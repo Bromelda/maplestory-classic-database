@@ -264,6 +264,19 @@ td .spr-cell { width: 34px; }
 .cx-pick-row b { font-size: .88em; font-weight: 600; }
 .cx-pick-row small { color: var(--muted); font-size: .74em; }
 
+.t-bonus { color: var(--accent); font-size: .72em; font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-bonus:empty { display: none; }
+.cx-picker .cf-note { padding: 0 10px; margin: 8px 0; }
+.cx-bonus-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 10px; border-bottom: 1px solid var(--line); }
+.cx-bonus-head b { flex: 1; min-width: 0; font-size: .92em; }
+.cx-bonus-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0 10px 10px; }
+.cx-bonus-field { display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; min-width: 0; font-size: .78em; color: var(--muted); font-weight: 600; }
+.cx-bonus-field small { display: block; font-weight: 400; font-size: .9em; }
+.cx-bonus-field input { font: inherit; font-size: 16px; font-weight: 400; width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.cx-bonus-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cx-bonus-more summary { cursor: pointer; padding: 4px 10px 10px; color: var(--muted); font-size: .84em; font-weight: 600; }
+.cx-bonus-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border-top: 1px solid var(--line); font-size: .88em; }
+.cx-bonus-actions .cx-auto { min-height: 36px; }
 .cx-ap { display: flex; flex-direction: column; gap: 5px; }
 .cx-ap-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .86em; color: var(--muted); }
 .cx-ap-top b { color: var(--text); font-variant-numeric: tabular-nums; }

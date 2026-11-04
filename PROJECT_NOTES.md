@@ -23,7 +23,7 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patche
 - **Monsters / Items**: stats, Classic drop tables with rates and kill counts, sprites.
 - **Quests**: 325 quests as step-by-step guides, a tracker per character, and an "Only quests for my character" filter.
 - **NPCs**: 187 NPCs, each location circled on the minimap.
-- **Calculator**: Classic damage and accuracy formulas, equipment tiles with a search list (`data/gear.json`, every non-cash weapon and armor item with stats; stats are added to the typed numbers), item icons and requirements (`tools/fetch_gear_info.py` → `assets/item`, `data/gear_info.json`), AP auto-assign, a character sheet, best training picks, a skill and skill-level picker, a "Fight a monster" verdict, and a hits-to-kill table.
+- **Calculator**: Classic damage and accuracy formulas, equipment tiles with a search list (`data/gear.json`, every non-cash weapon and armor item with stats; stats and per-item bonus stats (`calc.gearBonus`, for scrolls and rolls) are added to the typed numbers), item icons and requirements (`tools/fetch_gear_info.py` → `assets/item`, `data/gear_info.json`), AP auto-assign, a character sheet, best training picks, a skill and skill-level picker, a "Fight a monster" verdict, and a hits-to-kill table.
 - **Skills**: an SP planner for every 1st and 2nd job skill at every level. It saves to the character, and the calculator uses it.
 - **Saved characters**: multiple characters in localStorage, each with its own calc setup, skill plan and quest progress.
   Share build creates a `?build=` link.

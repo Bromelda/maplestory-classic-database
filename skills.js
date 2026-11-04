@@ -173,7 +173,7 @@ function renderSkillsTab() {
   }));
   $("#sk_cls").onchange = (e) => { c.calc = { ...k, cls: e.target.value, weapon: Object.keys(WEAPONS[e.target.value])[0], skillId: "basic" }; saveChars(); loadCalcFromChar(); renderSkillsTab(); };
   $("#sk_job2").onchange = (e) => { c.job2 = Number(e.target.value); saveChars(); renderSkillsTab(); };
-  $("#sk_level").oninput = (e) => { c.calc = { ...k, level: Number(e.target.value) || 1 }; saveChars(); loadCalcFromChar(); renderSkillsTab(); };
+  $("#sk_level").onchange = (e) => { c.calc = { ...k, level: Number(e.target.value) || 1 }; saveChars(); loadCalcFromChar(); renderSkillsTab(); };
   let armed = false;
   $("#sk_reset").onclick = (e) => {
     if (!armed) { armed = true; e.target.textContent = "Tap again to reset"; setTimeout(() => { armed = false; if (e.target.isConnected) e.target.textContent = "Reset plan"; }, 3000); return; }

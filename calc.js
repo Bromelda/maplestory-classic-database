@@ -75,7 +75,7 @@ const ELEMENTS = ["None", "Fire", "Ice", "Lightning", "Poison", "Holy"];
 const DEFAULTS = {
   cls: "Warrior", weapon: "1H Sword", motion: "avg", level: 30, STR: 132, DEX: 30, INT: 4, LUK: 4,
   watk: 47, matk: 0, ap: 0, mastery: 0, skillId: "basic", skill: 100, hits: 1, crit: 5, critdmg: 20,
-  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {}, mobSort: "level",
+  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {}, gearBonus: {}, mobSort: "level",
 };
 
 // The calculator edits the active saved character (see app.js). A shared build link
@@ -94,11 +94,12 @@ function loadCalcFromChar() {
 }
 
 // ---------- shareable builds ----------
-const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear", "mobSort"].includes(k));
+const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear", "gearBonus", "mobSort"].includes(k));
 function encodeBuild(name) {
   const o = { n: name };
   for (const k of BUILD_KEYS) if (calc[k] !== DEFAULTS[k]) o[k] = calc[k];
   if (Object.keys(calc.gear).length) o.g = calc.gear;
+  if (Object.keys(calc.gearBonus).length) o.b = calc.gearBonus;
   const p = plan(); if (Object.keys(p).length) o.p = p;
   if (activeChar().job2) o.j = activeChar().job2;
   const bytes = new TextEncoder().encode(JSON.stringify(o));
@@ -119,7 +120,13 @@ function readSharedBuild() {
     if (!WEAPONS[clean.cls || DEFAULTS.cls]) return false;
     const gear = {};
     for (const [slot, gid] of Object.entries(o.g || {})) if (Number.isInteger(gid)) gear[slot] = gid;
-    calc = { ...DEFAULTS, ...clean, gear };
+    const gearBonus = {};
+    for (const [slot, stats] of Object.entries(o.b || {})) {
+      if (!Object.prototype.hasOwnProperty.call(gear, slot) || !stats || typeof stats !== "object") continue;
+      const good = Object.entries(stats).filter(([k, v]) => BONUS_STATS.some(([s]) => s === k) && Number.isInteger(v));
+      if (good.length) gearBonus[slot] = Object.fromEntries(good);
+    }
+    calc = { ...DEFAULTS, ...clean, gear, gearBonus };
     const sp = {};
     for (const [k, v] of Object.entries(o.p || {})) if (/^\d+$/.test(k) && Number.isInteger(v) && v > 0 && v <= 30) sp[k] = v;
     shared = { from: String(o.n || "A shared build").slice(0, 40), skills: sp, job2: Number(o.j) || null };
@@ -250,7 +257,10 @@ const GEAR_LABEL = { ATT: "ATT", MATT: "Magic ATT", ACC: "accuracy", CRIT: "crit
 const AMMO_LABEL = { Claw: "Throwing stars", Bow: "Arrows", Crossbow: "Arrows" };
 // [main stat, second stat] for auto-assign; the rest of the AP goes to the main stat
 const MAIN_STATS = { Beginner: ["STR", "DEX"], Warrior: ["STR", "DEX"], Magician: ["INT", "LUK"], Bowman: ["DEX", "STR"], Thief: ["LUK", "DEX"] };
-const picker = { slot: null, mine: false };
+// what can be added to a piece of gear by hand: scroll results, or rolling higher or lower than normal
+const BONUS_STATS = [["ATT", "Weapon ATT"], ["MATT", "Magic ATT"], ["STR", "STR"], ["DEX", "DEX"], ["INT", "INT"], ["LUK", "LUK"],
+  ["ACC", "Accuracy"], ["AVOID", "Avoid"], ["WDEF", "Weapon DEF"], ["MDEF", "Magic DEF"], ["HP", "HP"], ["MP", "MP"], ["SPEED", "Speed"], ["JUMP", "Jump"], ["CRIT", "Crit rate %"], ["CRITDMG", "Crit damage %"]];
+const picker = { slot: null, mine: false, list: false };
 
 function gearFor(c, slot) {
   if (slot === "ammo") return (db.ammo || []).filter((a) => a.weapon === c.weapon);
@@ -266,7 +276,8 @@ function wornGear(c) {
 }
 function gearTotals(c) {
   const total = {};
-  for (const it of wornGear(c)) for (const [k, v] of Object.entries(it.stats)) total[k] = (total[k] || 0) + v;
+  const add = (stats) => { for (const [k, v] of Object.entries(stats || {})) total[k] = (total[k] || 0) + v; };
+  for (const it of wornGear(c)) { add(it.stats); add(c.gearBonus[it.slot]); }
   return total;
 }
 function withGear(c) {
@@ -287,6 +298,10 @@ function gearNeeds(it, total) {
   for (const k of ["STR", "DEX", "INT", "LUK"]) if (req[k] > total[k]) needs.push(`${req[k]} ${k}`);
   return needs;
 }
+function bonusText(it) {
+  const stats = calc.gearBonus[it.slot];
+  return stats ? `Bonus ${gearStatText({ slot: "bonus", stats })}` : "";
+}
 const itemIcon = (gid) => `<img src="assets/item/${gid}.png" alt="" loading="lazy" onerror="this.remove()">`;
 
 function wornIn(slot) {
@@ -299,10 +314,15 @@ function gearTile(slot, label, glyph, wide = false) {
   return `<button type="button" class="cx-tile ${it ? "on" : ""} ${wide ? "wide" : ""}" data-tile="${slot}" aria-expanded="${picker.slot === slot}" ${covered ? "disabled" : ""}>
     <span class="cx-ico">${it ? itemIcon(it.gid) : `<i>${glyph}</i>`}</span>
     <span class="cx-tile-text"><small>${esc(label)}</small><b>${it ? esc(it.name) : covered ? "Covered by overall" : "Empty"}</b>
-      ${it ? `<em>${esc(gearStatText(it))}</em>` : ""}<strong class="t-need"></strong></span></button>`;
+      ${it ? `<em>${esc(gearStatText(it))}</em><u class="t-bonus"></u>` : ""}<strong class="t-need"></strong></span></button>`;
 }
 function setGear(slot, gid) {
   const g = { ...calc.gear };
+  // a different item starts with no bonus stats
+  if (calc.gear[slot] !== gid) {
+    const { [slot]: gone, ...rest } = calc.gearBonus;
+    calc.gearBonus = rest;
+  }
   if (gid) g[slot] = gid; else delete g[slot];
   if (!gid && slot === "top") delete g.overall;
   if (gid && slot === "overall") { delete g.top; delete g.bottom; }
@@ -310,12 +330,23 @@ function setGear(slot, gid) {
   // the attack typed so far was standing in for a weapon, so the real one replaces it
   if (gid && slot === "weapon" && !calc.gear.weapon) { calc.watk = 0; calc.matk = 0; }
   calc.gear = g;
-  picker.slot = null;
+  const tileSlot = slot === "overall" ? "top" : slot;
+  // the next thing to do with a new item is often entering its bonus stats
+  picker.slot = gid && slot !== "ammo" ? tileSlot : null;
+  picker.list = false;
   saveCalc();
   renderCalc();
-  const tile = $(`[data-tile="${slot === "overall" ? "top" : slot}"]`);
+  const tile = $(`[data-tile="${tileSlot}"]`);
   tile?.focus({ preventScroll: true });
-  tile?.scrollIntoView({ block: "nearest" });
+  (picker.slot ? $("#gearPicker") : tile)?.scrollIntoView({ block: "nearest" });
+}
+function setBonus(it, key, value) {
+  const stats = { ...calc.gearBonus[it.slot] };
+  if (value) stats[key] = value; else delete stats[key];
+  const { [it.slot]: old, ...rest } = calc.gearBonus;
+  calc.gearBonus = Object.keys(stats).length ? { ...rest, [it.slot]: stats } : rest;
+  saveCalc();
+  renderCalcOut();
 }
 function pickerItems(slot) {
   const list = slot === "top" ? [...gearFor(calc, "top"), ...gearFor(calc, "overall")] : gearFor(calc, slot);
@@ -334,6 +365,38 @@ function renderPickerList() {
         <span><b>${esc(g.name)}</b><small>${g.level ? `Lv ${g.level}` : "No level needed"}${g.stats && gearStatText(g) ? ` · ${esc(gearStatText(g))}` : ""}</small>${needs.length ? `<strong>Needs ${esc(needs.join(", "))}</strong>` : ""}</span></button>`;
     }).join("") || `<p class="sub empty">Nothing matches.</p>`);
 }
+function bonusField(it, key, label) {
+  const normal = it.stats[key];
+  const value = calc.gearBonus[it.slot]?.[key];
+  return `<label class="cx-bonus-field"><span>${label}${normal ? ` <small>normal ${normal > 0 ? "+" : ""}${normal}</small>` : ""}</span>
+    <input type="number" data-bonus="${key}" step="1" placeholder="0" value="${value || ""}" aria-label="Bonus ${label}"></label>`;
+}
+function renderBonus(box, it) {
+  const main = WEAPONS[calc.cls][calc.weapon].magic ? ["MATT", "INT", "LUK", "ATT", "STR", "DEX"] : ["ATT", "STR", "DEX", "INT", "LUK", "MATT"];
+  const label = (k) => BONUS_STATS.find(([s]) => s === k)[1];
+  const more = BONUS_STATS.filter(([k]) => !main.includes(k));
+  const moreSet = more.some(([k]) => calc.gearBonus[it.slot]?.[k]);
+  box.innerHTML = `<div class="cx-bonus-head"><span class="cx-ico">${itemIcon(it.gid)}</span><b>${esc(it.name)}</b>
+      <button type="button" class="cx-pick-close" id="gpClose" aria-label="Close">✕</button></div>
+    <p class="cf-note">Scrolled it, or got a better or worse roll? Enter the difference here, like +14 Magic ATT from scrolls. Use a minus for a lower roll. It's added to your damage.</p>
+    <div class="cx-bonus-grid">${main.map((k) => bonusField(it, k, label(k))).join("")}</div>
+    <details class="cx-bonus-more" ${moreSet ? "open" : ""}><summary>More stats</summary>
+      <div class="cx-bonus-grid">${more.map(([k, l]) => bonusField(it, k, l)).join("")}</div></details>
+    <div class="cx-bonus-actions"><button type="button" class="cx-auto" id="gpChange">Change item</button>
+      <button type="button" class="cx-auto" id="gpClear">Clear bonus</button>
+      <button type="button" class="cx-auto" id="gpOff">Take it off</button></div>`;
+  box.querySelectorAll("[data-bonus]").forEach((el) => el.addEventListener("input", () => setBonus(it, el.dataset.bonus, parseInt(el.value, 10) || 0)));
+  $("#gpChange").addEventListener("click", () => { picker.list = true; renderPicker(); });
+  $("#gpClear").addEventListener("click", () => {
+    const { [it.slot]: gone, ...rest } = calc.gearBonus;
+    calc.gearBonus = rest;
+    saveCalc();
+    renderPicker();
+    renderCalcOut();
+  });
+  $("#gpOff").addEventListener("click", () => setGear(picker.slot === "top" ? "top" : it.slot, 0));
+  $("#gpClose").addEventListener("click", () => closePicker());
+}
 function renderPicker() {
   const box = $("#gearPicker");
   if (!box) return;
@@ -343,7 +406,14 @@ function renderPicker() {
     t.setAttribute("aria-expanded", on);
   });
   box.hidden = !picker.slot;
+  box.onkeydown = (e) => { if (e.key === "Escape") closePicker(); };
   if (!picker.slot) { box.innerHTML = ""; return; }
+  const worn = wornIn(picker.slot);
+  if (worn && picker.slot !== "ammo" && !picker.list) {
+    renderBonus(box, worn);
+    box.scrollIntoView({ block: "nearest" });
+    return;
+  }
   box.innerHTML = `<div class="cx-pick-head">
       <input id="gpSearch" type="search" placeholder="Search items…" autocomplete="off" aria-label="Search items">
       <label class="check"><input id="gpMine" type="checkbox" ${picker.mine ? "checked" : ""}> Up to my level</label>
@@ -357,7 +427,6 @@ function renderPicker() {
     const row = e.target.closest("[data-gid]");
     if (row) setGear(row.dataset.real, Number(row.dataset.gid) || 0);
   });
-  box.addEventListener("keydown", (e) => { if (e.key === "Escape") closePicker(); });
   box.scrollIntoView({ block: "nearest" });
   // no keyboard popping up on phones until someone taps the search box
   if (!isPhone()) $("#gpSearch").focus({ preventScroll: true });
@@ -365,6 +434,7 @@ function renderPicker() {
 function closePicker() {
   const slot = picker.slot;
   picker.slot = null;
+  picker.list = false;
   renderPicker();
   $(`[data-tile="${slot}"]`)?.focus({ preventScroll: true });
 }
@@ -419,9 +489,12 @@ function refreshBuild() {
     const needs = it ? gearNeeds(it, total) : [];
     t.classList.toggle("warn", needs.length > 0);
     t.querySelector(".t-need").textContent = needs.length ? `Needs ${needs.join(", ")}` : "";
+    const bonus = t.querySelector(".t-bonus");
+    if (bonus) bonus.textContent = it ? bonusText(it) : "";
   });
   const weaponless = !calc.gear.weapon && !(isSpell(calc) ? calc.matk : calc.watk);
-  $("#gearNote").textContent = weaponless ? "Pick your weapon, or type its attack under Attack." : "";
+  $("#gearNote").textContent = weaponless ? "Pick your weapon, or type its attack under Attack."
+    : wornGear(calc).some((g) => g.slot !== "ammo") ? "Tap a worn item to add scroll bonuses or a better or worse roll." : "";
   const used = calc.STR + calc.DEX + calc.INT + calc.LUK, all = AP_AT(calc.level);
   const hasGear = wornGear(calc).length > 0;
   $("#apBar").style.width = `${Math.min(100, (used / all) * 100)}%`;
@@ -598,6 +671,7 @@ function renderCalc() {
   const wearable = {};
   for (const [slot, gid] of Object.entries(calc.gear)) if (gearFor(calc, slot).some((g) => g.gid === gid)) wearable[slot] = gid;
   calc.gear = wearable;
+  calc.gearBonus = Object.fromEntries(Object.entries(calc.gearBonus).filter(([slot]) => wearable[slot]));
   const w = WEAPONS[calc.cls][calc.weapon];
   const magic = isSpell(calc);
   const sk = currentSkill();
@@ -652,7 +726,7 @@ function renderCalc() {
           ${sk?.mobs > 1 ? `<p class="cf-note full">Hits up to ${sk.mobs} monsters at once.</p>` : ""}
         </fieldset>
         <fieldset><legend>Attack</legend>
-          ${magic ? num("matk", "Magic Attack", 0, 9999, hasGear ? "On top of your gear: scrolls and buffs" : "Wand/staff + gear (not INT)") : num("watk", "Weapon Attack", 0, 9999, hasGear ? "On top of your gear: scrolls and buffs" : calc.weapon === "Claw" ? "Claw + gloves + stars" : calc.cls === "Bowman" ? "Bow/crossbow + gear + arrows" : "Weapon + gloves + gear")}
+          ${magic ? num("matk", "Magic Attack", 0, 9999, hasGear ? "On top of your gear, like buffs" : "Wand/staff + gear (not INT)") : num("watk", "Weapon Attack", 0, 9999, hasGear ? "On top of your gear, like buffs" : calc.weapon === "Claw" ? "Claw + gloves + stars" : calc.cls === "Bowman" ? "Bow/crossbow + gear + arrows" : "Weapon + gloves + gear")}
           ${!magic && ms ? `<label class="cf"><span>${esc(ms.name)} level</span><input type="number" id="c_msLv" min="0" max="${ms.max}" value="${planLevel(ms.id)}" inputmode="numeric"><small>0–${ms.max} · mastery ${physMastery(calc)}, +${skillAt(ms, planLevel(ms.id)).x || 0} accuracy</small></label>`
             : w.magic && !magic ? "" : num("mastery", magic ? "Spell mastery" : "Mastery", 0, 10, magic ? "0–10. Set by the spell's level" : "0–10. Mastery skill level ÷ 2")}
           ${magic ? "" : num("ap", "Attack Power", 0, 999, "Other buffs / consumables")}
@@ -693,6 +767,7 @@ function renderCalc() {
   bindCharBar();
   view.querySelectorAll("[data-tile]").forEach((t) => t.addEventListener("click", () => {
     picker.slot = picker.slot === t.dataset.tile ? null : t.dataset.tile;
+    picker.list = false;
     renderPicker();
   }));
   $("#apAuto").addEventListener("click", autoAssign);
@@ -708,7 +783,19 @@ function renderCalc() {
     if (hint && s) hint.textContent = describeLevel(s, skillAt(s, planLevel(s.id)));
   }));
   const skLv = $("#c_skLv");
-  if (skLv) skLv.addEventListener("input", () => { const s = currentSkill(); setPlanLevel(s.id, Number(skLv.value) || 1); applySkill(); saveCalc(); renderCalc(); });
+  if (skLv) {
+    // the box has to stay put while typing: empty just means the next digit is coming
+    skLv.addEventListener("input", () => {
+      const v = parseInt(skLv.value, 10);
+      if (!v) return;
+      setPlanLevel(currentSkill().id, v);
+      applySkill();
+      saveCalc();
+      for (const k of ["skill", "hits", "mastery", "element"]) { const el = $(`#c_${k}`); if (el) el.value = calc[k]; }
+      renderCalcOut();
+    });
+    skLv.addEventListener("blur", () => { const s = currentSkill(); if (s) skLv.value = usedLevel(s); });
+  }
   const msLv = $("#c_msLv");
   if (msLv) msLv.addEventListener("input", () => { setPlanLevel(masterySkill().id, Number(msLv.value) || 0); renderCalcOut(); msLv.parentElement.querySelector("small").textContent = `0–${masterySkill().max} · mastery ${physMastery(calc)}, +${skillAt(masterySkill(), planLevel(masterySkill().id)).x || 0} accuracy`; });
   view.querySelectorAll(".cx-job").forEach((b) => b.addEventListener("click", () => {
@@ -721,12 +808,14 @@ function renderCalc() {
   }));
   view.querySelectorAll(".calc-form input:not([data-plan]):not(#c_skLv):not(#c_msLv):not(#levelR), .calc-form select, #c_target, #c_near, #c_mobSort").forEach((el) => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
     const id = el.id.slice(2);
+    if (["level", "hits"].includes(id) && !Number(el.value)) return; // still typing
     calc[id] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : Number(el.value) || 0;
     if (id === "skillId") applySkill();
     if (["skill", "hits"].includes(id) && currentSkill()) calc.skillId = "custom";
     saveCalc();
     if (["weapon", "skillId"].includes(id)) renderCalc(); else renderCalcOut();
   }));
+  for (const id of ["level", "hits"]) $(`#c_${id}`)?.addEventListener("blur", (e) => { if (!Number(e.target.value)) e.target.value = calc[id]; });
   renderPicker();
   renderCalcOut();
 }
