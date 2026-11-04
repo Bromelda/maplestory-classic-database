@@ -46,6 +46,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/old"
           cp data/*.json "$RUNNER_TEMP/old/"
           python3 tools/build_data.py "$RUNNER_TEMP/fm/data"
+          python3 tools/audit_gaps.py
           python3 tools/update_log.py "$RUNNER_TEMP/old" data data/log.json
 
       - name: Fetch Nexon Classic World posts
