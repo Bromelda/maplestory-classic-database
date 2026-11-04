@@ -6,17 +6,17 @@ It's a plain static website with no build step for the site itself. Open it loca
 
 ## Features
 
-- **Interactive world map**: an illustrated map of Maple Island and Victoria Island (AI-made fan art, not an official map), with every area colored by its typical training level. Click an area to list all its maps and their monsters.
+- **Interactive world map**: the game's own world maps of Maple Island and Victoria Island, with the same nodes as in the game, along the roads between towns. Each node is colored by its typical training level. Click one to list all its maps and their monsters.
 - **Map pages** show:
   - the exact spawn count of each monster (for example 10 Shroom, 6 Red Snail, 5 Slime…)
-  - the real in-game minimap, sharpened to 4x, with spawn points and portals on top, so you can click a portal to jump there
+  - the map's full art from the Classic game files, with its monsters standing at their spawn points and portals on top, so you can click a monster or portal to jump there
   - **How to get here**: the neighbouring maps' minimaps, zoomed in, with the portal that leads here circled. This is especially handy for hidden streets.
   - connected maps, **hidden portals**, one-way entrances, and how you get in when no portal leads there (job tests, party quests)
   - NPCs, plus boss respawn timers
 - **Monster pages**: the animated in-game sprite, full stats, the Classic drop table with drop rates, and every map the monster spawns on. Hover a monster anywhere to preview its drops.
 - **Item pages**: stats, requirements, and every monster that drops it, sorted by rate.
-- **Quests**: all 325 current quests as step-by-step guides. Each one covers who to talk to (circled on the minimap), what to kill or collect and who drops it, where to turn it in, rewards, and what it unlocks next. Tick off finished quests to track your progress; it's saved in your browser. Ended events and Forgotten Hollow quests are left out.
-- **NPCs**: all 187 NPCs with every location circled on the in-game minimap, plus the quests they give and accept. NPCs also show as ◆ markers on every map.
+- **Quests**: all 325 current quests as step-by-step guides. Each one covers who to talk to (circled on the map), what to kill or collect and who drops it, where to turn it in, rewards, and what it unlocks next. Tick off finished quests to track your progress; it's saved in your browser. Ended events and Forgotten Hollow quests are left out.
+- **NPCs**: all 187 NPCs with every location circled on the map, plus the quests they give and accept. NPCs also show as pins on every map.
 - **Market**: typical Free Market prices for about 1,500 items, with a 7-day trend, prices by stat roll (for example clean versus +8 ATT Work Gloves), and the character names of shops selling near that price. Each item links to [Cozy Market](https://cozy.markets/market) and [HeneFM](https://henefm.com) for live shops and channels. Monster drop tables show roughly what each drop is worth.
 - **Skills**: a skill-point planner for every Classic job (1st and 2nd), with every skill's numbers at every level straight from the game files. Spend points with + / − and see what each level does and what the next one adds. SP is counted at 3 per level from level 11. The plan saves to your character, and the calculator uses it: your skill level, mastery, Rage, Precise Strikes and Focus are all picked up automatically. Skills changed in the Oct 29 patch are marked.
 - **Saved characters**: keep several characters (main, alts) in your browser. Each one remembers its stats, gear and skill settings for the calculator, and its own quest progress. Tap the 👤 chip at the top to switch. The Quests tab can show only the quests your character can do right now.
@@ -48,8 +48,9 @@ It's a plain static website with no build step for the site itself. Open it loca
 | Monster stats, map layouts, spawn points | Classic World game files, via [Club FM](https://maplefm.gg) / maplestory.io |
 | Stat cross-check | [NiaDB](https://meowdb.com/msclassic), [MapleStoryClassic.org](https://maplestoryclassic.org/monsters/) |
 | Maps, portals, spawns, drops | [MapleClassic Wiki](https://mapleclassic.wiki) (CC BY-NC-SA 4.0) |
-| Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg). `tools/upscale_minimaps.py` makes the sharper copies in `assets/minimap-hd`, without AI, so markers still line up |
-| World map art | Generated with ChatGPT from a text description: original fan art, not an official map (`assets/world-map.webp`) |
+| Map art | Classic World game files, rendered by [maplestory.io](https://maplestory.io). `tools/fetch_map_art.py` aligns each map to its coordinates (`assets/map-art`) |
+| Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg). `tools/upscale_minimaps.py` makes sharper minimaps (`assets/minimap-hd`), shown for any map without art |
+| World maps and their nodes | Classic World game files, via [maplestory.io](https://maplestory.io) (`tools/fetch_worldmap.py`) |
 | Quests and NPC positions | Classic World game data (maplestory.io) + MapleClassic Wiki, via [Club FM](https://maplefm.gg) |
 | Skills (every level) | Classic World game files via maplestory.io (launch v1.0.0), with Oct 29 patch changes applied or flagged |
 | Free Market prices | [Club FM](https://maplefm.gg) public price summary, loaded live in the browser and refreshed daily by Club FM |
@@ -59,7 +60,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 
 `.github/workflows/daily-update.yml` runs on GitHub every 6 hours. It:
 
-1. pulls the latest Classic data (game files + player-counted drops) and rebuilds `data/*.json`
+1. pulls the latest Classic data (game files + player-counted drops) and rebuilds `data/*.json`, and gets art for any new maps and the world maps
 2. compares it with yesterday's data and adds anything new to `data/log.json` (the Log tab)
 3. fetches Nexon's Classic World posts into `data/patches.json` (the Patches tab)
 4. commits the changes, so the site updates itself
@@ -98,6 +99,6 @@ GitHub Pages needs a public repo, or a paid plan for a private one. Turn it on u
 
 The map, spawn and drop data is adapted from the MapleClassic Wiki under **CC BY-NC-SA 4.0**, so this project's data is shared under the same license, for non-commercial use with attribution.
 
-Game images (minimaps and monster sprites) are © NEXON, from MapleStory Classic World. The world map is AI-illustrated fan art based on the game's locations. They're used non-commercially under [Nexon's guide for fan content](https://m.nexon.com/terms/1037), so this site must stay free, with no paid access or selling.
+Game images (world maps, maps, minimaps and monster sprites) are © NEXON, from MapleStory Classic World. They're used non-commercially under [Nexon's guide for fan content](https://m.nexon.com/terms/1037), so this site must stay free, with no paid access or selling.
 
 This is an unofficial fan project, not affiliated with or endorsed by Nexon. MapleStory is a trademark of Nexon.

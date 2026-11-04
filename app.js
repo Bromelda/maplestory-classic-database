@@ -1,7 +1,7 @@
 // MapleStory Classic DB: interactive world map, searchable tables and a
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
-const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta"];
+const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta", "worldmap"];
 const OPTIONAL = ["log", "patches", "skills"]; // fine if missing
 const db = {};
 const byId = {};
@@ -12,6 +12,8 @@ const MARKET_URL = "https://raw.githubusercontent.com/maplefm/maplefm.github.io/
 const COZY_URL = "https://cozy.markets/market";
 const CLUBFM_URL = "https://maplefm.gg";
 const HENEFM_URL = "https://henefm.com";
+// our game id for these isn't the one HeneFM lists (mostly variants sharing a name), so they use its search instead
+const HENEFM_NO_PAGE = new Set([1002994, 1007239, 1007248, 1040013, 1041015, 1087027, 1302019, 1702020, 2000007, 2000008, 2010008, 2020023, 2030011, 2040513, 4031027]);
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 function meso(n) {
   if (n == null) return "—";
@@ -27,23 +29,6 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => (n == null ? "—" : typeof n === "number" ? n.toLocaleString() : n);
 
-// ---------- world map layout (positions on assets/world-map.webp, not to scale) ----------
-const ZONES = {
-  "Mushroom Town": { x: 75, y: 105 },
-  "Amherst": { x: 195, y: 55 },
-  "Southperry": { x: 225, y: 160 },
-  "Ellinia": { x: 470, y: 110 },
-  "Perion": { x: 815, y: 135 },
-  "Sleepywood": { x: 665, y: 270 },
-  "Henesys": { x: 270, y: 335 },
-  "Kerning City": { x: 850, y: 365 },
-  "Lith Harbor": { x: 340, y: 480 },
-  "Free Market": { x: 590, y: 480 },
-  "Kerning City PQ": { x: 860, y: 495 },
-  "Florina Beach": { x: 85, y: 520 },
-  "Other": { x: 925, y: 590 },
-};
-const BOATS = [["Southperry", "Lith Harbor"], ["Lith Harbor", "Florina Beach"]];
 const LEVEL_BANDS = [
   [10, "#5cb85c", "1–10"], [20, "#2bb3a3", "11–20"], [30, "#3d8be0", "21–30"],
   [40, "#8a5cd6", "31–40"], [50, "#e8711c", "41–50"], [999, "#d9434c", "51+"],
@@ -75,7 +60,7 @@ const COLUMNS = {
   ],
   maps: [
     { key: "name", label: "Name" },
-    { key: "zone", label: "Area" },
+    { key: "zone", label: "Area", get: (m) => m.node },
     { key: "type", label: "Type", wide: true },
     { key: "level", label: "Lv", num: true, get: (m) => (m.levels ? m.levels[0] : null), show: (m) => levelText(m.levels) },
     { key: "_mobs", label: "Mobs", num: true, get: (m) => m.spawns.reduce((a, s) => a + s.count, 0) },
@@ -112,7 +97,7 @@ const COLUMNS = {
 const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job", market: "price", quests: "quest", npcs: "npc" };
 const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world", price: "market", quest: "quests", npc: "npcs" };
 
-const state = { tab: "world", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
+const state = { world: 0, tab: "world", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
 
 // ---------- load + index ----------
 async function load() {
@@ -125,8 +110,9 @@ async function load() {
     db[name] = await res.json();
     if (Array.isArray(db[name])) byId[name] = Object.fromEntries(db[name].map((e) => [e.id, e]));
   }));
+  buildWorldNodes();
   for (const m of db.maps) {
-    (idx.zones[m.zone] ||= []).push(m);
+    (idx.zones[m.node] ||= []).push(m);
     for (const s of m.spawns) (idx.spawnsOf[s.monster] ||= []).push({ map: m.id, count: s.count });
     for (const p of m.portals) (idx.incoming[p.to] ||= new Set()).add(m.id);
   }
@@ -314,46 +300,125 @@ function zoneSummary(z) {
   return { maps, min: lv.length ? Math.min(...lv) : null, max: lv.length ? Math.max(...lv) : null, mobs, typical };
 }
 
+// The nodes come from the game's own world maps (data/worldmap.json). A map that isn't on one, like the
+// subway, joins a node next to it in the same area. Areas with no node at all, like the Free Market, stay on their own.
+const nodes = {};
+
+function nodeName(maps) {
+  const main = maps.find((m) => m.name === m.zone) || maps[0];
+  const base = (m) => m.name.replace(/ \([^)]*\)$/, "").replace(/ (I|II|III|IV|V|VI|VII|VIII|IX)$/, "");
+  const shared = maps.filter((m) => base(m) === base(main)).length > 1;
+  return shared ? base(main) : main.name;
+}
+
+function buildWorldNodes() {
+  const byGid = Object.fromEntries(db.maps.map((m) => [m.gid, m]));
+  db.worldmap.forEach((wm, world) => {
+    for (const s of wm.spots) {
+      const maps = s.maps.map((g) => byGid[g]).filter(Boolean);
+      if (!maps.length) continue;
+      let name = nodeName(maps);
+      while (nodes[name]) name += " ";
+      const town = s.type === 0 || s.type === 2 || (maps.length > 2 && maps.every((m) => m.type?.startsWith("Town")));
+      nodes[name] = { name, world, x: s.x, y: s.y, town };
+      for (const m of maps) m.node = name;
+    }
+  });
+  // spread out to maps connected to a placed one, in the same area
+  const near = {};
+  for (const m of db.maps) for (const p of m.portals) {
+    (near[m.id] ||= []).push(p.to);
+    (near[p.to] ||= []).push(m.id);
+  }
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const m of db.maps) {
+      if (m.node) continue;
+      const by = (near[m.id] || []).map((id) => byId.maps[id]).find((o) => o?.node && o.zone === m.zone);
+      if (by) { m.node = by.node; changed = true; }
+    }
+  }
+  for (const m of db.maps) m.node ||= m.zone;
+  state.world = Math.max(0, db.worldmap.findIndex((wm) => wm.name === "Victoria Island"));
+}
+
 function renderWorld() {
-  const nodes = Object.entries(ZONES).filter(([z]) => idx.zones[z]).map(([z, pos]) => {
-    const s = zoneSummary(z);
-    const r = 16 + Math.min(18, Math.sqrt(s.maps.length) * 3.2);
-    const color = s.mobs && s.typical != null ? bandColor(s.typical) : TOWN_COLOR;
-    const sub = s.min == null ? `${s.maps.length} maps` : `Lv ${s.min}–${s.max}`;
-    return `<g class="zone" data-type="zone" data-id="${esc(z)}" tabindex="0" role="button" aria-label="${esc(z)}">
-      <circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${color}"></circle>
-      <text class="zone-count" x="${pos.x}" y="${pos.y + 4}" text-anchor="middle">${s.maps.length}</text>
-      <text class="zone-name" x="${pos.x}" y="${pos.y + r + 17}" text-anchor="middle">${esc(z)}</text>
-      <text class="zone-sub" x="${pos.x}" y="${pos.y + r + 32}" text-anchor="middle">${esc(sub)}</text>
+  const wm = db.worldmap[state.world];
+  if (!wm) { $("#worldView").innerHTML = `<p class="sub" style="padding:14px">The world map isn't available right now. Every map is still listed in the Maps tab.</p>`; return; }
+  const here = Object.values(nodes).filter((n) => n.world === state.world).sort((a, b) => a.town - b.town);
+  // a node only counts as a training spot when most of its maps have monsters (one job-test map doesn't make a town one)
+  const training = (s) => s.typical != null && s.maps.filter((m) => m.spawns.length).length * 2 > s.maps.length;
+  const colorOf = (s) => (training(s) ? bandColor(s.typical) : TOWN_COLOR);
+  const levels = (s) => `${training(s) ? `Lv ${levelText([s.min, s.max])} · ` : ""}${s.maps.length} ${s.maps.length === 1 ? "map" : "maps"}`;
+  const marks = here.map((n) => {
+    const s = zoneSummary(n.name);
+    return `<g class="zone ${n.town ? "town" : ""}" data-type="zone" data-id="${esc(n.name)}" tabindex="0" role="button" aria-label="${esc(n.name)}, ${esc(levels(s))}">
+      <circle class="hit" cx="${n.x}" cy="${n.y}" r="${n.town ? 13 : 11}"></circle>
+      <circle class="mark" cx="${n.x}" cy="${n.y}" r="${n.town ? 8.5 : 4.5}" fill="${colorOf(s)}"></circle>
+      ${n.town ? `<text class="zone-count" x="${n.x}" y="${n.y + 3}" text-anchor="middle">${s.maps.length}</text>` : ""}
     </g>`;
   }).join("");
-  const boats = BOATS.map(([a, b]) => {
-    const p = ZONES[a], q = ZONES[b];
-    const mx = (p.x + q.x) / 2 - 30, my = (p.y + q.y) / 2 + 20;
-    return `<path class="boat" d="M${p.x},${p.y} Q${mx},${my} ${q.x},${q.y}"></path>`;
+  const labels = here.map((n) => {
+    const sub = levels(zoneSummary(n.name)), w = Math.max(n.name.length * 6.1, sub.length * 4.9) + 12;
+    const lx = Math.max(3, Math.min(wm.width - w - 3, n.x - w / 2));
+    const ly = n.y < 45 ? n.y + 11 : n.y - 39;
+    return `<g class="zone-label" data-for="${esc(n.name)}">
+      <rect x="${lx}" y="${ly}" width="${w}" height="28" rx="6"></rect>
+      <text class="zone-name" x="${lx + w / 2}" y="${ly + 12}" text-anchor="middle">${esc(n.name)}</text>
+      <text class="zone-sub" x="${lx + w / 2}" y="${ly + 23}" text-anchor="middle">${esc(sub)}</text>
+    </g>`;
   }).join("");
+  const off = Object.keys(idx.zones).filter((z) => !nodes[z]).sort();
+  const chip = (z) => {
+    const s = zoneSummary(z);
+    return `<button type="button" class="zone-chip" data-type="zone" data-id="${esc(z)}"><i class="dot" style="background:${colorOf(s)}"></i><b>${esc(z)}</b><span>${esc(levels(s))}</span></button>`;
+  };
   const legend = LEVEL_BANDS.map(([, c, label]) => `<span><i class="dot" style="background:${c}"></i>Lv ${label}</span>`).join("") +
-    `<span><i class="dot" style="background:${TOWN_COLOR}"></i>Town / no monsters</span><span>Color = typical training level · number = maps in area · dashed line = boat</span><span>AI-illustrated fan art (ChatGPT), not an official map and not to scale</span>`;
+    `<span><i class="dot" style="background:${TOWN_COLOR}"></i>Town / no monsters</span><span>Color = typical training level · big circles are towns, with the number of maps · click any node for its maps</span>`;
   $("#worldView").innerHTML = `
-    <svg viewBox="0 0 1000 667" role="img" aria-label="World map of Maple Island and Victoria Island">
-      <image href="assets/world-map.webp" width="1000" height="667"></image>
-      <text class="island-label" x="14" y="26">Maple Island</text>
-      <text class="island-label" x="420" y="640">Victoria Island</text>
-      ${boats}${nodes}
+    <div class="world-bar">
+      ${db.worldmap.map((w, i) => `<button type="button" class="world-tab ${i === state.world ? "active" : ""}" data-world="${i}">${esc(w.name)}</button>`).join("")}
+      ${off.map((z) => `<button type="button" class="world-tab off" data-type="zone" data-id="${esc(z)}">${esc(z)}</button>`).join("")}
+    </div>
+    <svg viewBox="0 0 ${wm.width} ${wm.height}" role="img" aria-label="World map of ${esc(wm.name)}">
+      <image href="${wm.image}" width="${wm.width}" height="${wm.height}"></image>
+      ${marks}${labels}
     </svg>
     <div class="legend">${legend}</div>
-    <div class="zone-chips">${Object.keys(ZONES).filter((z) => idx.zones[z]).map((z) => {
-      const s = zoneSummary(z);
-      const color = s.mobs && s.typical != null ? bandColor(s.typical) : TOWN_COLOR;
-      return `<button type="button" class="zone-chip" data-type="zone" data-id="${esc(z)}"><i class="dot" style="background:${color}"></i><b>${esc(z)}</b><span>${s.min != null ? `Lv ${s.min}–${s.max}` : "Town"} · ${s.maps.length} maps</span></button>`;
-    }).join("")}</div>`;
-  $("#worldView").querySelectorAll(".zone").forEach((g) => g.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open("zone", g.dataset.id); }
+    <div class="zone-chips">
+      ${here.filter((n) => n.town).map((n) => chip(n.name)).join("")}
+      <details class="zone-more"><summary>All ${here.filter((n) => !n.town).length} areas between the towns</summary>
+        <div class="zone-more-list">${here.filter((n) => !n.town).map((n) => chip(n.name)).join("")}</div>
+      </details>
+    </div>`;
+  $("#worldView").querySelectorAll(".world-tab[data-world]").forEach((b) => b.addEventListener("click", () => {
+    state.world = Number(b.dataset.world);
+    renderWorld();
+    markZone(currentEntry()?.type === "zone" ? currentEntry().id : null);
+    $(".world-tab.active")?.focus();
   }));
+  const labelOf = (id) => [...$("#worldView").querySelectorAll(".zone-label")].find((l) => l.dataset.for === id);
+  $("#worldView").querySelectorAll(".zone").forEach((g) => {
+    g.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open("zone", g.dataset.id); }
+    });
+    // mouse only: on an iPhone, changing the page on hover makes the first tap do nothing
+    g.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") labelOf(g.dataset.id)?.classList.add("show"); });
+    g.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") labelOf(g.dataset.id)?.classList.remove("show"); });
+    g.addEventListener("focus", () => labelOf(g.dataset.id)?.classList.add("show"));
+    g.addEventListener("blur", () => labelOf(g.dataset.id)?.classList.remove("show"));
+  });
 }
 
 function highlightZone(z) {
+  const n = nodes[z];
+  if (n && n.world !== state.world) { state.world = n.world; renderWorld(); }
+  markZone(z);
+}
+
+function markZone(z) {
   document.querySelectorAll(".zone").forEach((g) => g.classList.toggle("active", g.dataset.id === z));
+  document.querySelectorAll(".zone-label").forEach((l) => l.classList.toggle("on", l.dataset.for === z));
 }
 
 // ---------- tables ----------
@@ -562,7 +627,13 @@ function zoneDetail(z) {
     }).join("");
     return `<div class="zone-group"><h4>${g} (${groups[g].length})</h4>${rows}</div>`;
   }).join("");
-  return `<h2>${esc(z.id)}</h2><p class="sub">${s.maps.length} maps${s.min != null ? ` · Lv ${s.min}–${s.max}` : ""}</p>${out}`;
+  const next = new Set();
+  for (const m of s.maps) for (const p of m.portals) {
+    const to = byId.maps[p.to];
+    if (p.kind !== "hidden" && to && to.node !== z.id && nodes[to.node]) next.add(to.node);
+  }
+  const links = next.size ? `<p class="sub">Connects to ${[...next].map((n) => link("zone", n)).join(", ")}</p>` : "";
+  return `<h2>${esc(z.id)}</h2><p class="sub">${s.maps.length} ${s.maps.length === 1 ? "map" : "maps"}${s.min != null ? ` · Lv ${levelText([s.min, s.max])}` : ""}</p>${links}${out}`;
 }
 
 // map: layout drawing, spawn counts, portals (incl. hidden), NPCs
@@ -570,7 +641,7 @@ function mapDetail(m) {
   const colorOf = {};
   m.spawns.forEach((s, i) => { colorOf[s.monster] = MOB_COLORS[i % MOB_COLORS.length]; });
   const total = m.spawns.reduce((a, x) => a + x.count, 0);
-  let html = `<h2>${esc(m.name)}</h2><p class="sub">${esc(m.zone)} · ${esc(m.type || m.region)}${m.region === "Hidden Street" ? ' · <span class="badge hidden">Hidden Street</span>' : ""}</p>`;
+  let html = `<h2>${esc(m.name)}</h2><p class="sub">${link("zone", m.node)} · ${esc(m.type || m.region)}${m.region === "Hidden Street" ? ' · <span class="badge hidden">Hidden Street</span>' : ""}</p>`;
   html += dl([["Level range", m.levels ? levelText(m.levels) + (m.levels_from_mobs ? ' <span class="sub">(from its monsters)</span>' : "") : null], ["Total monsters", total || null]]);
   const walkIn = [...(idx.incoming[m.id] || [])].some((id) => id !== m.id);
   if (!walkIn) {
@@ -616,8 +687,8 @@ function mapDetail(m) {
   return html;
 }
 
-// Draws a map: the real in-game minimap when we have it, with spawn points and
-// portals on top. `highlight` = id of a destination map whose portal(s) get circled.
+// Draws a map: its art from the game files when we have it (the sharpened minimap otherwise),
+// with monsters at their spawn points and portals on top. `highlight` = id of a destination map whose portal(s) get circled.
 function mapLayout(m, colorOf, { highlight = null, point = null, showMobs = true, showNpcs = true, caption = true } = {}) {
   const pts = [...m.mobpos.map(([, x, y]) => [x, y]), ...m.portals.map((p) => [p.x, p.y]), ...m.npcs.map((n) => [n.x, n.y])];
   if (!m.minimap && !m.mobpos.length) return ""; // nothing worth drawing (e.g. small interiors)
@@ -629,14 +700,9 @@ function mapLayout(m, colorOf, { highlight = null, point = null, showMobs = true
     ox = -Math.min(...xs) + pad; oy = -Math.min(...ys) + pad;
     w = Math.max(...xs) - Math.min(...xs) + pad * 2; h = Math.max(...ys) - Math.min(...ys) + pad * 2;
   }
-  const r = Math.max(18, Math.min(w, h) / 45);
   const bg = m.minimap
-    ? `<image href="assets/minimap-hd/${m.gid}.webp" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none"></image>`
+    ? `<image href="assets/map-art/${m.gid}.webp" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" onerror="this.onerror=null;this.setAttribute('href','assets/minimap-hd/${m.gid}.webp')"></image>`
     : "";
-  const mobs = showMobs ? m.mobpos.map(([id, x, y]) => {
-    const name = getEntity("monster", id)?.name || id;
-    return `<circle class="mob" cx="${x + ox}" cy="${y + oy}" r="${r * 0.8}" fill="${colorOf[id] || "#999"}"><title>${esc(name)}</title></circle>`;
-  }).join("") : "";
   // zoom in on the circled portal so it's easy to spot on wide maps (e.g. towns)
   let vb = `0 0 ${w} ${h}`, zoomW = w;
   const target = point || (highlight && m.portals.find((p) => p.to === highlight));
@@ -649,34 +715,61 @@ function mapLayout(m, colorOf, { highlight = null, point = null, showMobs = true
     vb = `${vx} ${vy} ${cw} ${ch}`;
     zoomW = cw;
   }
+  const u = zoomW / 560; // about one screen pixel, so markers stay the same size on any map
+  // monsters stand where they spawn, bigger on large maps so they stay visible and tappable, without big ones taking over
+  const k = Math.min(3.5, Math.max(1, zoomW / 1000));
+  const tallest = zoomW * 0.13;
+  const mobs = showMobs ? m.mobpos.map(([id, x, y]) => {
+    const mob = getEntity("monster", id);
+    const cx = x + ox, cy = y + oy, color = colorOf[id] || "#999";
+    const title = `<title>${esc(mob?.name || id)}</title>`;
+    if (!mob?.sprite) return `<circle class="mob-dot" data-type="monster" data-id="${esc(id)}" cx="${cx}" cy="${cy}" r="${7 * u}" fill="${color}">${title}</circle>`;
+    const size = mob.sprite_size || [80, 80];
+    const fit = Math.min(k, Math.max(1, tallest / Math.max(...size)));
+    const [sw, sh] = size.map((v) => v * fit);
+    return `<g class="mob" data-type="monster" data-id="${esc(id)}">${title}<ellipse class="mob-base" cx="${cx}" cy="${cy}" rx="${sw * 0.42}" ry="${Math.max(sw * 0.12, 3 * u)}" fill="${color}"></ellipse><image href="assets/mob/${mob.gid}.gif" x="${cx - sw / 2}" y="${cy - sh}" width="${sw}" height="${sh}"></image></g>`;
+  }).join("") : "";
+  const label = (text, cx, y) => {
+    const anchor = cx < w * 0.12 ? "start" : cx > w * 0.88 ? "end" : "middle";
+    return `<text class="map-label" y="${y}" text-anchor="${anchor}">${esc(text)}</text>`;
+  };
   const seen = new Set();
   let rings = "";
-  const portals = m.portals.filter((p) => { const k = `${p.to}|${p.x}|${p.y}`; if (seen.has(k) || p.to === m.id) return false; seen.add(k); return true; }).map((p) => {
+  const shownPortals = m.portals.filter((p) => { const k = `${p.to}|${p.x}|${p.y}`; if (seen.has(k) || p.to === m.id) return false; seen.add(k); return true; });
+  // towns have dozens of markers: draw them smaller there, and skip the rings around hidden portals
+  const crowded = shownPortals.length + m.npcs.length > 12;
+  const mu = crowded ? u * 0.72 : u;
+  const portals = shownPortals.map((p) => {
     const t = getEntity("map", p.to);
-    const s = r * 1.3, cx = p.x + ox, cy = p.y + oy;
+    // kept inside the map, for portals right at its edge
+    const edge = 14 * mu;
+    const cx = Math.max(edge, Math.min(w - edge, p.x + ox)), cy = Math.max(edge, Math.min(h - edge, p.y + oy - 15 * mu));
     const hidden = p.kind === "hidden";
-    if (p.to === highlight || (!highlight && !point && hidden)) {
+    if (p.to === highlight || (!highlight && !point && hidden && !crowded)) {
       const isT = p.to === highlight;
-      const R = isT ? zoomW * 0.09 : Math.max(r * 4.5, Math.min(w, h) / 9);
-      const sw = isT ? zoomW * 0.016 : Math.max(8, w * 0.004);
-      if (isT) rings += `<circle class="ring halo" cx="${cx}" cy="${cy - s * 0.4}" r="${R}" style="stroke-width:${sw * 1.9}px"></circle>`;
-      rings += `<circle class="ring ${isT ? "target" : ""}" cx="${cx}" cy="${cy - s * 0.4}" r="${R}" style="stroke-width:${sw}px"></circle>`;
+      const R = isT ? zoomW * 0.09 : 27 * u;
+      const sw = isT ? zoomW * 0.016 : 3 * u;
+      if (isT) rings += `<circle class="ring halo" cx="${cx}" cy="${cy}" r="${R}" style="stroke-width:${sw * 1.9}px"></circle>`;
+      rings += `<circle class="ring ${isT ? "target" : ""}" cx="${cx}" cy="${cy}" r="${R}" style="stroke-width:${sw}px${isT ? "" : `;stroke-dasharray:${8 * u} ${5 * u}`}"></circle>`;
     }
-    return `<rect class="portal ${hidden ? "hidden-p" : ""}" x="${cx - s}" y="${cy - s * 1.6}" width="${s * 2}" height="${s * 2.4}" rx="${s}" data-type="map" data-id="${esc(p.to)}"><title>${hidden ? "Hidden portal" : "Portal"} → ${esc(t?.name || p.to)}</title></rect>`;
+    const glyph = hidden ? `<text class="glyph" y="5.5" text-anchor="middle">?</text>` : `<path d="M-5.5,2.5 L0,-3.5 L5.5,2.5"></path>`;
+    const name = caption && shownPortals.length <= 8 ? label(t?.name || p.to, cx, 28) : "";
+    return `<g class="portal ${hidden ? "hidden-p" : ""}" data-type="map" data-id="${esc(p.to)}" transform="translate(${cx} ${cy}) scale(${mu})"><title>${hidden ? "Hidden portal" : "Portal"} → ${esc(t?.name || p.to)}</title><circle class="glow" r="19"></circle><circle class="disc" r="12.5"></circle>${glyph}${name}</g>`;
   }).join("");
-  const d = r * 1.1;
+  const head = 70; // NPC pins point at the top of the character
   const npcs = showNpcs || point ? m.npcs.map((n) => {
     const e = getEntity("npc", n.npc);
-    const cx = n.x + ox, cy = n.y + oy - d;
-    return `<path class="npc-mark" d="M${cx},${cy - d} L${cx + d},${cy} L${cx},${cy + d} L${cx - d},${cy} Z" data-type="npc" data-id="${esc(n.npc)}"><title>${esc(e?.name || n.npc)}</title></path>`;
+    const cx = n.x + ox, cy = n.y + oy - head;
+    const name = caption && m.npcs.length <= 6 ? label(e?.name || n.npc, cx, -30) : "";
+    return `<g class="npc-mark" data-type="npc" data-id="${esc(n.npc)}" transform="translate(${cx} ${cy}) scale(${mu})"><title>${esc(e?.name || n.npc)}</title><path d="M0,0 C-2.5,-5 -9,-9.5 -9,-16 A9,9 0 1 1 9,-16 C9,-9.5 2.5,-5 0,0 Z"></path><circle cy="-16" r="3.4"></circle>${name}</g>`;
   }).join("") : "";
   if (point) {
-    const R = zoomW * 0.09, sw = zoomW * 0.016;
-    rings += `<circle class="ring halo" cx="${point.x + ox}" cy="${point.y + oy - d}" r="${R}" style="stroke-width:${sw * 1.9}px"></circle>
-      <circle class="ring target" cx="${point.x + ox}" cy="${point.y + oy - d}" r="${R}" style="stroke-width:${sw}px"></circle>`;
+    const R = zoomW * 0.09, sw = zoomW * 0.016, py = point.y + oy - head - 16 * mu;
+    rings += `<circle class="ring halo" cx="${point.x + ox}" cy="${py}" r="${R}" style="stroke-width:${sw * 1.9}px"></circle>
+      <circle class="ring target" cx="${point.x + ox}" cy="${py}" r="${R}" style="stroke-width:${sw}px"></circle>`;
   }
   const cap = caption
-    ? `<p class="sub" style="margin-top:6px">${m.minimap ? "In-game minimap, sharpened" : "Layout from the game data"}. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (circled) · <span style="color:var(--npc)">◆</span> NPC · click any marker${showMobs ? " · dots = spawn points" : ""}</p>`
+    ? `<p class="sub" style="margin-top:6px">${m.minimap ? "Map from the game files" : "Layout from the game data"}. <span style="color:var(--accent)">●</span> portal · <span style="color:var(--hidden)">●</span> hidden portal · <span style="color:var(--npc)">●</span> NPC · click any marker${showMobs && m.mobpos.length ? " · monsters are shown where they spawn" : ""}</p>`
     : "";
   return `<svg class="layout-svg ${m.minimap ? "has-img" : ""}" viewBox="${vb}" role="img" aria-label="${esc(m.name)} map">${bg}${mobs}${rings}${portals}${npcs}</svg>${cap}`;
 }
@@ -820,7 +913,7 @@ function npcDetail(n) {
     const pic = i < 4 ? mapLayout(m, {}, { point: loc, showMobs: false, caption: false }) : "";
     return `<h3>${n.locations.length > 1 ? `Location ${i + 1}` : "Where to find"}</h3>
       <p>${link("map", m.id)}${m.zone && m.zone !== m.name ? ` <span class="sub">· ${esc(m.zone)}</span>` : ""}</p>${pic}
-      ${pic ? `<p class="sub" style="margin-top:4px">Circled on the in-game minimap.</p>` : ""}`;
+      ${pic ? `<p class="sub" style="margin-top:4px">Circled on the map.</p>` : ""}`;
   }).join("");
   html += questList("Quests they give", idx.qGiver[n.id], true);
   html += questList("Quests you turn in here", idx.qEnder[n.id], true);
@@ -914,7 +1007,7 @@ function cozyButton(label = "Find live shops on Cozy Market ↗") {
 // (untraded items like quest items have no page there)
 function heneButton(name, cls = "btn ghost") {
   const it = priceOf(name) && byId.items[slugify(name)];
-  const url = it?.gid ? `${HENEFM_URL}/items/${it.gid}` : `${HENEFM_URL}/?q=${encodeURIComponent(name)}`;
+  const url = it?.gid && !HENEFM_NO_PAGE.has(it.gid) ? `${HENEFM_URL}/items/${it.gid}` : `${HENEFM_URL}/?q=${encodeURIComponent(name)}`;
   return `<a class="${cls}" href="${url}" target="_blank" rel="noopener">HeneFM ↗</a>`;
 }
 

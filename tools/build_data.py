@@ -47,6 +47,17 @@ ORG_ONLY = {"Fairy 1", "Orange Slime", "Ultra Jr. Necki 1"}
 VARIANT_RE = re.compile(r"\((.+)\)$")
 
 
+def sprite_size(path):
+    """Width and height from the file's header, or None if there's no such file.
+    Sprites that don't animate are really PNGs, even though they're all named .gif."""
+    if not path.exists():
+        return None
+    head = path.read_bytes()[:24]
+    if head.startswith(b"\x89PNG"):
+        return [int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")]
+    return [int.from_bytes(head[6:8], "little"), int.from_bytes(head[8:10], "little")]
+
+
 def slug(s):
     return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
 
@@ -162,6 +173,7 @@ def main():
             "undead": m["undead"],
             "boss": m["boss"],
             "sprite": (OUT.parent / "assets" / "mob" / f"{m['id']}.gif").exists(),
+            "sprite_size": sprite_size(OUT.parent / "assets" / "mob" / f"{m['id']}.gif"),
             "meso": meso,
             "drops": d,
             "sources": sources,
@@ -289,7 +301,7 @@ def main():
             "respawn": respawn or None,
             "portals": portals,
             "npcs": [{"npc": slug(n[0]), "x": n[1], "y": n[2]} for n in mp["npcs"]],
-            "size": [mp["w"], mp["h"]],
+            "size": [mm[3], mm[4]] if mm else [mp["w"], mp["h"]],
             "origin": [mm[0], mm[1]] if mm else None,
             "minimap": bool(mm) and (OUT.parent / "assets" / "minimap" / f"{mp['id']}.png").exists(),
             "mobpos": [[slug(gid_to_mob.get(g, str(g))), x, y] for g, x, y in mp["mobpos"]],
