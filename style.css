@@ -138,3 +138,20 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .unv { color: var(--accent); font-weight: 700; margin-left: 4px; }
 footer { text-align: center; color: var(--muted); font-size: .82em; padding: 24px 16px; line-height: 1.7; }
+
+/* ---------- images ---------- */
+.sprite { display: inline-block; vertical-align: middle; image-rendering: auto; }
+.spr-cell { display: inline-flex; width: 34px; justify-content: center; align-items: center; margin-right: 6px; vertical-align: middle; }
+#detail li .spr-cell { width: 30px; margin-right: 0; }
+.hero { display: flex; justify-content: center; align-items: flex-end; min-height: 90px; padding: 8px; margin-bottom: 8px;
+  background: radial-gradient(ellipse at 50% 85%, var(--accent-soft), transparent 70%); border-radius: 10px; }
+#tooltip .sprite { float: right; margin: 0 0 4px 8px; }
+.layout-svg.has-img { background: #000; }
+.layout-svg .ring { fill: none; stroke: var(--hidden); stroke-dasharray: 26 14; opacity: .9; }
+.layout-svg .ring.target { stroke: #ff2d20; stroke-dasharray: none; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
+.layout-svg .ring.halo { stroke: #fff; stroke-dasharray: none; opacity: .85; }
+@media (prefers-reduced-motion: reduce) { .layout-svg .ring.target { animation: none; } }
+.howto { margin-bottom: 14px; }
+.howto p { margin: 0 0 6px; font-size: .92em; }
+td .spr-cell { width: 34px; }

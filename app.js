@@ -195,7 +195,7 @@ function filtered() {
   const lvOf = (e) => (tab === "maps" ? e.levels?.[0] : e.level);
   const rows = db[tab].filter((e) => {
     if (q && !e.name.toLowerCase().includes(q)) return false;
-    if (tab === "monsters" && !showVariants && (e.variant || e.level >= 200 || e.name.startsWith("Tutorial"))) return false;
+    if (tab === "monsters" && !showVariants && (e.variant || e.level >= 200 || e.name.startsWith("Tutorial") || (!idx.spawnsOf[e.id] && !e.drops.length))) return false;
     const lv = lvOf(e);
     if (!isNaN(min) && (lv == null || lv < min)) return false;
     if (!isNaN(max) && (lv == null || lv > max)) return false;
@@ -228,11 +228,13 @@ function renderTable() {
     cols.map((c, i) => {
       let v = c.show ? c.show(e) : valueOf(c, e);
       let extra = "";
+      if (i === 0 && tab === "monsters") v = null;
       if (i === 0 && e.boss) extra = ' <span class="badge">Boss</span>';
       if (i === 0 && e.variant) extra = ` <span class="badge">${esc(e.variant)}</span>`;
       if (i === 0 && e.disputed) extra += '<span class="unv" title="Sources disagree; see details">?</span>';
       if (i === 0 && e.region === "Hidden Street") extra = ' <span class="badge hidden">Hidden</span>';
-      return `<td class="${c.num ? "num" : ""}">${esc(fmt(v))}${extra}</td>`;
+      const cell = i === 0 && tab === "monsters" ? `<span class="spr-cell">${sprite(e, 28)}</span>${esc(e.name)}` : esc(fmt(v));
+      return `<td class="${c.num ? "num" : ""}">${cell}${extra}</td>`;
     }).join("") + "</tr>").join("");
   $("#table").innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
   $("#count").textContent = `${rows.length.toLocaleString()} result${rows.length === 1 ? "" : "s"}`;
@@ -282,6 +284,11 @@ function link(type, id, label) {
   if (!e) return esc(label ?? id);
   const tip = type === "monster" ? ` data-tip="1"` : "";
   return `<a href="#${type}/${encodeURIComponent(id)}" data-type="${type}" data-id="${esc(id)}"${tip}>${esc(label ?? e.name)}</a>`;
+}
+
+function sprite(mob, h = 32) {
+  if (!mob?.sprite) return "";
+  return `<img class="sprite" src="assets/mob/${mob.gid}.gif" alt="" loading="lazy" style="max-height:${h}px">`;
 }
 
 function levelText(l) { return l ? (l[0] === l[1] ? `${l[0]}` : `${l[0]}–${l[1]}`) : "—"; }
@@ -343,12 +350,14 @@ function mapDetail(m) {
   let html = `<h2>${esc(m.name)}</h2><p class="sub">${esc(m.zone)} · ${esc(m.type || m.region)}${m.region === "Hidden Street" ? ' · <span class="badge hidden">Hidden Street</span>' : ""}</p>`;
   html += dl([["Level range", m.levels ? levelText(m.levels) : null], ["Total monsters", total || null]]);
   html += mapLayout(m, colorOf);
+  const isHidden = m.region === "Hidden Street";
+  if (isHidden) html += howToGetHere(m);
 
   if (m.spawns.length) {
     html += `<h3>Monsters on this map</h3><ul>` + m.spawns.map((s) => {
       const mob = getEntity("monster", s.monster);
       const resp = m.respawn?.[s.monster];
-      return `<li><i class="dot" style="background:${colorOf[s.monster]}"></i>${link("monster", s.monster)}
+      return `<li><i class="dot" style="background:${colorOf[s.monster]}"></i><span class="spr-cell">${sprite(mob, 30)}</span>${link("monster", s.monster)}
         ${mob?.boss ? '<span class="badge">Boss</span>' : ""}<span class="right">×${s.count}${resp ? ` · respawn ${Math.round(resp / 60)} min` : ""}</span></li>`;
     }).join("") + `</ul>`;
   }
@@ -366,12 +375,15 @@ function mapDetail(m) {
   if (hidden.length) html += `<h3>Hidden portals</h3><ul>${hidden.map(portalLi).join("")}</ul>`;
   if (into.length) html += `<h3>One-way in from</h3><ul>${into.map((id) => `<li>${link("map", id)}</li>`).join("")}</ul>`;
   if (m.npcs.length) html += `<h3>NPCs</h3><p>${m.npcs.map(esc).join(", ")}</p>`;
+  if (!isHidden) html += howToGetHere(m);
   return html;
 }
 
-function mapLayout(m, colorOf) {
+// Draws a map: the real in-game minimap when we have it, with spawn points and
+// portals on top. `highlight` = id of a destination map whose portal(s) get circled.
+function mapLayout(m, colorOf, { highlight = null, showMobs = true, caption = true } = {}) {
   const pts = [...m.mobpos.map(([, x, y]) => [x, y]), ...m.portals.map((p) => [p.x, p.y])];
-  if (!pts.length) return "";
+  if (!m.minimap && !m.mobpos.length) return ""; // nothing worth drawing (e.g. small interiors)
   let ox, oy, w, h;
   if (m.origin) { [ox, oy] = m.origin; [w, h] = m.size; }
   else {
@@ -381,22 +393,69 @@ function mapLayout(m, colorOf) {
     w = Math.max(...xs) - Math.min(...xs) + pad * 2; h = Math.max(...ys) - Math.min(...ys) + pad * 2;
   }
   const r = Math.max(18, Math.min(w, h) / 45);
-  const mobs = m.mobpos.map(([id, x, y]) => {
+  const bg = m.minimap
+    ? `<image href="assets/minimap/${m.gid}.png" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none"></image>`
+    : "";
+  const mobs = showMobs ? m.mobpos.map(([id, x, y]) => {
     const name = getEntity("monster", id)?.name || id;
-    return `<circle class="mob" cx="${x + ox}" cy="${y + oy}" r="${r}" fill="${colorOf[id] || "#999"}"><title>${esc(name)}</title></circle>`;
-  }).join("");
+    return `<circle class="mob" cx="${x + ox}" cy="${y + oy}" r="${r * 0.8}" fill="${colorOf[id] || "#999"}"><title>${esc(name)}</title></circle>`;
+  }).join("") : "";
+  // zoom in on the circled portal so it's easy to spot on wide maps (e.g. towns)
+  let vb = `0 0 ${w} ${h}`, zoomW = w;
+  const target = highlight && m.portals.find((p) => p.to === highlight);
+  if (target) {
+    const cw = Math.min(w, 1800);
+    const ch = Math.min(h, cw * 0.62);
+    const tx = target.x + ox, ty = target.y + oy;
+    const vx = Math.max(0, Math.min(w - cw, tx - cw / 2));
+    const vy = Math.max(0, Math.min(h - ch, ty - ch * 0.6));
+    vb = `${vx} ${vy} ${cw} ${ch}`;
+    zoomW = cw;
+  }
   const seen = new Set();
-  const portals = m.portals.filter((p) => { const k = `${p.to}|${p.x}|${p.y}`; if (seen.has(k)) return false; seen.add(k); return true; }).map((p) => {
+  let rings = "";
+  const portals = m.portals.filter((p) => { const k = `${p.to}|${p.x}|${p.y}`; if (seen.has(k) || p.to === m.id) return false; seen.add(k); return true; }).map((p) => {
     const t = getEntity("map", p.to);
     const s = r * 1.3, cx = p.x + ox, cy = p.y + oy;
-    return `<rect class="portal ${p.kind === "hidden" ? "hidden-p" : ""}" x="${cx - s}" y="${cy - s * 1.6}" width="${s * 2}" height="${s * 2.4}" rx="${s}" data-type="map" data-id="${esc(p.to)}"><title>${p.kind === "hidden" ? "Hidden portal" : "Portal"} → ${esc(t?.name || p.to)}</title></rect>`;
+    const hidden = p.kind === "hidden";
+    if (p.to === highlight || (!highlight && hidden)) {
+      const isT = p.to === highlight;
+      const R = isT ? zoomW * 0.09 : Math.max(r * 4.5, Math.min(w, h) / 9);
+      const sw = isT ? zoomW * 0.016 : Math.max(8, w * 0.004);
+      if (isT) rings += `<circle class="ring halo" cx="${cx}" cy="${cy - s * 0.4}" r="${R}" style="stroke-width:${sw * 1.9}px"></circle>`;
+      rings += `<circle class="ring ${isT ? "target" : ""}" cx="${cx}" cy="${cy - s * 0.4}" r="${R}" style="stroke-width:${sw}px"></circle>`;
+    }
+    return `<rect class="portal ${hidden ? "hidden-p" : ""}" x="${cx - s}" y="${cy - s * 1.6}" width="${s * 2}" height="${s * 2.4}" rx="${s}" data-type="map" data-id="${esc(p.to)}"><title>${hidden ? "Hidden portal" : "Portal"} → ${esc(t?.name || p.to)}</title></rect>`;
   }).join("");
-  return `<svg class="layout-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="Spawn and portal layout">${mobs}${portals}</svg>
-    <p class="sub" style="margin-top:6px">Spawn points and portals from the game data. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (click to go)</p>`;
+  const cap = caption
+    ? `<p class="sub" style="margin-top:6px">${m.minimap ? "In-game minimap" : "Layout from the game data"}. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (circled) · click a portal to go there${showMobs ? " · dots = spawn points" : ""}</p>`
+    : "";
+  return `<svg class="layout-svg ${m.minimap ? "has-img" : ""}" viewBox="${vb}" role="img" aria-label="${esc(m.name)} map">${bg}${mobs}${rings}${portals}</svg>${cap}`;
+}
+
+// "How to get here": the neighbouring maps, with the portal that leads here circled.
+function howToGetHere(m) {
+  const from = [...(idx.incoming[m.id] || [])].filter((id) => id !== m.id).map((id) => getEntity("map", id));
+  if (!from.length) return "";
+  // prefer the maps where the way in is a hidden portal, then towns/fields with a drawable minimap
+  from.sort((a, b) => {
+    const ha = a.portals.some((p) => p.to === m.id && p.kind === "hidden") ? 0 : 1;
+    const hb = b.portals.some((p) => p.to === m.id && p.kind === "hidden") ? 0 : 1;
+    return ha - hb || (b.minimap ? 1 : 0) - (a.minimap ? 1 : 0);
+  });
+  const shown = from.slice(0, 3);
+  const cards = shown.map((src) => {
+    const p = src.portals.find((x) => x.to === m.id);
+    const how = p?.kind === "hidden" ? "the hidden portal" : "the portal";
+    return `<div class="howto"><p>From ${link("map", src.id)}, take ${how} circled below${src.zone !== m.zone ? ` (${esc(src.zone)})` : ""}.</p>
+      ${mapLayout(src, {}, { highlight: m.id, showMobs: false, caption: false })}</div>`;
+  }).join("");
+  const more = from.length > shown.length ? `<p class="sub">Also reachable from ${from.slice(shown.length).map((x) => link("map", x.id)).join(", ")}.</p>` : "";
+  return `<h3>How to get here</h3>${cards}${more}`;
 }
 
 function monsterDetail(mob) {
-  let html = `<h2>${esc(mob.name)} ${mob.boss ? '<span class="badge">Boss</span>' : ""}</h2>
+  let html = `${mob.sprite ? `<div class="hero">${sprite(mob, 120)}</div>` : ""}<h2>${esc(mob.name)} ${mob.boss ? '<span class="badge">Boss</span>' : ""}</h2>
     <p class="sub">Monster${mob.variant ? ` · ${esc(mob.variant)}` : ""}</p>`;
   html += dl([
     ["Level", fmt(mob.level)], ["HP", fmt(mob.hp) + (mob.disputed?.hp ? '<span class="unv">?</span>' : "")], ["EXP", fmt(mob.exp)],
@@ -435,7 +494,7 @@ function itemDetail(it) {
   const by = idx.droppedBy[it.id] || [];
   html += `<h3>Dropped by (${by.length})</h3>`;
   html += by.length
-    ? `<ul>${by.map((d) => `<li>${link("monster", d.monster)}<span class="right">Lv ${getEntity("monster", d.monster)?.level} · ${rateText(d.rate)}</span></li>`).join("")}</ul>`
+    ? `<ul>${by.map((d) => `<li><span class="spr-cell">${sprite(getEntity("monster", d.monster), 26)}</span>${link("monster", d.monster)}<span class="right">Lv ${getEntity("monster", d.monster)?.level} · ${rateText(d.rate)}</span></li>`).join("")}</ul>`
     : `<p class="sub">No Classic drop reported.</p>`;
   return html;
 }
@@ -458,7 +517,7 @@ function onHover(e) {
   if (!mob) return;
   const tip = $("#tooltip");
   const top = mob.drops.slice(0, 6).map((d) => `<div class="row"><span>${esc(getEntity("item", d.item)?.name || d.item)}</span><span>${rateText(d.rate)}</span></div>`).join("");
-  tip.innerHTML = `<strong>${esc(mob.name)}</strong><div class="t-sub">Lv ${mob.level} · ${fmt(mob.hp)} HP · ${fmt(mob.exp)} EXP</div>` +
+  tip.innerHTML = `${sprite(mob, 56)}<strong>${esc(mob.name)}</strong><div class="t-sub">Lv ${mob.level} · ${fmt(mob.hp)} HP · ${fmt(mob.exp)} EXP</div>` +
     (top ? `${top}${mob.drops.length > 6 ? `<div class="t-sub" style="margin:4px 0 0">+${mob.drops.length - 6} more · click for full table</div>` : ""}` : `<div class="t-sub">No Classic drops reported yet.</div>`);
   tip.hidden = false;
   const r = a.getBoundingClientRect();

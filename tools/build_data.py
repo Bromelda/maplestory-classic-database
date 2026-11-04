@@ -7,6 +7,9 @@ Inputs (pass the folder of a checkout of Club FM's public data, branch `live`):
     cd fm && git sparse-checkout set --no-cone '/data/*' '!/data/sprite/'
     python3 tools/build_data.py path/to/fm/data
 
+Images: copy <fm>/data/minimap/<mapId>.png to assets/minimap/ and <fm>/data/sprite/<mobId>.gif
+to assets/mob/ before running (they come from the Classic World game files).
+
 Source rules (see README "Data sources"):
   * Monster stats come from the Classic World game files (via Club FM / maplestory.io)
     and are kept only when a second Classic source (NiaDB, MapleStoryClassic.org /
@@ -143,6 +146,7 @@ def main():
             "resist": m["resist"] or None,
             "undead": m["undead"],
             "boss": m["boss"],
+            "sprite": (OUT.parent / "assets" / "mob" / f"{m['id']}.gif").exists(),
             "meso": meso,
             "drops": d,
             "sources": sources,
@@ -200,6 +204,7 @@ def main():
             "npcs": [n[0] for n in mp["npcs"]],
             "size": [mp["w"], mp["h"]],
             "origin": [mm[0], mm[1]] if mm else None,
+            "minimap": bool(mm) and (OUT.parent / "assets" / "minimap" / f"{mp['id']}.png").exists(),
             "mobpos": [[slug(gid_to_mob.get(g, str(g))), x, y] for g, x, y in mp["mobpos"]],
         })
     for m in maps:

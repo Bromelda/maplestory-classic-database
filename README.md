@@ -9,10 +9,11 @@ It's a plain static website with no build step for the site itself. Open it loca
 - **Interactive world map**: Maple Island and Victoria Island, with every area colored by its typical training level. Click an area to list all its maps and their monsters.
 - **Map pages** show:
   - the exact spawn count of each monster (for example 10 Shroom, 6 Red Snail, 5 Slime…)
-  - a drawing of where monsters spawn and where portals sit, so you can click a portal to jump there
+  - the real in-game minimap, with spawn points and portals on top, so you can click a portal to jump there
+  - **How to get here**: the neighbouring maps' minimaps, zoomed in, with the portal that leads here circled. This is especially handy for hidden streets.
   - connected maps, **hidden portals**, and one-way entrances
   - NPCs, plus boss respawn timers
-- **Monster pages**: full stats, the Classic drop table with drop rates, and every map the monster spawns on. Hover a monster anywhere to preview its drops.
+- **Monster pages**: the animated in-game sprite, full stats, the Classic drop table with drop rates, and every map the monster spawns on. Hover a monster anywhere to preview its drops.
 - **Item pages**: stats, requirements, and every monster that drops it, sorted by rate.
 - **Jobs**: the Classic job tree (no Pirates, 2nd job at 30, Magician 1st job at level 10).
 - Searchable, sortable tables for monsters, items, maps and jobs. Links are shareable (for example `#map/henesys_hunting_ground_i`).
@@ -31,6 +32,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 | Monster stats, map layouts, spawn points | Classic World game files, via [Club FM](https://maplefm.gg) / maplestory.io |
 | Stat cross-check | [NiaDB](https://meowdb.com/msclassic), [MapleStoryClassic.org](https://maplestoryclassic.org/monsters/) |
 | Maps, portals, spawns, drops | [MapleClassic Wiki](https://mapleclassic.wiki) (CC BY-NC-SA 4.0) |
+| Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg) |
 | Job levels and instructors | Game quest data plus [Henesys.gg](https://henesys.gg/guides/beginner), [Metaroad](https://metaroad.gg/maplestory-classic/meta/beginners-guide-maplestory-classic-world), [MapleStory-Classic.com](https://maplestory-classic.com/guides/first-job-advancement-guide) |
 
 ## Updating the data
@@ -60,11 +62,15 @@ GitHub Pages needs a public repo, or a paid plan for a private one. Turn it on u
 ## Roadmap
 
 - Damage calculator (job, level, stats, skills → damage range and hits to kill)
-- Free Market tab with live listings (data source still to decide)
+- Free Market tab with live listings (candidates: MesoWatch, MapleStory.market, Cozy Market, Club FM, FreeMarketClassic)
+- Skill planner, using Planet Helper and MS-Classic as references
+- The real in-game Victoria Island world map in place of the schematic
 - Forgotten Hollow, Orbis and El Nath once they open in Classic
 
 ## License and disclaimer
 
 The map, spawn and drop data is adapted from the MapleClassic Wiki under **CC BY-NC-SA 4.0**, so this project's data is shared under the same license, for non-commercial use with attribution.
 
-This is an unofficial fan project, not affiliated with or endorsed by Nexon. MapleStory is a trademark of Nexon. No game art, sprites or music are included. The world map and spawn drawings are original schematics.
+Game images (minimaps and monster sprites) are © NEXON, from MapleStory Classic World. They're used non-commercially under [Nexon's guide for fan content](https://m.nexon.com/terms/1037), so this site must stay free, with no paid access or selling.
+
+This is an unofficial fan project, not affiliated with or endorsed by Nexon. MapleStory is a trademark of Nexon.
