@@ -3,7 +3,7 @@
   "summary": {
     "monsters_total": 83,
     "live_nonvariant_monsters": 69,
-    "live_nonvariant_monsters_missing_meso_range": 31,
+    "live_nonvariant_monsters_missing_meso_range": 30,
     "items_total": 848,
     "equipment_items": 476,
     "equipment_items_with_clean_roll_ranges": 0
@@ -53,11 +53,6 @@
       "id": "ligator",
       "name": "Ligator",
       "level": 31
-    },
-    {
-      "id": "fire_boar",
-      "name": "Fire Boar",
-      "level": 32
     },
     {
       "id": "king_slime",
