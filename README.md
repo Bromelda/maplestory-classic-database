@@ -20,7 +20,13 @@ It's a plain static website with no build step for the site itself. Open it loca
 - **Market**: typical Free Market prices for about 1,500 items, with a 7-day trend, prices by stat roll (for example clean versus +8 ATT Work Gloves), and the character names of shops selling near that price. Each item links to [Cozy Market](https://cozy.markets/market) for live shops and channels. Monster drop tables show roughly what each drop is worth.
 - **Patches**: Classic World patch notes, maintenance, events and Cash Shop posts from Nexon, linked to the full post.
 - **Log**: a daily list of anything new, such as new drops players find, new monsters, stat changes, and new or ended quests and events.
-- **Calculator**: enter class, weapon, level, stats, weapon or magic attack, mastery and skill % to get your damage range and a **hits-to-kill table for every monster near your level**. It uses each monster's defense, elemental weakness and level gap. It uses Classic World's new formulas (NiaDB, FullBoosts and MS-Classic agree; there's a switch for the MapleClassic Wiki variant). Your inputs are remembered in your browser.
+- **Calculator**: pick your class, weapon and skill (attack skills preset at max level, with values from NiaDB's skill pages) and enter your stats. You get:
+  - your damage range, average and max crit
+  - your accuracy
+  - a **"Fight a monster"** matchup: damage, hits to kill, hit chance, the accuracy you need for 100%, and a verdict (One-shot / Easy / Good / Slow / Too tough / Hard to hit)
+  - a table of every monster near your level
+
+  It uses Classic World's own formulas, including the level-gap and defense penalties, and includes Rage and Precise Strikes. Your inputs are remembered in your browser.
 - **Jobs**: the Classic job tree (no Pirates, 2nd job at 30, Magician 1st job at level 10).
 - Searchable, sortable tables for monsters, items, maps and jobs. Links are shareable (for example `#map/henesys_hunting_ground_i`).
 
