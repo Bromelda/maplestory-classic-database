@@ -2,7 +2,7 @@
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
 const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta"];
-const OPTIONAL = ["log", "patches"]; // fine if missing
+const OPTIONAL = ["log", "patches", "audit_gaps", "source_refs"]; // fine if missing
 const db = {};
 const byId = {};
 const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
@@ -25,6 +25,15 @@ function pct(x) { return x == null ? "—" : `${x > 0 ? "▲" : x < 0 ? "▼" : 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => (n == null ? "—" : typeof n === "number" ? n.toLocaleString() : n);
+
+function sourceLinks(entityType, entityId) {
+  const refs = Array.isArray(db.source_refs) ? db.source_refs.filter((r) => r.entity_type === entityType && r.entity_id === entityId) : [];
+  if (!refs.length) return "";
+  return `<h3>Source checks</h3><ul>${refs.map((r) => {
+    const facts = Array.isArray(r.facts) && r.facts.length ? ` <span class="sub">(${r.facts.map(esc).join(", ")})</span>` : "";
+    return `<li><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.source)} ↗</a>${facts}</li>`;
+  }).join("")}</ul>`;
+}
 
 // ---------- world map layout (schematic, not to scale) ----------
 const ZONES = {
@@ -197,7 +206,7 @@ function priceOf(name) { return idx.priceByName[String(name).toLowerCase()]; }
 
 function bind() {
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
-  ["#search", "#minLv", "#maxLv", "#variants", "#cat", "#qarea", "#hideDone"].forEach((s) => $(s).addEventListener("input", renderTable));
+  ["#search", "#minLv", "#maxLv", "#variants", "#cat", "#qarea", "#hideDone"].forEach((s) => $(s).addEventListener("input", () => FEED_TABS.includes(state.tab) ? renderFeed() : renderTable()));
   const areas = [...new Set(db.quests.map((q) => q.area))].sort();
   $("#qarea").innerHTML = `<option value="">All areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
   window.addEventListener("hashchange", fromHash);
@@ -222,7 +231,7 @@ function onLinkClick(e) {
 }
 
 // ---------- tabs ----------
-const FEED_TABS = ["patches", "log"];
+const FEED_TABS = ["patches", "log", "audit"];
 function switchTab(tab) {
   state.tab = tab;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
@@ -642,6 +651,7 @@ function monsterDetail(mob) {
     ? `<ul>${where.map((w) => `<li>${link("map", w.map)}<span class="right">×${w.count}</span></li>`).join("")}</ul>`
     : `<p class="sub">Doesn't spawn on any regular map.</p>`;
   html += `<p class="sub" style="margin-top:12px">Stats confirmed by: ${mob.sources.map(esc).join(", ")}</p>`;
+  html += sourceLinks("monster", mob.id);
   return html;
 }
 
@@ -662,6 +672,7 @@ function itemDetail(it) {
   html += by.length
     ? `<ul>${by.map((d) => `<li><span class="spr-cell">${sprite(getEntity("monster", d.monster), 26)}</span>${link("monster", d.monster)}<span class="right">Lv ${getEntity("monster", d.monster)?.level} · ${rateText(d.rate)}</span></li>`).join("")}</ul>`
     : `<p class="sub">No Classic drop reported.</p>`;
+  html += sourceLinks("item", it.id);
   return html;
 }
 
@@ -698,6 +709,22 @@ function logText(e) {
 function renderFeed() {
   const q = $("#search").value.trim().toLowerCase();
   const view = $("#feedView");
+  if (state.tab === "audit") {
+    const audit = db.audit_gaps || {};
+    const s = audit.summary || {};
+    const missing = (audit.missing_meso_ranges || []).filter((m) => !q || m.name.toLowerCase().includes(q));
+    const refs = Array.isArray(db.source_refs) ? db.source_refs : [];
+    view.innerHTML = `<div class="market-bar"><div><strong>Classic data audit</strong><br><span class="sub">Known gaps only. Unknown values stay unknown until they are verified from Classic-specific evidence.</span></div></div>
+      <div class="audit-summary">
+        <p><strong>${fmt(s.live_nonvariant_monsters_missing_meso_range || 0)}</strong> live monsters missing meso ranges · <strong>${fmt(s.equipment_items_with_clean_roll_ranges || 0)}</strong> / ${fmt(s.equipment_items || 0)} equipment items have clean-roll ranges · <strong>${fmt(refs.length)}</strong> exact source checks recorded.</p>
+      </div>
+      <h3>Missing meso ranges (${missing.length})</h3>
+      ${missing.length ? `<table class="drops"><thead><tr><th>Monster</th><th>Level</th><th>Status</th></tr></thead><tbody>${missing.map((m) => `<tr><td>${link("monster", m.id)}</td><td class="num">${fmt(m.level)}</td><td><span class="badge">Needs verification</span></td></tr>`).join("")}</tbody></table>` : `<p class="sub">No matching gaps.</p>`}
+      <h3>Verification rules</h3>
+      <ul>${(audit.notes || []).map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`;
+    $("#count").textContent = `${missing.length} gap${missing.length === 1 ? "" : "s"}`;
+    return;
+  }
   if (state.tab === "patches") {
     const posts = (db.patches || []).filter((p) => !q || `${p.name} ${p.summary}`.toLowerCase().includes(q));
     view.innerHTML = `<div class="market-bar"><div><strong>Classic World patches & news</strong><br><span class="sub">Patch notes, maintenance, events and Cash Shop updates from Nexon, checked every morning. Click a post to read it in full on nexon.com.</span></div></div>` +
