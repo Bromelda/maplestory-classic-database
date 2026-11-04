@@ -1,25 +1,21 @@
 [
-  { "id": "beginner", "name": "Beginner", "branch": "Beginner", "advancement": 0, "level": 1, "notes": "Every character starts here on Maple Island." },
+  { "id": "beginner", "name": "Beginner", "branch": "Beginner", "advancement": 0, "level": 1, "notes": "Every character starts on Maple Island." },
 
-  { "id": "warrior", "name": "Warrior", "branch": "Warrior", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Dances with Balrog", "location": "Perion", "stat": "STR" },
-  { "id": "fighter", "name": "Fighter", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR" },
-  { "id": "page", "name": "Page", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR" },
-  { "id": "spearman", "name": "Spearman", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR" },
+  { "id": "warrior", "name": "Warrior", "branch": "Warrior", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Dances with Balrog", "location": "Warriors' Sanctuary, Perion", "stat": "STR" },
+  { "id": "fighter", "name": "Fighter", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR", "notes": "2nd job starts by talking to Dances with Balrog." },
+  { "id": "page", "name": "Page", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR", "notes": "2nd job starts by talking to Dances with Balrog." },
+  { "id": "spearman", "name": "Spearman", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR", "notes": "2nd job starts by talking to Dances with Balrog." },
 
-  { "id": "magician", "name": "Magician", "branch": "Magician", "advancement": 1, "level": 8, "from": "beginner", "instructor": "Grendel the Really Old", "location": "Ellinia", "stat": "INT" },
-  { "id": "fp_wizard", "name": "Wizard (Fire/Poison)", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT" },
-  { "id": "il_wizard", "name": "Wizard (Ice/Lightning)", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT" },
-  { "id": "cleric", "name": "Cleric", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT" },
+  { "id": "magician", "name": "Magician", "branch": "Magician", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Grendel the Really Old", "location": "Magic Library, Ellinia", "stat": "INT", "notes": "Level 10 in Classic World (the original game used level 8)." },
+  { "id": "fp_wizard", "name": "Wizard (Fire/Poison)", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT", "notes": "2nd job starts by talking to Grendel the Really Old." },
+  { "id": "il_wizard", "name": "Wizard (Ice/Lightning)", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT", "notes": "2nd job starts by talking to Grendel the Really Old." },
+  { "id": "cleric", "name": "Cleric", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT", "notes": "2nd job starts by talking to Grendel the Really Old." },
 
-  { "id": "bowman", "name": "Bowman", "branch": "Bowman", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Athena Pierce", "location": "Henesys", "stat": "DEX" },
-  { "id": "hunter", "name": "Hunter", "branch": "Bowman", "advancement": 2, "level": 30, "from": "bowman", "stat": "DEX" },
-  { "id": "crossbowman", "name": "Crossbowman", "branch": "Bowman", "advancement": 2, "level": 30, "from": "bowman", "stat": "DEX" },
+  { "id": "bowman", "name": "Bowman", "branch": "Bowman", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Athena Pierce", "location": "Bowman Instructional School, Henesys", "stat": "DEX" },
+  { "id": "hunter", "name": "Hunter", "branch": "Bowman", "advancement": 2, "level": 30, "from": "bowman", "stat": "DEX", "notes": "2nd job starts by talking to Athena Pierce." },
+  { "id": "crossbowman", "name": "Crossbowman", "branch": "Bowman", "advancement": 2, "level": 30, "from": "bowman", "stat": "DEX", "notes": "2nd job starts by talking to Athena Pierce." },
 
-  { "id": "thief", "name": "Thief", "branch": "Thief", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Dark Lord", "location": "Kerning City", "stat": "LUK" },
-  { "id": "assassin", "name": "Assassin", "branch": "Thief", "advancement": 2, "level": 30, "from": "thief", "stat": "LUK" },
-  { "id": "bandit", "name": "Bandit", "branch": "Thief", "advancement": 2, "level": 30, "from": "thief", "stat": "LUK" },
-
-  { "id": "pirate", "name": "Pirate", "branch": "Pirate", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Kyrin", "location": "Nautilus", "stat": "STR / DEX" },
-  { "id": "brawler", "name": "Brawler", "branch": "Pirate", "advancement": 2, "level": 30, "from": "pirate", "stat": "STR" },
-  { "id": "gunslinger", "name": "Gunslinger", "branch": "Pirate", "advancement": 2, "level": 30, "from": "pirate", "stat": "DEX" }
+  { "id": "thief", "name": "Thief", "branch": "Thief", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Dark Lord", "location": "Thieves' Hideout, Kerning City", "stat": "LUK" },
+  { "id": "assassin", "name": "Assassin", "branch": "Thief", "advancement": 2, "level": 30, "from": "thief", "stat": "LUK", "notes": "2nd job starts by talking to the Dark Lord." },
+  { "id": "bandit", "name": "Bandit", "branch": "Thief", "advancement": 2, "level": 30, "from": "thief", "stat": "LUK", "notes": "2nd job starts by talking to the Dark Lord." }
 ]

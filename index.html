@@ -4,13 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MapleStory Classic DB</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍁</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
     <h1>🍁 MapleStory Classic DB</h1>
     <nav id="tabs">
-      <button data-tab="monsters" class="active">Monsters</button>
+      <button data-tab="world" class="active">World Map</button>
+      <button data-tab="monsters">Monsters</button>
       <button data-tab="items">Items</button>
       <button data-tab="maps">Maps</button>
       <button data-tab="jobs">Jobs</button>
@@ -18,20 +20,31 @@
   </header>
 
   <main>
-    <section id="controls">
+    <section id="controls" hidden>
       <input id="search" type="search" placeholder="Search by name…" autocomplete="off">
       <label>Lv <input id="minLv" type="number" min="0" max="200" placeholder="min"></label>
       <label>to <input id="maxLv" type="number" min="0" max="200" placeholder="max"></label>
+      <label id="variantsWrap" class="check"><input id="variants" type="checkbox"> Show job-test, PQ &amp; event variants</label>
       <span id="count"></span>
     </section>
 
     <div id="layout">
-      <div id="tableWrap"><table id="table"></table></div>
+      <div id="mainView">
+        <div id="worldView"></div>
+        <div id="tableWrap" hidden><table id="table"></table></div>
+      </div>
       <aside id="detail" hidden></aside>
     </div>
   </main>
 
-  <footer>Unofficial fan project. Not affiliated with Nexon. Rows marked <span class="unv">?</span> are unverified.</footer>
+  <div id="tooltip" hidden></div>
+
+  <footer>
+    Only MapleStory Classic World data: stats confirmed by two or more Classic sources, drops from player-counted Classic kills.
+    <span id="builtFrom"></span><br>
+    Map, spawn and drop data adapted from the <a href="https://mapleclassic.wiki">MapleClassic Wiki</a> (CC BY-NC-SA 4.0) via <a href="https://maplefm.gg">Club FM</a>.
+    Unofficial fan project, not affiliated with Nexon.
+  </footer>
   <script src="app.js"></script>
 </body>
 </html>

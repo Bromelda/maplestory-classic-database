@@ -1,26 +1,67 @@
-// MapleStory Classic DB: loads data/*.json and renders searchable, sortable tables
-// with a cross-linked detail panel.
+// MapleStory Classic DB: interactive world map, searchable tables and a
+// cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
-const DATASETS = ["monsters", "items", "maps", "jobs"];
-const db = {};      // db.monsters = [...]
-const byId = {};    // byId.monsters.snail = {...}
+const DATASETS = ["monsters", "items", "maps", "jobs", "meta"];
+const db = {};
+const byId = {};
+const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {} };
 
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => (n == null ? "—" : typeof n === "number" ? n.toLocaleString() : n);
+
+// ---------- world map layout (schematic, not to scale) ----------
+const ZONES = {
+  "Mushroom Town": { x: 125, y: 140 },
+  "Amherst": { x: 228, y: 98 },
+  "Southperry": { x: 292, y: 178 },
+  "Ellinia": { x: 450, y: 300 },
+  "Perion": { x: 800, y: 285 },
+  "Sleepywood": { x: 625, y: 395 },
+  "Henesys": { x: 480, y: 450 },
+  "Kerning City": { x: 815, y: 455 },
+  "Lith Harbor": { x: 392, y: 545 },
+  "Free Market": { x: 640, y: 525 },
+  "Kerning City PQ": { x: 900, y: 560 },
+  "Florina Beach": { x: 182, y: 560 },
+  "Other": { x: 930, y: 90 },
+};
+const BOATS = [["Southperry", "Lith Harbor"], ["Lith Harbor", "Florina Beach"]];
+const LEVEL_BANDS = [
+  [10, "#5cb85c", "1–10"], [20, "#2bb3a3", "11–20"], [30, "#3d8be0", "21–30"],
+  [40, "#8a5cd6", "31–40"], [50, "#e8711c", "41–50"], [999, "#d9434c", "51+"],
+];
+const TOWN_COLOR = "#a08a6a";
+const MOB_COLORS = ["#e8711c", "#3d8be0", "#5cb85c", "#d9434c", "#8a5cd6", "#2bb3a3", "#d4a017", "#c2549d", "#6b7f2a", "#5b6ee1"];
+
+function bandColor(lv) {
+  if (lv == null) return TOWN_COLOR;
+  return LEVEL_BANDS.find(([max]) => lv <= max)[1];
+}
+
+// ---------- table columns ----------
 const COLUMNS = {
   monsters: [
     { key: "name", label: "Name" },
     { key: "level", label: "Lv", num: true },
     { key: "hp", label: "HP", num: true },
     { key: "exp", label: "EXP", num: true },
+    { key: "_drops", label: "Drops", num: true, get: (m) => m.drops.length },
+    { key: "_maps", label: "Maps", num: true, get: (m) => (idx.spawnsOf[m.id] || []).length },
   ],
   items: [
     { key: "name", label: "Name" },
     { key: "type", label: "Type" },
+    { key: "category", label: "Category" },
     { key: "level", label: "Req Lv", num: true },
-    { key: "price", label: "Shop Price", num: true },
+    { key: "_by", label: "Dropped by", num: true, get: (i) => (idx.droppedBy[i.id] || []).length },
   ],
   maps: [
     { key: "name", label: "Name" },
-    { key: "region", label: "Region" },
+    { key: "zone", label: "Area" },
+    { key: "type", label: "Type" },
+    { key: "level", label: "Lv", num: true, get: (m) => (m.levels ? m.levels[0] : null), show: (m) => levelText(m.levels) },
+    { key: "_mobs", label: "Mobs", num: true, get: (m) => m.spawns.reduce((a, s) => a + s.count, 0) },
   ],
   jobs: [
     { key: "name", label: "Name" },
@@ -29,138 +70,407 @@ const COLUMNS = {
     { key: "level", label: "Req Lv", num: true },
   ],
 };
+const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job" };
+const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world" };
 
-const state = { tab: "monsters", sortKey: "level", asc: true, selected: null };
-const $ = (s) => document.querySelector(s);
+const state = { tab: "world", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
 
+// ---------- load + index ----------
 async function load() {
   await Promise.all(DATASETS.map(async (name) => {
     const res = await fetch(`data/${name}.json`);
+    if (!res.ok) throw new Error(`${name}.json: ${res.status}`);
     db[name] = await res.json();
-    byId[name] = Object.fromEntries(db[name].map((e) => [e.id, e]));
+    if (Array.isArray(db[name])) byId[name] = Object.fromEntries(db[name].map((e) => [e.id, e]));
   }));
+  for (const m of db.maps) {
+    (idx.zones[m.zone] ||= []).push(m);
+    for (const s of m.spawns) (idx.spawnsOf[s.monster] ||= []).push({ map: m.id, count: s.count });
+    for (const p of m.portals) (idx.incoming[p.to] ||= new Set()).add(m.id);
+  }
+  for (const mob of db.monsters)
+    for (const d of mob.drops) (idx.droppedBy[d.item] ||= []).push({ monster: mob.id, rate: d.rate, kills: d.kills });
+  for (const list of Object.values(idx.droppedBy)) list.sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1));
+  for (const list of Object.values(idx.spawnsOf)) list.sort((a, b) => b.count - a.count);
+  if (db.meta?.built_from) $("#builtFrom").textContent = `Data: ${db.meta.built_from}.`;
+
   bind();
-  render();
+  renderWorld();
+  fromHash() || switchTab("world");
 }
 
 function bind() {
-  document.querySelectorAll("#tabs button").forEach((b) =>
-    b.addEventListener("click", () => switchTab(b.dataset.tab)));
-  ["#search", "#minLv", "#maxLv"].forEach((s) => $(s).addEventListener("input", render));
+  document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+  ["#search", "#minLv", "#maxLv", "#variants"].forEach((s) => $(s).addEventListener("input", renderTable));
+  window.addEventListener("hashchange", fromHash);
+  document.addEventListener("click", onLinkClick);
+  document.addEventListener("mouseover", onHover);
+  document.addEventListener("mouseout", (e) => { if (e.target.closest?.("[data-tip]")) hideTip(); });
 }
 
-function switchTab(tab, selectId = null) {
-  state.tab = tab;
-  state.sortKey = COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
-  state.asc = true;
-  state.selected = selectId;
-  document.querySelectorAll("#tabs button").forEach((b) =>
-    b.classList.toggle("active", b.dataset.tab === tab));
-  $("#search").value = "";
-  render();
+function onLinkClick(e) {
+  const a = e.target.closest("[data-type][data-id]");
+  if (!a) return;
+  e.preventDefault();
+  open(a.dataset.type, a.dataset.id);
 }
+
+// ---------- tabs ----------
+function switchTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  const isWorld = tab === "world";
+  $("#worldView").hidden = !isWorld;
+  $("#tableWrap").hidden = isWorld;
+  $("#controls").hidden = isWorld;
+  $("#variantsWrap").hidden = tab !== "monsters";
+  if (!isWorld) {
+    state.sortKey = COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
+    state.asc = true;
+    $("#search").value = "";
+    renderTable();
+  }
+}
+
+// ---------- world map ----------
+function zoneSummary(z) {
+  const maps = idx.zones[z] || [];
+  const lv = maps.flatMap((m) => m.levels || []).filter((x) => x != null);
+  const mobs = maps.reduce((a, m) => a + m.spawns.length, 0);
+  // typical level = median of each hunting map's lowest level (outliers don't skew the color)
+  const starts = maps.filter((m) => m.spawns.length && m.levels).map((m) => m.levels[0]).sort((a, b) => a - b);
+  const typical = starts.length ? starts[Math.floor(starts.length / 2)] : null;
+  return { maps, min: lv.length ? Math.min(...lv) : null, max: lv.length ? Math.max(...lv) : null, mobs, typical };
+}
+
+function renderWorld() {
+  const nodes = Object.entries(ZONES).filter(([z]) => idx.zones[z]).map(([z, pos]) => {
+    const s = zoneSummary(z);
+    const r = 16 + Math.min(18, Math.sqrt(s.maps.length) * 3.2);
+    const color = s.mobs && s.typical != null ? bandColor(s.typical) : TOWN_COLOR;
+    const sub = s.min == null ? `${s.maps.length} maps` : `Lv ${s.min}–${s.max}`;
+    return `<g class="zone" data-type="zone" data-id="${esc(z)}" tabindex="0" role="button" aria-label="${esc(z)}">
+      <circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${color}"></circle>
+      <text class="zone-count" x="${pos.x}" y="${pos.y + 4}" text-anchor="middle">${s.maps.length}</text>
+      <text class="zone-name" x="${pos.x}" y="${pos.y + r + 17}" text-anchor="middle">${esc(z)}</text>
+      <text class="zone-sub" x="${pos.x}" y="${pos.y + r + 32}" text-anchor="middle">${esc(sub)}</text>
+    </g>`;
+  }).join("");
+  const boats = BOATS.map(([a, b]) => {
+    const p = ZONES[a], q = ZONES[b];
+    const mx = (p.x + q.x) / 2 - 30, my = (p.y + q.y) / 2 + 20;
+    return `<path class="boat" d="M${p.x},${p.y} Q${mx},${my} ${q.x},${q.y}"></path>`;
+  }).join("");
+  const legend = LEVEL_BANDS.map(([, c, label]) => `<span><i class="dot" style="background:${c}"></i>Lv ${label}</span>`).join("") +
+    `<span><i class="dot" style="background:${TOWN_COLOR}"></i>Town / no monsters</span><span>Color = typical training level · number = maps in area · dashed line = boat</span>`;
+  $("#worldView").innerHTML = `
+    <svg viewBox="0 0 1000 640" role="img" aria-label="World map of Maple Island and Victoria Island">
+      <rect class="sea" width="1000" height="640"></rect>
+      <path class="island" d="M80,130 C60,60 190,30 270,70 C350,110 370,215 300,238 C225,262 105,225 80,130 Z"></path>
+      <path class="island" d="M350,330 C335,250 450,212 565,238 C660,200 790,198 885,250 C965,292 975,425 935,505 C900,585 785,612 655,592 C560,612 430,612 360,572 C305,532 318,420 350,330 Z"></path>
+      <path class="island" d="M128,560 C128,522 214,516 238,548 C254,586 182,604 150,593 C134,587 128,576 128,560 Z"></path>
+      <text class="island-label" x="70" y="35">Maple Island</text>
+      <text class="island-label" x="560" y="225">Victoria Island</text>
+      ${boats}${nodes}
+    </svg>
+    <div class="legend">${legend}</div>`;
+  $("#worldView").querySelectorAll(".zone").forEach((g) => g.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open("zone", g.dataset.id); }
+  }));
+}
+
+function highlightZone(z) {
+  document.querySelectorAll(".zone").forEach((g) => g.classList.toggle("active", g.dataset.id === z));
+}
+
+// ---------- tables ----------
+function valueOf(col, e) { return col.get ? col.get(e) : e[col.key]; }
 
 function filtered() {
+  const tab = state.tab;
   const q = $("#search").value.trim().toLowerCase();
   const min = parseInt($("#minLv").value, 10);
   const max = parseInt($("#maxLv").value, 10);
-  const rows = db[state.tab].filter((e) => {
+  const showVariants = $("#variants").checked;
+  const lvOf = (e) => (tab === "maps" ? e.levels?.[0] : e.level);
+  const rows = db[tab].filter((e) => {
     if (q && !e.name.toLowerCase().includes(q)) return false;
-    if (e.level != null) {
-      if (!isNaN(min) && e.level < min) return false;
-      if (!isNaN(max) && e.level > max) return false;
-    }
+    if (tab === "monsters" && !showVariants && (e.variant || e.level >= 200 || e.name.startsWith("Tutorial"))) return false;
+    const lv = lvOf(e);
+    if (!isNaN(min) && (lv == null || lv < min)) return false;
+    if (!isNaN(max) && (lv == null || lv > max)) return false;
     return true;
   });
-  const k = state.sortKey;
+  const col = COLUMNS[tab].find((c) => c.key === state.sortKey) || COLUMNS[tab][0];
   rows.sort((a, b) => {
-    const x = a[k] ?? "", y = b[k] ?? "";
+    const x = valueOf(col, a), y = valueOf(col, b);
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
     const r = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
     return state.asc ? r : -r;
   });
   return rows;
 }
 
-function render() {
-  const cols = COLUMNS[state.tab];
+function renderTable() {
+  const tab = state.tab;
+  if (tab === "world") return;
+  const cols = COLUMNS[tab];
   const rows = filtered();
+  const type = TYPE_OF_TAB[tab];
+  const cur = currentEntry();
   const head = cols.map((c) => {
-    const cls = [c.num ? "num" : "", state.sortKey === c.key ? "sorted" : "", state.sortKey === c.key && state.asc ? "asc" : ""].join(" ");
-    return `<th class="${cls}" data-key="${c.key}">${c.label}</th>`;
+    const s = state.sortKey === c.key;
+    return `<th class="${c.num ? "num" : ""} ${s ? "sorted" : ""} ${s && state.asc ? "asc" : ""}" data-key="${c.key}">${c.label}</th>`;
   }).join("");
-  const body = rows.map((e) => `<tr data-id="${e.id}" class="${e.id === state.selected ? "selected" : ""}">` +
+  const body = rows.map((e) => `<tr data-type="${type}" data-id="${esc(e.id)}" class="${cur?.id === e.id ? "selected" : ""}">` +
     cols.map((c, i) => {
-      const v = e[c.key] ?? "—";
-      const mark = i === 0 && e.verified === false ? '<span class="unv" title="Unverified">?</span>' : "";
-      return `<td class="${c.num ? "num" : ""}">${esc(v)}${mark}</td>`;
+      let v = c.show ? c.show(e) : valueOf(c, e);
+      let extra = "";
+      if (i === 0 && e.boss) extra = ' <span class="badge">Boss</span>';
+      if (i === 0 && e.variant) extra = ` <span class="badge">${esc(e.variant)}</span>`;
+      if (i === 0 && e.disputed) extra += '<span class="unv" title="Sources disagree; see details">?</span>';
+      if (i === 0 && e.region === "Hidden Street") extra = ' <span class="badge hidden">Hidden</span>';
+      return `<td class="${c.num ? "num" : ""}">${esc(fmt(v))}${extra}</td>`;
     }).join("") + "</tr>").join("");
   $("#table").innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
-  $("#count").textContent = `${rows.length} result${rows.length === 1 ? "" : "s"}`;
-
+  $("#count").textContent = `${rows.length.toLocaleString()} result${rows.length === 1 ? "" : "s"}`;
   $("#table").querySelectorAll("th").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.key;
     state.asc = state.sortKey === k ? !state.asc : true;
     state.sortKey = k;
-    render();
+    renderTable();
   }));
-  $("#table").querySelectorAll("tbody tr").forEach((tr) =>
-    tr.addEventListener("click", () => { state.selected = tr.dataset.id; render(); }));
+}
 
+// ---------- detail panel + history ----------
+function currentEntry() { return state.history[state.pos]; }
+
+function open(type, id, { push = true } = {}) {
+  if (!getEntity(type, id)) return;
+  if (push) {
+    state.history = state.history.slice(0, state.pos + 1);
+    state.history.push({ type, id });
+    state.pos = state.history.length - 1;
+    const h = `#${type}/${encodeURIComponent(id)}`;
+    if (location.hash !== h) history.replaceState(null, "", h);
+  }
+  hideTip();
   renderDetail();
 }
 
-// ---------- detail panel ----------
+function fromHash() {
+  const m = location.hash.match(/^#(\w+)\/(.+)$/);
+  if (!m) return false;
+  const [, type, id] = m;
+  const tab = TAB_OF_TYPE[type];
+  if (!tab || !getEntity(type, decodeURIComponent(id))) return false;
+  if (state.tab !== tab && !(type === "map" && state.tab === "world")) switchTab(tab);
+  open(type, decodeURIComponent(id));
+  return true;
+}
 
-function link(type, id) {
-  const e = byId[type]?.[id];
-  return e ? `<a data-type="${type}" data-id="${id}">${esc(e.name)}</a>` : esc(id);
+function getEntity(type, id) {
+  if (type === "zone") return idx.zones[id] ? { id, name: id } : null;
+  const ds = { monster: "monsters", item: "items", map: "maps", job: "jobs" }[type];
+  return ds ? byId[ds][id] : null;
 }
-function list(type, ids) {
-  return ids?.length ? `<ul>${ids.map((id) => `<li>${link(type, id)}</li>`).join("")}</ul>` : "<p>—</p>";
+
+function link(type, id, label) {
+  const e = getEntity(type, id);
+  if (!e) return esc(label ?? id);
+  const tip = type === "monster" ? ` data-tip="1"` : "";
+  return `<a href="#${type}/${encodeURIComponent(id)}" data-type="${type}" data-id="${esc(id)}"${tip}>${esc(label ?? e.name)}</a>`;
 }
-function reverse(type, field, id) {
-  return db[type].filter((e) => (e[field] || []).includes(id)).map((e) => e.id);
+
+function levelText(l) { return l ? (l[0] === l[1] ? `${l[0]}` : `${l[0]}–${l[1]}`) : "—"; }
+function rateText(r) { return r == null ? "reported" : `${r < 1 ? r.toFixed(2) : r.toFixed(1)}%`; }
+function dl(pairs) {
+  return `<dl>${pairs.filter(([, v]) => v != null && v !== "").map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
 }
 
 function renderDetail() {
   const panel = $("#detail");
-  const e = state.selected && byId[state.tab][state.selected];
-  $("#layout").classList.toggle("with-detail", !!e);
-  if (!e) { panel.hidden = true; return; }
+  const cur = currentEntry();
+  $("#layout").classList.toggle("with-detail", !!cur);
+  highlightZone(cur?.type === "zone" ? cur.id : null);
+  if (!cur) { panel.hidden = true; return; }
   panel.hidden = false;
+  const nav = `<div class="panel-nav">
+      <button id="back" ${state.pos > 0 ? "" : "disabled"}>← Back</button>
+      <button id="close" title="Close">✕</button></div>`;
+  const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail }[cur.type](getEntity(cur.type, cur.id));
+  panel.innerHTML = nav + body;
+  panel.scrollTop = 0;
+  $("#back").onclick = () => { if (state.pos > 0) { state.pos--; syncHash(); renderDetail(); } };
+  $("#close").onclick = () => { state.history = []; state.pos = -1; history.replaceState(null, "", location.pathname); renderDetail(); renderTable(); };
+  if (window.innerWidth < 960) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  renderTable();
+}
+function syncHash() {
+  const c = currentEntry();
+  if (c) history.replaceState(null, "", `#${c.type}/${encodeURIComponent(c.id)}`);
+}
 
-  let html = `<button class="close" title="Close">×</button><h2>${esc(e.name)}</h2>`;
-  const dl = (pairs) => `<dl>${pairs.filter(([, v]) => v != null).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
-
-  if (state.tab === "monsters") {
-    html += `<p class="sub">Monster</p>` + dl([["Level", e.level], ["HP", e.hp], ["MP", e.mp], ["EXP", e.exp]]);
-    html += `<h3>Drops</h3>${list("items", e.drops)}<h3>Found in</h3>${list("maps", e.maps)}`;
-  } else if (state.tab === "items") {
-    html += `<p class="sub">${esc(e.type)}</p>` + dl([["Req. level", e.level], ["Job", e.job], ["Shop price", e.price], ["Effect", e.effect]]);
-    html += `<h3>Dropped by</h3>${list("monsters", reverse("monsters", "drops", e.id))}`;
-  } else if (state.tab === "maps") {
-    html += `<p class="sub">${esc(e.region)}</p>`;
-    html += `<h3>Monsters</h3>${list("monsters", reverse("monsters", "maps", e.id))}`;
-    if (e.connects) html += `<h3>Connects to</h3>${list("maps", e.connects)}`;
-  } else if (state.tab === "jobs") {
-    html += `<p class="sub">${esc(e.branch)}</p>` + dl([["Advancement", e.advancement], ["Req. level", e.level], ["Instructor", e.instructor], ["Location", e.location], ["Main stat", e.stat]]);
-    if (e.from) html += `<h3>Advances from</h3>${list("jobs", [e.from])}`;
-    const next = db.jobs.filter((j) => j.from === e.id).map((j) => j.id);
-    if (next.length) html += `<h3>Advances to</h3>${list("jobs", next)}`;
+// zone: list its maps grouped by type
+function zoneDetail(z) {
+  const s = zoneSummary(z.id);
+  const groups = {};
+  for (const m of s.maps) {
+    const g = m.region === "Hidden Street" ? "Hidden Street" : m.town || m.type === "Town interior" || m.type === "Town" ? "Town" : m.type === "Dungeon" ? "Dungeons" : "Hunting grounds & fields";
+    (groups[g] ||= []).push(m);
   }
-  if (e.notes) html += `<h3>Notes</h3><p>${esc(e.notes)}</p>`;
-  if (e.verified === false) html += `<p class="sub"><span class="unv">?</span> Values not yet verified.</p>`;
-
-  panel.innerHTML = html;
-  panel.querySelector(".close").onclick = () => { state.selected = null; render(); };
-  panel.querySelectorAll("a[data-type]").forEach((a) =>
-    a.addEventListener("click", () => switchTab(a.dataset.type, a.dataset.id)));
+  const order = ["Hunting grounds & fields", "Dungeons", "Hidden Street", "Town"];
+  const out = order.filter((g) => groups[g]).map((g) => {
+    const rows = groups[g].sort((a, b) => (a.levels?.[0] ?? 999) - (b.levels?.[0] ?? 999) || a.name.localeCompare(b.name)).map((m) => {
+      const total = m.spawns.reduce((a, x) => a + x.count, 0);
+      const mobs = m.spawns.map((x) => `${x.count} ${getEntity("monster", x.monster)?.name}`).join(", ");
+      return `<a class="maprow" data-type="map" data-id="${esc(m.id)}" href="#map/${encodeURIComponent(m.id)}">
+        <span class="top">${esc(m.name)} ${m.region === "Hidden Street" ? '<span class="badge hidden">Hidden</span>' : ""}<span class="right">${m.levels ? "Lv " + levelText(m.levels) : ""}${total ? ` · ${total} mobs` : ""}</span></span>
+        ${mobs ? `<span class="mobs">${esc(mobs)}</span>` : ""}</a>`;
+    }).join("");
+    return `<div class="zone-group"><h4>${g} (${groups[g].length})</h4>${rows}</div>`;
+  }).join("");
+  return `<h2>${esc(z.id)}</h2><p class="sub">${s.maps.length} maps${s.min != null ? ` · Lv ${s.min}–${s.max}` : ""}</p>${out}`;
 }
 
-function esc(v) {
-  return String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// map: layout drawing, spawn counts, portals (incl. hidden), NPCs
+function mapDetail(m) {
+  const colorOf = {};
+  m.spawns.forEach((s, i) => { colorOf[s.monster] = MOB_COLORS[i % MOB_COLORS.length]; });
+  const total = m.spawns.reduce((a, x) => a + x.count, 0);
+  let html = `<h2>${esc(m.name)}</h2><p class="sub">${esc(m.zone)} · ${esc(m.type || m.region)}${m.region === "Hidden Street" ? ' · <span class="badge hidden">Hidden Street</span>' : ""}</p>`;
+  html += dl([["Level range", m.levels ? levelText(m.levels) : null], ["Total monsters", total || null]]);
+  html += mapLayout(m, colorOf);
+
+  if (m.spawns.length) {
+    html += `<h3>Monsters on this map</h3><ul>` + m.spawns.map((s) => {
+      const mob = getEntity("monster", s.monster);
+      const resp = m.respawn?.[s.monster];
+      return `<li><i class="dot" style="background:${colorOf[s.monster]}"></i>${link("monster", s.monster)}
+        ${mob?.boss ? '<span class="badge">Boss</span>' : ""}<span class="right">×${s.count}${resp ? ` · respawn ${Math.round(resp / 60)} min` : ""}</span></li>`;
+    }).join("") + `</ul>`;
+  }
+
+  const uniq = (arr) => [...new Map(arr.map((p) => [p.to, p])).values()].filter((p) => p.to !== m.id);
+  const walk = uniq(m.portals.filter((p) => p.kind !== "hidden"));
+  const hidden = uniq(m.portals.filter((p) => p.kind === "hidden"));
+  const shown = new Set([...walk, ...hidden].map((p) => p.to));
+  const into = [...(idx.incoming[m.id] || [])].filter((id) => !shown.has(id) && id !== m.id);
+  const portalLi = (p) => {
+    const t = getEntity("map", p.to);
+    return `<li>${link("map", p.to)}${t?.region === "Hidden Street" ? ' <span class="badge hidden">Hidden Street</span>' : ""}<span class="right">${t?.levels ? "Lv " + levelText(t.levels) : ""}</span></li>`;
+  };
+  if (walk.length) html += `<h3>Connected maps</h3><ul>${walk.map(portalLi).join("")}</ul>`;
+  if (hidden.length) html += `<h3>Hidden portals</h3><ul>${hidden.map(portalLi).join("")}</ul>`;
+  if (into.length) html += `<h3>One-way in from</h3><ul>${into.map((id) => `<li>${link("map", id)}</li>`).join("")}</ul>`;
+  if (m.npcs.length) html += `<h3>NPCs</h3><p>${m.npcs.map(esc).join(", ")}</p>`;
+  return html;
 }
+
+function mapLayout(m, colorOf) {
+  const pts = [...m.mobpos.map(([, x, y]) => [x, y]), ...m.portals.map((p) => [p.x, p.y])];
+  if (!pts.length) return "";
+  let ox, oy, w, h;
+  if (m.origin) { [ox, oy] = m.origin; [w, h] = m.size; }
+  else {
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const pad = 150;
+    ox = -Math.min(...xs) + pad; oy = -Math.min(...ys) + pad;
+    w = Math.max(...xs) - Math.min(...xs) + pad * 2; h = Math.max(...ys) - Math.min(...ys) + pad * 2;
+  }
+  const r = Math.max(18, Math.min(w, h) / 45);
+  const mobs = m.mobpos.map(([id, x, y]) => {
+    const name = getEntity("monster", id)?.name || id;
+    return `<circle class="mob" cx="${x + ox}" cy="${y + oy}" r="${r}" fill="${colorOf[id] || "#999"}"><title>${esc(name)}</title></circle>`;
+  }).join("");
+  const seen = new Set();
+  const portals = m.portals.filter((p) => { const k = `${p.to}|${p.x}|${p.y}`; if (seen.has(k)) return false; seen.add(k); return true; }).map((p) => {
+    const t = getEntity("map", p.to);
+    const s = r * 1.3, cx = p.x + ox, cy = p.y + oy;
+    return `<rect class="portal ${p.kind === "hidden" ? "hidden-p" : ""}" x="${cx - s}" y="${cy - s * 1.6}" width="${s * 2}" height="${s * 2.4}" rx="${s}" data-type="map" data-id="${esc(p.to)}"><title>${p.kind === "hidden" ? "Hidden portal" : "Portal"} → ${esc(t?.name || p.to)}</title></rect>`;
+  }).join("");
+  return `<svg class="layout-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="Spawn and portal layout">${mobs}${portals}</svg>
+    <p class="sub" style="margin-top:6px">Spawn points and portals from the game data. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (click to go)</p>`;
+}
+
+function monsterDetail(mob) {
+  let html = `<h2>${esc(mob.name)} ${mob.boss ? '<span class="badge">Boss</span>' : ""}</h2>
+    <p class="sub">Monster${mob.variant ? ` · ${esc(mob.variant)}` : ""}</p>`;
+  html += dl([
+    ["Level", fmt(mob.level)], ["HP", fmt(mob.hp) + (mob.disputed?.hp ? '<span class="unv">?</span>' : "")], ["EXP", fmt(mob.exp)],
+    ["Attack", fmt(mob.atk)], ["Magic attack", mob.matk ? fmt(mob.matk) : null],
+    ["Weapon / magic DEF", `${fmt(mob.wdef)} / ${fmt(mob.mdef)}`], ["Accuracy", fmt(mob.acc)], ["Avoid", fmt(mob.avoid)],
+    ["Weak to", esc(mob.weak)], ["Resists", esc(mob.resist)], ["Undead", mob.undead ? "Yes" : null],
+    ["Mesos", mob.meso ? `${fmt(mob.meso.min)}–${fmt(mob.meso.max)}${mob.meso.basis === "reported" ? " (player-reported)" : ""}` : null],
+  ]);
+  if (mob.disputed?.hp) {
+    html += `<div class="note">HP is ${fmt(mob.hp)} per ${mob.sources.join(" and ")}. The ${esc(mob.disputed.hp.source)} show ${fmt(mob.disputed.hp.value)}, which may be from before a patch.</div>`;
+  }
+  html += `<h3>Drop table (${mob.drops.length})</h3>`;
+  if (mob.drops.length) {
+    const kills = mob.drops.find((d) => d.kills)?.kills;
+    html += `<table class="drops"><tbody>${mob.drops.map((d) => {
+      const it = getEntity("item", d.item);
+      return `<tr><td>${link("item", d.item)}${it?.type ? ` <span class="sub">${esc(it.type)}</span>` : ""}</td><td class="num">${rateText(d.rate)}</td></tr>`;
+    }).join("")}</tbody></table>`;
+    html += `<p class="sub" style="margin-top:6px">${kills ? `Rates counted in Classic World over ${kills.toLocaleString()} kills.` : "Drops reported by Classic players; no rate counted yet."}</p>`;
+  } else {
+    html += `<p class="sub">No Classic drops reported yet.</p>`;
+  }
+  const where = idx.spawnsOf[mob.id] || [];
+  html += `<h3>Found in (${where.length})</h3>`;
+  html += where.length
+    ? `<ul>${where.map((w) => `<li>${link("map", w.map)}<span class="right">×${w.count}</span></li>`).join("")}</ul>`
+    : `<p class="sub">Doesn't spawn on any regular map.</p>`;
+  html += `<p class="sub" style="margin-top:12px">Stats confirmed by: ${mob.sources.map(esc).join(", ")}</p>`;
+  return html;
+}
+
+function itemDetail(it) {
+  let html = `<h2>${esc(it.name)}</h2><p class="sub">${esc([it.type, it.category].filter(Boolean).join(" · ") || "Item")}</p>`;
+  const stats = it.stats ? Object.entries(it.stats).map(([k, v]) => `${esc(k)} ${v > 0 ? "+" : ""}${v}`).join(", ") : null;
+  html += dl([["Req. level", it.level], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
+  const by = idx.droppedBy[it.id] || [];
+  html += `<h3>Dropped by (${by.length})</h3>`;
+  html += by.length
+    ? `<ul>${by.map((d) => `<li>${link("monster", d.monster)}<span class="right">Lv ${getEntity("monster", d.monster)?.level} · ${rateText(d.rate)}</span></li>`).join("")}</ul>`
+    : `<p class="sub">No Classic drop reported.</p>`;
+  return html;
+}
+
+function jobDetail(j) {
+  let html = `<h2>${esc(j.name)}</h2><p class="sub">${esc(j.branch)}</p>`;
+  html += dl([["Advancement", j.advancement ? `${j.advancement}${["", "st", "nd", "rd"][j.advancement] || "th"} job` : "None"], ["Req. level", j.level], ["Instructor", esc(j.instructor)], ["Location", esc(j.location)], ["Main stat", esc(j.stat)]]);
+  if (j.from) html += `<h3>Advances from</h3><ul><li>${link("job", j.from)}</li></ul>`;
+  const next = db.jobs.filter((x) => x.from === j.id);
+  if (next.length) html += `<h3>Advances to</h3><ul>${next.map((x) => `<li>${link("job", x.id)}<span class="right">Lv ${x.level}</span></li>`).join("")}</ul>`;
+  if (j.notes) html += `<div class="note">${esc(j.notes)}</div>`;
+  return html;
+}
+
+// ---------- monster hover tooltip ----------
+function onHover(e) {
+  const a = e.target.closest?.("[data-tip]");
+  if (!a) return;
+  const mob = getEntity("monster", a.dataset.id);
+  if (!mob) return;
+  const tip = $("#tooltip");
+  const top = mob.drops.slice(0, 6).map((d) => `<div class="row"><span>${esc(getEntity("item", d.item)?.name || d.item)}</span><span>${rateText(d.rate)}</span></div>`).join("");
+  tip.innerHTML = `<strong>${esc(mob.name)}</strong><div class="t-sub">Lv ${mob.level} · ${fmt(mob.hp)} HP · ${fmt(mob.exp)} EXP</div>` +
+    (top ? `${top}${mob.drops.length > 6 ? `<div class="t-sub" style="margin:4px 0 0">+${mob.drops.length - 6} more · click for full table</div>` : ""}` : `<div class="t-sub">No Classic drops reported yet.</div>`);
+  tip.hidden = false;
+  const r = a.getBoundingClientRect();
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = r.left, y = r.bottom + 6;
+  if (x + tw > innerWidth - 8) x = innerWidth - tw - 8;
+  if (y + th > innerHeight - 8) y = r.top - th - 6;
+  tip.style.left = `${Math.max(8, x)}px`;
+  tip.style.top = `${Math.max(8, y)}px`;
+}
+function hideTip() { $("#tooltip").hidden = true; }
 
 load().catch((err) => {
-  $("#tableWrap").innerHTML = `<p style="padding:16px">Couldn't load data (${esc(err.message)}). If you opened the file directly, run <code>python3 -m http.server</code> in this folder instead.</p>`;
+  $("#worldView").innerHTML = `<p style="padding:16px">Couldn't load data (${esc(err.message)}). If you opened the file directly, run <code>python3 -m http.server</code> in this folder instead.</p>`;
 });
