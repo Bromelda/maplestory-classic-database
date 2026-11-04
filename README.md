@@ -15,6 +15,7 @@ It's a plain static website with no build step for the site itself. Open it loca
   - NPCs, plus boss respawn timers
 - **Monster pages**: the animated in-game sprite, full stats, the Classic drop table with drop rates, and every map the monster spawns on. Hover a monster anywhere to preview its drops.
 - **Item pages**: stats, requirements, and every monster that drops it, sorted by rate.
+- **Market**: typical Free Market prices for about 1,500 items, with a 7-day trend, prices by stat roll (for example clean versus +8 ATT Work Gloves), and the character names of shops selling near that price. Each item links to [Cozy Market](https://cozy.markets/market) for live shops and channels. Monster drop tables show roughly what each drop is worth.
 - **Jobs**: the Classic job tree (no Pirates, 2nd job at 30, Magician 1st job at level 10).
 - Searchable, sortable tables for monsters, items, maps and jobs. Links are shareable (for example `#map/henesys_hunting_ground_i`).
 
@@ -33,6 +34,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 | Stat cross-check | [NiaDB](https://meowdb.com/msclassic), [MapleStoryClassic.org](https://maplestoryclassic.org/monsters/) |
 | Maps, portals, spawns, drops | [MapleClassic Wiki](https://mapleclassic.wiki) (CC BY-NC-SA 4.0) |
 | Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg) |
+| Free Market prices | [Club FM](https://maplefm.gg) public price summary, loaded live in the browser and refreshed daily by Club FM |
 | Job levels and instructors | Game quest data plus [Henesys.gg](https://henesys.gg/guides/beginner), [Metaroad](https://metaroad.gg/maplestory-classic/meta/beginners-guide-maplestory-classic-world), [MapleStory-Classic.com](https://maplestory-classic.com/guides/first-job-advancement-guide) |
 
 ## Updating the data
@@ -62,7 +64,6 @@ GitHub Pages needs a public repo, or a paid plan for a private one. Turn it on u
 ## Roadmap
 
 - Damage calculator (job, level, stats, skills → damage range and hits to kill)
-- Free Market tab with live listings (candidates: MesoWatch, MapleStory.market, Cozy Market, Club FM, FreeMarketClassic)
 - Skill planner, using Planet Helper and MS-Classic as references
 - The real in-game Victoria Island world map in place of the schematic
 - Forgotten Hollow, Orbis and El Nath once they open in Classic

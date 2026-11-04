@@ -4,7 +4,22 @@
 const DATASETS = ["monsters", "items", "maps", "jobs", "meta"];
 const db = {};
 const byId = {};
-const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {} };
+const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName: {} };
+
+// Free Market prices: Club FM's public daily summary, loaded live from GitHub.
+const MARKET_URL = "https://raw.githubusercontent.com/maplefm/maplefm.github.io/live/data/summary-public.json";
+const COZY_URL = "https://cozy.markets/market";
+const CLUBFM_URL = "https://maplefm.gg";
+const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+function meso(n) {
+  if (n == null) return "—";
+  if (n > 0 && n < 1) return "<1";
+  if (n >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, "") + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(n < 1e7 ? 2 : 1).replace(/\.?0+$/, "") + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, "") + "k";
+  return Math.round(n).toLocaleString();
+}
+function pct(x) { return x == null ? "—" : `${x > 0 ? "▲" : x < 0 ? "▼" : ""} ${Math.abs(x * 100).toFixed(0)}%`; }
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -46,22 +61,30 @@ const COLUMNS = {
     { key: "level", label: "Lv", num: true },
     { key: "hp", label: "HP", num: true },
     { key: "exp", label: "EXP", num: true },
-    { key: "_drops", label: "Drops", num: true, get: (m) => m.drops.length },
+    { key: "_drops", label: "Drops", num: true, wide: true, get: (m) => m.drops.length },
     { key: "_maps", label: "Maps", num: true, get: (m) => (idx.spawnsOf[m.id] || []).length },
   ],
   items: [
     { key: "name", label: "Name" },
     { key: "type", label: "Type" },
-    { key: "category", label: "Category" },
+    { key: "category", label: "Category", wide: true },
     { key: "level", label: "Req Lv", num: true },
     { key: "_by", label: "Dropped by", num: true, get: (i) => (idx.droppedBy[i.id] || []).length },
   ],
   maps: [
     { key: "name", label: "Name" },
     { key: "zone", label: "Area" },
-    { key: "type", label: "Type" },
+    { key: "type", label: "Type", wide: true },
     { key: "level", label: "Lv", num: true, get: (m) => (m.levels ? m.levels[0] : null), show: (m) => levelText(m.levels) },
     { key: "_mobs", label: "Mobs", num: true, get: (m) => m.spawns.reduce((a, s) => a + s.count, 0) },
+  ],
+  market: [
+    { key: "name", label: "Item" },
+    { key: "cat", label: "Category", wide: true },
+    { key: "typ", label: "Price", num: true, show: (p) => meso(p.typ) },
+    { key: "_range", label: "Range", num: true, wide: true, get: (p) => p.lo, show: (p) => `${meso(p.lo)}–${meso(p.hi)}` },
+    { key: "change", label: "7-day", num: true, show: (p) => pct(p.change) },
+    { key: "sales", label: "Sales", num: true, wide: true },
   ],
   jobs: [
     { key: "name", label: "Name" },
@@ -70,8 +93,8 @@ const COLUMNS = {
     { key: "level", label: "Req Lv", num: true },
   ],
 };
-const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job" };
-const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world" };
+const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job", market: "price" };
+const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world", price: "market" };
 
 const state = { tab: "world", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
 
@@ -97,11 +120,41 @@ async function load() {
   bind();
   renderWorld();
   fromHash() || switchTab("world");
+  loadMarket();
 }
+
+async function loadMarket() {
+  try {
+    const res = await fetch(MARKET_URL, { cache: "no-cache" });
+    if (!res.ok) throw new Error(res.status);
+    const raw = await res.json();
+    db.market = raw.rows.map((r) => {
+      const daily = (r.daily || []).filter((d) => d[1] != null);
+      const change = daily.length > 1 ? daily[daily.length - 1][1] / daily[0][1] - 1 : null;
+      return {
+        id: slugify(r.item), name: r.item, cat: r.cat, typ: r.typ, lo: r.lo, hi: r.hi,
+        sales: r.salesN ?? 0, listings: r.n ?? 0, basis: r.kind, conf: r.conf, daily, change,
+        ladder: r.lad || null, sellers: r.typWho || [],
+      };
+    });
+    db.marketAt = raw.at;
+    byId.market = Object.fromEntries(db.market.map((p) => [p.id, p]));
+    for (const p of db.market) idx.priceByName[p.name.toLowerCase()] = p;
+    const cats = [...new Set(db.market.map((p) => p.cat))].sort();
+    $("#cat").innerHTML = `<option value="">All categories</option>` + cats.map((c) => `<option>${esc(c)}</option>`).join("");
+  } catch (err) {
+    db.market = [];
+    db.marketError = String(err.message || err);
+  }
+  if (state.tab === "market") renderTable();
+  if (location.hash.startsWith("#price/")) fromHash();
+  else if (currentEntry()) renderDetail();
+}
+function priceOf(name) { return idx.priceByName[String(name).toLowerCase()]; }
 
 function bind() {
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
-  ["#search", "#minLv", "#maxLv", "#variants"].forEach((s) => $(s).addEventListener("input", renderTable));
+  ["#search", "#minLv", "#maxLv", "#variants", "#cat"].forEach((s) => $(s).addEventListener("input", renderTable));
   window.addEventListener("hashchange", fromHash);
   document.addEventListener("click", onLinkClick);
   document.addEventListener("mouseover", onHover);
@@ -124,9 +177,13 @@ function switchTab(tab) {
   $("#tableWrap").hidden = isWorld;
   $("#controls").hidden = isWorld;
   $("#variantsWrap").hidden = tab !== "monsters";
+  const isMarket = tab === "market";
+  $("#catWrap").hidden = !isMarket;
+  $("#marketBar").hidden = !isMarket;
+  document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = isMarket; });
   if (!isWorld) {
-    state.sortKey = COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
-    state.asc = true;
+    state.sortKey = isMarket ? "sales" : COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
+    state.asc = !isMarket;
     $("#search").value = "";
     renderTable();
   }
@@ -193,8 +250,10 @@ function filtered() {
   const max = parseInt($("#maxLv").value, 10);
   const showVariants = $("#variants").checked;
   const lvOf = (e) => (tab === "maps" ? e.levels?.[0] : e.level);
-  const rows = db[tab].filter((e) => {
+  const cat = $("#cat").value;
+  const rows = (db[tab] || []).filter((e) => {
     if (q && !e.name.toLowerCase().includes(q)) return false;
+    if (tab === "market") return !cat || e.cat === cat;
     if (tab === "monsters" && !showVariants && (e.variant || e.level >= 200 || e.name.startsWith("Tutorial") || (!idx.spawnsOf[e.id] && !e.drops.length))) return false;
     const lv = lvOf(e);
     if (!isNaN(min) && (lv == null || lv < min)) return false;
@@ -216,13 +275,20 @@ function filtered() {
 function renderTable() {
   const tab = state.tab;
   if (tab === "world") return;
+  if (tab === "market" && (!db.market || db.marketError)) {
+    $("#table").innerHTML = `<tbody><tr><td style="padding:20px;white-space:normal">${db.marketError
+      ? `Couldn't load Free Market prices right now (${esc(db.marketError)}). You can still check <a href="${COZY_URL}" target="_blank" rel="noopener">Cozy Market</a>.`
+      : "Loading Free Market prices…"}</td></tr></tbody>`;
+    $("#count").textContent = "";
+    return;
+  }
   const cols = COLUMNS[tab];
   const rows = filtered();
   const type = TYPE_OF_TAB[tab];
   const cur = currentEntry();
   const head = cols.map((c) => {
     const s = state.sortKey === c.key;
-    return `<th class="${c.num ? "num" : ""} ${s ? "sorted" : ""} ${s && state.asc ? "asc" : ""}" data-key="${c.key}">${c.label}</th>`;
+    return `<th class="${c.num ? "num" : ""} ${c.wide ? "wide-only" : ""} ${s ? "sorted" : ""} ${s && state.asc ? "asc" : ""}" data-key="${c.key}">${c.label}</th>`;
   }).join("");
   const body = rows.map((e) => `<tr data-type="${type}" data-id="${esc(e.id)}" class="${cur?.id === e.id ? "selected" : ""}">` +
     cols.map((c, i) => {
@@ -234,7 +300,7 @@ function renderTable() {
       if (i === 0 && e.disputed) extra += '<span class="unv" title="Sources disagree; see details">?</span>';
       if (i === 0 && e.region === "Hidden Street") extra = ' <span class="badge hidden">Hidden</span>';
       const cell = i === 0 && tab === "monsters" ? `<span class="spr-cell">${sprite(e, 28)}</span>${esc(e.name)}` : esc(fmt(v));
-      return `<td class="${c.num ? "num" : ""}">${cell}${extra}</td>`;
+      return `<td class="${c.num ? "num" : ""} ${c.wide ? "wide-only" : ""}">${cell}${extra}</td>`;
     }).join("") + "</tr>").join("");
   $("#table").innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
   $("#count").textContent = `${rows.length.toLocaleString()} result${rows.length === 1 ? "" : "s"}`;
@@ -275,8 +341,8 @@ function fromHash() {
 
 function getEntity(type, id) {
   if (type === "zone") return idx.zones[id] ? { id, name: id } : null;
-  const ds = { monster: "monsters", item: "items", map: "maps", job: "jobs" }[type];
-  return ds ? byId[ds][id] : null;
+  const ds = { monster: "monsters", item: "items", map: "maps", job: "jobs", price: "market" }[type];
+  return ds ? byId[ds]?.[id] : null;
 }
 
 function link(type, id, label) {
@@ -307,7 +373,7 @@ function renderDetail() {
   const nav = `<div class="panel-nav">
       <button id="back" ${state.pos > 0 ? "" : "disabled"}>← Back</button>
       <button id="close" title="Close">✕</button></div>`;
-  const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail }[cur.type](getEntity(cur.type, cur.id));
+  const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail, price: priceDetail }[cur.type](getEntity(cur.type, cur.id));
   panel.innerHTML = nav + body;
   panel.scrollTop = 0;
   $("#back").onclick = () => { if (state.pos > 0) { state.pos--; syncHash(); renderDetail(); } };
@@ -472,7 +538,8 @@ function monsterDetail(mob) {
     const kills = mob.drops.find((d) => d.kills)?.kills;
     html += `<table class="drops"><tbody>${mob.drops.map((d) => {
       const it = getEntity("item", d.item);
-      return `<tr><td>${link("item", d.item)}${it?.type ? ` <span class="sub">${esc(it.type)}</span>` : ""}</td><td class="num">${rateText(d.rate)}</td></tr>`;
+      const pr = it && priceOf(it.name);
+      return `<tr><td>${link("item", d.item)}${it?.type ? ` <span class="sub">${esc(it.type)}</span>` : ""}</td><td class="num price-cell">${pr ? `≈${meso(pr.typ)}` : ""}</td><td class="num">${rateText(d.rate)}</td></tr>`;
     }).join("")}</tbody></table>`;
     html += `<p class="sub" style="margin-top:6px">${kills ? `Rates counted in Classic World over ${kills.toLocaleString()} kills.` : "Drops reported by Classic players; no rate counted yet."}</p>`;
   } else {
@@ -491,6 +558,12 @@ function itemDetail(it) {
   let html = `<h2>${esc(it.name)}</h2><p class="sub">${esc([it.type, it.category].filter(Boolean).join(" · ") || "Item")}</p>`;
   const stats = it.stats ? Object.entries(it.stats).map(([k, v]) => `${esc(k)} ${v > 0 ? "+" : ""}${v}`).join(", ") : null;
   html += dl([["Req. level", it.level], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
+  const pr = priceOf(it.name);
+  if (pr) {
+    html += `<h3>Free Market price</h3>${priceSummary(pr)}<p>${link("price", pr.id, "Full price details, stat rolls & sellers →")}</p>`;
+  } else if (db.market && !db.marketError) {
+    html += `<h3>Free Market price</h3><p class="sub">No recent sales tracked. ${cozyButton()}</p>`;
+  }
   const by = idx.droppedBy[it.id] || [];
   html += `<h3>Dropped by (${by.length})</h3>`;
   html += by.length
@@ -506,6 +579,55 @@ function jobDetail(j) {
   const next = db.jobs.filter((x) => x.from === j.id);
   if (next.length) html += `<h3>Advances to</h3><ul>${next.map((x) => `<li>${link("job", x.id)}<span class="right">Lv ${x.level}</span></li>`).join("")}</ul>`;
   if (j.notes) html += `<div class="note">${esc(j.notes)}</div>`;
+  return html;
+}
+
+// ---------- Free Market prices ----------
+function cozyButton(label = "Find live shops on Cozy Market ↗") {
+  return `<a class="btn" href="${COZY_URL}" target="_blank" rel="noopener">${label}</a>`;
+}
+
+function sparkline(daily) {
+  if (daily.length < 2) return "";
+  const W = 320, H = 70, P = 6;
+  const ys = daily.map((d) => d[1]);
+  const min = Math.min(...ys), max = Math.max(...ys);
+  const x = (i) => P + (i * (W - 2 * P)) / (daily.length - 1);
+  const y = (v) => (max === min ? H / 2 : H - P - ((v - min) * (H - 2 * P)) / (max - min));
+  const pts = daily.map((d, i) => `${x(i).toFixed(1)},${y(d[1]).toFixed(1)}`).join(" ");
+  const day = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Price over the last ${daily.length} days">
+      <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"></polyline>
+      ${daily.map((d, i) => `<circle cx="${x(i)}" cy="${y(d[1])}" r="3" fill="var(--accent)"><title>${day(d[0])}: ${meso(d[1])}</title></circle>`).join("")}
+    </svg><div class="spark-axis"><span>${day(daily[0][0])}</span><span>low ${meso(min)} · high ${meso(max)}</span><span>${day(daily[daily.length - 1][0])}</span></div>`;
+}
+
+function priceSummary(p) {
+  const basis = p.basis === "sale" ? "typical sold price" : "typical asking price (few sales yet)";
+  return `<div class="price-big">${meso(p.typ)} <span>mesos</span></div>
+    <p class="sub">${basis} · usual range ${meso(p.lo)}–${meso(p.hi)} · ${p.sales.toLocaleString()} sales tracked</p>`;
+}
+
+function priceDetail(p) {
+  const conf = { verified: "Verified by repeated sales", lead: "Based on a few sales or listings", watched: "Being watched (prices moving)" }[p.conf] || p.conf;
+  const ourItem = byId.items[p.id];
+  let html = `<h2>${esc(p.name)}</h2><p class="sub">${esc(p.cat)} · Free Market</p>${priceSummary(p)}`;
+  html += `<p>${cozyButton()} <a class="btn ghost" href="${CLUBFM_URL}" target="_blank" rel="noopener">Club FM ↗</a></p>`;
+  if (p.daily.length > 1) html += `<h3>Last ${p.daily.length} days ${p.change != null ? `<span class="${p.change >= 0 ? "up" : "down"}">${pct(p.change)}</span>` : ""}</h3>${sparkline(p.daily)}`;
+  html += dl([["Confidence", esc(conf)], ["Listings seen", p.listings.toLocaleString()]]);
+  if (p.ladder?.length) {
+    for (const [stat, rows] of p.ladder) {
+      html += `<h3>Price by ${esc(stat)} roll</h3><table class="drops ladder"><tbody>${rows.map(([label, status, lo, hi, typ, sold, listed]) => `
+        <tr><td>${esc(label)}</td><td class="num">${typ ? meso(typ) : lo === hi ? meso(lo) : `${meso(lo)}–${meso(hi)}`}</td>
+        <td class="num sub">${status === "sold" ? `${sold} sold` : status === "asking" ? "asking" : "few sales"}</td></tr>`).join("")}</tbody></table>`;
+    }
+  }
+  if (p.sellers.length) {
+    html += `<h3>Shops selling near this price</h3>
+      <p class="sellers">${p.sellers.map((n) => `<span class="seller">${esc(n)}</span>`).join("")}</p>
+      <p class="sub">Character names whose shops sold or listed this item close to the typical price. Look for them in the Free Market, or check ${cozyButton("Cozy Market ↗").replace('class="btn"', 'class="inline"')} for their current channel and room.</p>`;
+  }
+  if (ourItem) html += `<h3>In the database</h3><p>${link("item", ourItem.id, `${ourItem.name}: stats and who drops it →`)}</p>`;
   return html;
 }
 

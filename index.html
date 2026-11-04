@@ -15,6 +15,7 @@
       <button data-tab="monsters">Monsters</button>
       <button data-tab="items">Items</button>
       <button data-tab="maps">Maps</button>
+      <button data-tab="market">Market</button>
       <button data-tab="jobs">Jobs</button>
     </nav>
   </header>
@@ -22,14 +23,19 @@
   <main>
     <section id="controls" hidden>
       <input id="search" type="search" placeholder="Search by name…" autocomplete="off">
-      <label>Lv <input id="minLv" type="number" min="0" max="200" placeholder="min"></label>
-      <label>to <input id="maxLv" type="number" min="0" max="200" placeholder="max"></label>
+      <label class="lvctl">Lv <input id="minLv" type="number" min="0" max="200" placeholder="min"></label>
+      <label class="lvctl">to <input id="maxLv" type="number" min="0" max="200" placeholder="max"></label>
+      <label id="catWrap" hidden><select id="cat"><option value="">All categories</option></select></label>
       <label id="variantsWrap" class="check"><input id="variants" type="checkbox"> Show job-test, PQ &amp; event variants</label>
       <span id="count"></span>
     </section>
 
     <div id="layout">
       <div id="mainView">
+        <div id="marketBar" class="market-bar" hidden>
+          <div><strong>Free Market prices</strong><br><span class="sub">Typical sold prices from the last week, updated daily from <a href="https://maplefm.gg" target="_blank" rel="noopener">Club FM</a>. Click an item for its price history, stat rolls and the shops selling it.</span></div>
+          <a class="btn" href="https://cozy.markets/market" target="_blank" rel="noopener">Live shops on Cozy Market ↗</a>
+        </div>
         <div id="worldView"></div>
         <div id="tableWrap" hidden><table id="table"></table></div>
       </div>
