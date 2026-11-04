@@ -62,6 +62,10 @@ jobs:
         continue-on-error: true
         run: python3 tools/fetch_ammo.py "$RUNNER_TEMP/fm/data/itemdb.json"
 
+      - name: Get potions that raise stats
+        continue-on-error: true
+        run: python3 tools/fetch_potions.py "$RUNNER_TEMP/fm/data/itemdb.json"
+
       - name: Get icons and requirements for new gear
         continue-on-error: true
         run: python3 tools/fetch_gear_info.py

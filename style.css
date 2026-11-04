@@ -277,6 +277,20 @@ td .spr-cell { width: 34px; }
 .cx-bonus-more summary { cursor: pointer; padding: 4px 10px 10px; color: var(--muted); font-size: .84em; font-weight: 600; }
 .cx-bonus-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border-top: 1px solid var(--line); font-size: .88em; }
 .cx-bonus-actions .cx-auto { min-height: 36px; }
+.cx-typed { margin-top: 10px; }
+.cx-buff-title { margin: 2px 0 0; font-size: .78em; font-weight: 600; color: var(--muted); }
+.cx-buff { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.cx-buff-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; line-height: 1.3; }
+label.cx-buff-main { cursor: pointer; }
+.cx-buff-main input[type=checkbox] { flex: none; width: 20px; height: 20px; accent-color: var(--accent); }
+.cx-buff-main b { display: block; font-size: .88em; font-weight: 600; }
+.cx-buff-main small { display: block; color: var(--muted); font-size: .74em; }
+.cx-buff-lv { flex: none; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: .76em; }
+.cx-buff-lv input { width: 56px; font: inherit; font-size: 16px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+.cx-buff-lv input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cx-potions summary { cursor: pointer; padding: 8px 0; font-weight: 600; font-size: .88em; color: var(--muted); }
+.cx-potion { min-height: 48px; padding: 5px 0; border-top: 1px solid var(--line); }
+.cx-potions .cf-note { margin-top: 8px; }
 .cx-ap { display: flex; flex-direction: column; gap: 5px; }
 .cx-ap-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .86em; color: var(--muted); }
 .cx-ap-top b { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -336,9 +350,6 @@ td .spr-cell { width: 34px; }
 .cf input:focus, .cf select:focus, .card-head select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .cf small, .cf-note { color: var(--muted); font-size: .78em; line-height: 1.35; margin: 0; }
 .cf small a { color: var(--accent); }
-.cf-toggle { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: .88em; }
-.cf-toggle input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; }
-.cf-toggle small { display: block; color: var(--muted); font-size: .85em; }
 .calc-more { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
 .calc-more summary { cursor: pointer; padding: 12px 14px; font-weight: 600; font-size: .9em; color: var(--muted); }
 .calc-more fieldset { border: 0; border-top: 1px solid var(--line); border-radius: 0 0 14px 14px; }

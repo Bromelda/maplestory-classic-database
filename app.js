@@ -2,7 +2,7 @@
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
 const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta", "worldmap"];
-const OPTIONAL = ["log", "patches", "skills", "gear", "ammo", "gear_info"]; // fine if missing
+const OPTIONAL = ["log", "patches", "skills", "gear", "ammo", "gear_info", "potions"]; // fine if missing
 const db = {};
 const byId = {};
 const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
@@ -16,6 +16,7 @@ const LEVEL_BANDS = [
   [40, "#8a5cd6", "31–40"], [50, "#e8711c", "41–50"], [999, "#d9434c", "51+"],
 ];
 const TOWN_COLOR = "#a08a6a";
+const FREE_MARKET = "Free Market";
 const MOB_COLORS = ["#e8711c", "#3d8be0", "#5cb85c", "#d9434c", "#8a5cd6", "#2bb3a3", "#d4a017", "#c2549d", "#6b7f2a", "#5b6ee1"];
 
 function bandColor(lv) {
@@ -311,7 +312,8 @@ function renderWorld() {
       <text class="zone-sub" x="${lx + w / 2}" y="${ly + 23}" text-anchor="middle">${esc(sub)}</text>
     </g>`;
   }).join("");
-  const off = Object.keys(idx.zones).filter((z) => !nodes[z]).sort();
+  // the Free Market isn't an area of its own: towns with a door to it link to it from their page
+  const off = Object.keys(idx.zones).filter((z) => !nodes[z] && z !== FREE_MARKET).sort();
   const chip = (z) => {
     const s = zoneSummary(z);
     return `<button type="button" class="zone-chip" data-type="zone" data-id="${esc(z)}"><i class="dot" style="background:${colorOf(s)}"></i><b>${esc(z)}</b><span>${esc(levels(s))}</span></button>`;
@@ -545,6 +547,12 @@ function syncHash() {
 // zone: list its maps grouped by type
 function zoneDetail(z) {
   const s = zoneSummary(z.id);
+  const doors = s.maps.filter((m) => m.portals.some((p) => byId.maps[p.to]?.node === FREE_MARKET));
+  const market = doors.length && z.id !== FREE_MARKET ? (() => {
+    const inside = byId.maps[doors[0].portals.find((p) => byId.maps[p.to]?.node === FREE_MARKET).to];
+    return `<div class="zone-group"><h4>Free Market</h4><a class="maprow" data-type="map" data-id="${esc(inside.id)}" href="#map/${encodeURIComponent(inside.id)}">
+      <span class="top">${esc(inside.name)}</span><span class="mobs">Go in from ${doors.map((m) => esc(m.name)).join(" or ")}</span></a></div>`;
+  })() : "";
   const groups = {};
   for (const m of s.maps) {
     const g = m.region === "Hidden Street" ? "Hidden Street" : m.town || m.type === "Town interior" || m.type === "Town" ? "Town" : m.type === "Dungeon" ? "Dungeons" : "Hunting grounds & fields";
@@ -567,7 +575,7 @@ function zoneDetail(z) {
     if (p.kind !== "hidden" && to && to.node !== z.id && nodes[to.node]) next.add(to.node);
   }
   const links = next.size ? `<p class="sub">Connects to ${[...next].map((n) => link("zone", n)).join(", ")}</p>` : "";
-  return `<h2>${esc(z.id)}</h2><p class="sub">${s.maps.length} ${s.maps.length === 1 ? "map" : "maps"}${s.min != null ? ` · Lv ${levelText([s.min, s.max])}` : ""}</p>${links}${out}`;
+  return `<h2>${esc(z.id)}</h2><p class="sub">${s.maps.length} ${s.maps.length === 1 ? "map" : "maps"}${s.min != null ? ` · Lv ${levelText([s.min, s.max])}` : ""}</p>${links}${market}${out}`;
 }
 
 // map: layout drawing, spawn counts, portals (incl. hidden), NPCs
@@ -575,7 +583,7 @@ function mapDetail(m) {
   const colorOf = {};
   m.spawns.forEach((s, i) => { colorOf[s.monster] = MOB_COLORS[i % MOB_COLORS.length]; });
   const total = m.spawns.reduce((a, x) => a + x.count, 0);
-  let html = `<h2>${esc(m.name)}</h2><p class="sub">${link("zone", m.node)} · ${esc(m.type || m.region)}${m.region === "Hidden Street" ? ' · <span class="badge hidden">Hidden Street</span>' : ""}</p>`;
+  let html = `<h2>${esc(m.name)}</h2><p class="sub">${m.node === FREE_MARKET ? esc(m.node) : link("zone", m.node)} · ${esc(m.type || m.region)}${m.region === "Hidden Street" ? ' · <span class="badge hidden">Hidden Street</span>' : ""}</p>`;
   html += dl([["Level range", m.levels ? levelText(m.levels) + (m.levels_from_mobs ? ' <span class="sub">(from its monsters)</span>' : "") : null], ["Total monsters", total || null]]);
   const walkIn = [...(idx.incoming[m.id] || [])].some((id) => id !== m.id);
   if (!walkIn) {
