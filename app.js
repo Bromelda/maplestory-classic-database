@@ -200,7 +200,6 @@ function bind() {
   ["#search", "#minLv", "#maxLv", "#variants", "#cat", "#qarea", "#hideDone"].forEach((s) => $(s).addEventListener("input", renderTable));
   const areas = [...new Set(db.quests.map((q) => q.area))].sort();
   $("#qarea").innerHTML = `<option value="">All areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
-  window.addEventListener("hashchange", fromHash);
   document.addEventListener("click", onLinkClick);
   document.addEventListener("mouseover", onHover);
   document.addEventListener("mouseout", (e) => { if (e.target.closest?.("[data-tip]")) hideTip(); });
@@ -225,7 +224,10 @@ function onLinkClick(e) {
 const FEED_TABS = ["patches", "log"];
 function switchTab(tab) {
   state.tab = tab;
-  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll("#tabs button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === tab);
+    if (b.dataset.tab === tab) b.scrollIntoView({ block: "nearest", inline: "center" });
+  });
   const isWorld = tab === "world";
   const isFeed = FEED_TABS.includes(tab);
   const isCalc = tab === "calc";
@@ -298,7 +300,12 @@ function renderWorld() {
       <text class="island-label" x="560" y="225">Victoria Island</text>
       ${boats}${nodes}
     </svg>
-    <div class="legend">${legend}</div>`;
+    <div class="legend">${legend}</div>
+    <div class="zone-chips">${Object.keys(ZONES).filter((z) => idx.zones[z]).map((z) => {
+      const s = zoneSummary(z);
+      const color = s.mobs && s.typical != null ? bandColor(s.typical) : TOWN_COLOR;
+      return `<button type="button" class="zone-chip" data-type="zone" data-id="${esc(z)}"><i class="dot" style="background:${color}"></i><b>${esc(z)}</b><span>${s.min != null ? `Lv ${s.min}–${s.max}` : "Town"} · ${s.maps.length} maps</span></button>`;
+    }).join("")}</div>`;
   $("#worldView").querySelectorAll(".zone").forEach((g) => g.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open("zone", g.dataset.id); }
   }));
@@ -397,11 +404,30 @@ function open(type, id, { push = true } = {}) {
     state.history.push({ type, id });
     state.pos = state.history.length - 1;
     const h = `#${type}/${encodeURIComponent(id)}`;
-    if (location.hash !== h) history.replaceState(null, "", h);
+    if (location.hash !== h) history.pushState({ pos: state.pos }, "", h);
   }
   hideTip();
   renderDetail();
 }
+
+const isPhone = () => window.matchMedia("(max-width: 959px)").matches;
+
+function closeDetail() {
+  state.history = []; state.pos = -1;
+  history.replaceState(null, "", location.pathname + location.search);
+  renderDetail(); renderTable();
+}
+
+// Browser/phone back button: step back through the panel, then close it.
+window.addEventListener("popstate", () => {
+  const m = location.hash.match(/^#(\w+)\/(.+)$/);
+  if (!m) { state.history = []; state.pos = -1; renderDetail(); renderTable(); return; }
+  const type = m[1], id = decodeURIComponent(m[2]);
+  const prev = state.history[state.pos - 1];
+  if (prev && prev.type === type && prev.id === id) { state.pos--; renderDetail(); return; }
+  if (!getEntity(type, id)) return;
+  state.history = [{ type, id }]; state.pos = 0; renderDetail();
+});
 
 function fromHash() {
   const m = location.hash.match(/^#(\w+)\/(.+)$/);
@@ -443,17 +469,18 @@ function renderDetail() {
   const cur = currentEntry();
   $("#layout").classList.toggle("with-detail", !!cur);
   highlightZone(cur?.type === "zone" ? cur.id : null);
+  document.body.classList.toggle("sheet-open", !!cur && isPhone());
   if (!cur) { panel.hidden = true; return; }
   panel.hidden = false;
   const nav = `<div class="panel-nav">
       <button id="back" ${state.pos > 0 ? "" : "disabled"}>← Back</button>
-      <button id="close" title="Close">✕</button></div>`;
+      <span class="panel-title">${esc(getEntity(cur.type, cur.id)?.name || "")}</span>
+      <button id="close" title="Close" aria-label="Close">✕</button></div>`;
   const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail, price: priceDetail, quest: questDetail, npc: npcDetail }[cur.type](getEntity(cur.type, cur.id));
   panel.innerHTML = nav + body;
   panel.scrollTop = 0;
-  $("#back").onclick = () => { if (state.pos > 0) { state.pos--; syncHash(); renderDetail(); } };
-  $("#close").onclick = () => { state.history = []; state.pos = -1; history.replaceState(null, "", location.pathname); renderDetail(); renderTable(); };
-  if (window.innerWidth < 960) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#back").onclick = () => { if (state.pos > 0) history.back(); };
+  $("#close").onclick = closeDetail;
   renderTable();
 }
 function syncHash() {

@@ -267,13 +267,14 @@ function renderCalc() {
             </select></div>
           <div id="calcMatch"></div>
         </section>
-        <section class="calc-card">
+        <section class="calc-card" id="calcMatchCard">
           <div class="card-head"><h3>Every monster</h3>
             <label class="check"><input type="checkbox" id="c_near" ${calc.near ? "checked" : ""}> Near my level only</label></div>
           <div id="calcTable"></div>
         </section>
       </div>
-    </div>`;
+    </div>
+    <button type="button" id="calcBar" class="calc-bar" aria-label="Jump to results"></button>`;
 
   view.querySelectorAll(".class-btn").forEach((b) => b.addEventListener("click", () => {
     calc.cls = b.dataset.cls;
@@ -318,6 +319,16 @@ function renderCalcOut() {
 
   // matchup
   const target = c.target && getEntity("monster", c.target);
+  const bar = $("#calcBar");
+  if (bar) {
+    let tail = "";
+    if (target) {
+      const mm0 = matchup(r, c, target);
+      tail = `<span class="cb-mob">${sprite(target, 28)}<span><b>${esc(target.name)}</b> ${mm0.uses} ${c.hits > 1 ? "uses" : "hits"} · ${Math.round(mm0.p * 100)}% hit</span>${verdictBadge(mm0.verdict)}</span>`;
+    }
+    bar.innerHTML = `<span class="cb-dmg"><small>${esc(skillName)}</small><b>${fmt(clampDmg(r.min))}–${fmt(clampDmg(r.max))}</b></span>${tail || '<span class="cb-hint">Pick a monster ↓</span>'}`;
+    bar.onclick = () => $(target ? "#calcMatch" : "#calcSummary").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
   if (target) {
     const mm = matchup(r, c, target);
     const where = (idx.spawnsOf[target.id] || []).slice(0, 2);
