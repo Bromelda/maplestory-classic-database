@@ -48,6 +48,10 @@ jobs:
           python3 tools/build_data.py "$RUNNER_TEMP/fm/data"
           python3 tools/update_log.py "$RUNNER_TEMP/old" data data/log.json
 
+      - name: Fetch Classic skill data (all levels, from the game files)
+        continue-on-error: true
+        run: python3 tools/fetch_skills.py data/skills.json
+
       - name: Fetch Nexon Classic World posts
         continue-on-error: true
         run: python3 tools/fetch_patches.py data/patches.json
