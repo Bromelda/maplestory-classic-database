@@ -27,7 +27,7 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Market, Jobs
 - **Skills**: an SP planner for every 1st and 2nd job skill at every level. It saves to the character, and the calculator uses it.
 - **Saved characters**: multiple characters in localStorage, each with its own calc setup, skill plan and quest progress.
   Share build creates a `?build=` link.
-- **Market**: Club FM's public price summary, loaded live in the browser, with seller names, plus links to Cozy Market for live shops.
+- **Market**: Club FM's public price summary, loaded live in the browser, with seller names, plus links to Cozy Market and HeneFM for live shops. HeneFM is links only (`/items/<game id>`, or `/?q=<name>` when we don't have the id); no data is pulled from it.
 - **Patches**: Nexon's Classic World posts. **Log**: daily changes (new drops, stat changes, quests).
 
 ## Data sources and rules

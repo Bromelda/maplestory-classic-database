@@ -11,6 +11,7 @@ const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName:
 const MARKET_URL = "https://raw.githubusercontent.com/maplefm/maplefm.github.io/live/data/summary-public.json";
 const COZY_URL = "https://cozy.markets/market";
 const CLUBFM_URL = "https://maplefm.gg";
+const HENEFM_URL = "https://henefm.com";
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 function meso(n) {
   if (n == null) return "—";
@@ -404,7 +405,7 @@ function renderTable() {
   if (FEED_TABS.includes(tab)) return renderFeed();
   if (tab === "market" && (!db.market || db.marketError)) {
     $("#table").innerHTML = `<tbody><tr><td style="padding:20px;white-space:normal">${db.marketError
-      ? `Couldn't load Free Market prices right now (${esc(db.marketError)}). You can still check <a href="${COZY_URL}" target="_blank" rel="noopener">Cozy Market</a>.`
+      ? `Couldn't load Free Market prices right now (${esc(db.marketError)}). You can still check <a href="${COZY_URL}" target="_blank" rel="noopener">Cozy Market</a> or <a href="${HENEFM_URL}" target="_blank" rel="noopener">HeneFM</a>.`
       : "Loading Free Market prices…"}</td></tr></tbody>`;
     $("#count").textContent = "";
     return;
@@ -742,9 +743,9 @@ function itemDetail(it) {
   html += dl([["Req. level", it.level], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
   const pr = priceOf(it.name);
   if (pr) {
-    html += `<h3>Free Market price</h3>${priceSummary(pr)}<p>${link("price", pr.id, "Full price details, stat rolls & sellers →")}</p>`;
+    html += `<h3>Free Market price</h3>${priceSummary(pr)}<p>${link("price", pr.id, "Full price details, stat rolls & sellers →")}</p><p>${heneButton(it.name)}</p>`;
   } else if (db.market && !db.marketError) {
-    html += `<h3>Free Market price</h3><p class="sub">No recent sales tracked. ${cozyButton()}</p>`;
+    html += `<h3>Free Market price</h3><p class="sub">No recent sales tracked. ${cozyButton()} ${heneButton(it.name)}</p>`;
   }
   html += questList("Needed for quests", idx.qNeedItem[it.id]);
   html += questList("Quest reward from", idx.qRewardItem[it.id]);
@@ -909,6 +910,14 @@ function cozyButton(label = "Find live shops on Cozy Market ↗") {
   return `<a class="btn" href="${COZY_URL}" target="_blank" rel="noopener">${label}</a>`;
 }
 
+// straight to the item's page when it's traded and we know its game id, otherwise HeneFM's search
+// (untraded items like quest items have no page there)
+function heneButton(name, cls = "btn ghost") {
+  const it = priceOf(name) && byId.items[slugify(name)];
+  const url = it?.gid ? `${HENEFM_URL}/items/${it.gid}` : `${HENEFM_URL}/?q=${encodeURIComponent(name)}`;
+  return `<a class="${cls}" href="${url}" target="_blank" rel="noopener">HeneFM ↗</a>`;
+}
+
 function sparkline(daily) {
   if (daily.length < 2) return "";
   const W = 320, H = 70, P = 6;
@@ -934,7 +943,7 @@ function priceDetail(p) {
   const conf = { verified: "Verified by repeated sales", lead: "Based on a few sales or listings", watched: "Being watched (prices moving)" }[p.conf] || p.conf;
   const ourItem = byId.items[p.id];
   let html = `<h2>${esc(p.name)}</h2><p class="sub">${esc(p.cat)} · Free Market</p>${priceSummary(p)}`;
-  html += `<p>${cozyButton()} <a class="btn ghost" href="${CLUBFM_URL}" target="_blank" rel="noopener">Club FM ↗</a></p>`;
+  html += `<p>${cozyButton()} ${heneButton(p.name)} <a class="btn ghost" href="${CLUBFM_URL}" target="_blank" rel="noopener">Club FM ↗</a></p>`;
   if (p.daily.length > 1) html += `<h3>Last ${p.daily.length} days ${p.change != null ? `<span class="${p.change >= 0 ? "up" : "down"}">${pct(p.change)}</span>` : ""}</h3>${sparkline(p.daily)}`;
   html += dl([["Confidence", esc(conf)], ["Listings seen", p.listings.toLocaleString()]]);
   if (p.ladder?.length) {
@@ -947,7 +956,7 @@ function priceDetail(p) {
   if (p.sellers.length) {
     html += `<h3>Shops selling near this price</h3>
       <p class="sellers">${p.sellers.map((n) => `<span class="seller">${esc(n)}</span>`).join("")}</p>
-      <p class="sub">Character names whose shops sold or listed this item close to the typical price. Look for them in the Free Market, or check ${cozyButton("Cozy Market ↗").replace('class="btn"', 'class="inline"')} for their current channel and room.</p>`;
+      <p class="sub">Character names whose shops sold or listed this item close to the typical price. Look for them in the Free Market, or check ${cozyButton("Cozy Market ↗").replace('class="btn"', 'class="inline"')} or ${heneButton(p.name, "inline")} for their current channel and room.</p>`;
   }
   if (ourItem) html += `<h3>In the database</h3><p>${link("item", ourItem.id, `${ourItem.name}: stats and who drops it →`)}</p>`;
   return html;
