@@ -20,6 +20,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 - **Market**: typical Free Market prices for about 1,500 items, with a 7-day trend, prices by stat roll (for example clean versus +8 ATT Work Gloves), and the character names of shops selling near that price. Each item links to [Cozy Market](https://cozy.markets/market) for live shops and channels. Monster drop tables show roughly what each drop is worth.
 - **Patches**: Classic World patch notes, maintenance, events and Cash Shop posts from Nexon, linked to the full post.
 - **Log**: a daily list of anything new, such as new drops players find, new monsters, stat changes, and new or ended quests and events.
+- **Calculator**: enter class, weapon, level, stats, weapon or magic attack, mastery and skill % to get your damage range and a **hits-to-kill table for every monster near your level**. It uses each monster's defense, elemental weakness and level gap. It uses Classic World's new formulas (NiaDB, FullBoosts and MS-Classic agree; there's a switch for the MapleClassic Wiki variant). Your inputs are remembered in your browser.
 - **Jobs**: the Classic job tree (no Pirates, 2nd job at 30, Magician 1st job at level 10).
 - Searchable, sortable tables for monsters, items, maps and jobs. Links are shareable (for example `#map/henesys_hunting_ground_i`).
 
@@ -79,8 +80,7 @@ GitHub Pages needs a public repo, or a paid plan for a private one. Turn it on u
 
 ## Roadmap
 
-- Damage calculator (job, level, stats, skills → damage range and hits to kill)
-- Skill planner, using Planet Helper and MS-Classic as references
+- Skill presets and a skill-point planner (needs per-level skill data, waiting on NiaDB's permission)
 - The real in-game Victoria Island world map in place of the schematic
 - Forgotten Hollow, Orbis and El Nath once they open in Classic
 

@@ -228,10 +228,13 @@ function switchTab(tab) {
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   const isWorld = tab === "world";
   const isFeed = FEED_TABS.includes(tab);
+  const isCalc = tab === "calc";
   $("#worldView").hidden = !isWorld;
-  $("#tableWrap").hidden = isWorld || isFeed;
+  $("#tableWrap").hidden = isWorld || isFeed || isCalc;
   $("#feedView").hidden = !isFeed;
-  $("#controls").hidden = isWorld;
+  $("#calcView").hidden = !isCalc;
+  $("#controls").hidden = isWorld || isCalc;
+  if (isCalc) { renderCalc(); return; }
   if (isFeed) {
     ["#variantsWrap", "#catWrap", "#marketBar", "#qareaWrap", "#hideDoneWrap"].forEach((x) => { $(x).hidden = true; });
     document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = true; });
@@ -344,7 +347,7 @@ function filtered() {
 
 function renderTable() {
   const tab = state.tab;
-  if (tab === "world") return;
+  if (tab === "world" || tab === "calc") return;
   if (FEED_TABS.includes(tab)) return renderFeed();
   if (tab === "market" && (!db.market || db.marketError)) {
     $("#table").innerHTML = `<tbody><tr><td style="padding:20px;white-space:normal">${db.marketError

@@ -211,3 +211,24 @@ h3 .up, h3 .down { text-transform: none; margin-left: 6px; }
 .feed li:last-child { border-bottom: none; }
 .feed .sub { color: var(--muted); }
 .feed-ico { flex: none; width: 22px; text-align: center; }
+
+/* ---------- calculator ---------- */
+.calc-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 900px) { .calc-grid { grid-template-columns: 330px minmax(0, 1fr); } }
+.calc-form { display: flex; flex-direction: column; gap: 12px; }
+.calc-form fieldset { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 10px 12px 12px; margin: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.calc-form legend { font-size: .78em; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 0 4px; }
+.cf { display: flex; flex-direction: column; gap: 3px; font-size: .88em; }
+.cf span { color: var(--muted); }
+.cf input, .cf select { font: inherit; font-size: 1rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; }
+.cf small, .calc-form small { color: var(--muted); font-size: .8em; line-height: 1.3; }
+.calc-form fieldset > .cf:has(select), .calc-form fieldset > small, .cf-check { grid-column: 1 / -1; }
+.calc-result { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.calc-result .sub, .calc-tablewrap + .sub, #calcOut > .sub { color: var(--muted); font-size: .88em; }
+.calc-table-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin: 16px 0 8px; }
+.calc-table-head h3 { margin: 0; font-size: .85em; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.calc-tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.calc-tablewrap td .sub { color: var(--muted); font-size: .85em; }
+tr.one-shot { background: #e6f6ea; }
+@media (prefers-color-scheme: dark) { tr.one-shot { background: #17321f; } }
