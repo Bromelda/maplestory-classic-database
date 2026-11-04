@@ -40,6 +40,7 @@ jobs:
           mkdir -p assets/minimap assets/mob
           cp -n "$RUNNER_TEMP"/fm/data/minimap/*.png assets/minimap/ || true
           cp -n "$RUNNER_TEMP"/fm/data/sprite/*.gif assets/mob/ || true
+          rm -f assets/minimap/80002{001..020}.png   # the Free Market's numbered rooms aren't on the site
 
       - name: Sharpen new minimaps
         run: |

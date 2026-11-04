@@ -45,6 +45,9 @@ ORG_MATCH = "MapleStoryClassic.org"
 ORG_ONLY = {"Fairy 1", "Orange Slime", "Ultra Jr. Necki 1"}
 
 VARIANT_RE = re.compile(r"\((.+)\)$")
+# The Free Market's numbered rooms are 20 empty copies with nothing to look up, so only the entrance
+# is kept: it has the NPCs and two quests start there.
+FREE_MARKET_ROOM = re.compile(r"Free Market \(\d+\)")
 
 
 def sprite_size(path):
@@ -118,7 +121,7 @@ def main():
     guide_ids = guide["ids"]
 
     mobs_src = world["mobs"]
-    maps_src = world["maps"]
+    maps_src = {name: mp for name, mp in world["maps"].items() if not FREE_MARKET_ROOM.fullmatch(name)}
     gid_to_mob = {m["id"]: name for name, m in mobs_src.items()}
 
     # ---------- drops (Classic kill counts only) ----------
@@ -280,6 +283,8 @@ def main():
     for name, mp in maps_src.items():
         portals = []
         for p in mp["portals"]:
+            if FREE_MARKET_ROOM.fullmatch(p[0]):
+                continue
             portals.append({"to": slug(p[0]), "kind": p[1], "x": p[2], "y": p[3]})
         spawns = [{"monster": slug(mn), "count": c} for mn, c in mp["mobs"]]
         # party-quest / event monsters are kept in a separate list in the source

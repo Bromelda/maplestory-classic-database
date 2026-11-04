@@ -69,6 +69,7 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patche
 
 ## Gotchas learned
 
+- The Free Market's 20 numbered rooms are left out on purpose (`FREE_MARKET_ROOM` in `tools/build_data.py`, and their minimaps are removed in the workflow). Only Free Market Entrance stays, because it has four NPCs and two quests start there. The site has no market prices either.
 - Map art is only fetched once per map and comes from MCW v1 (launch v1.0.0), so a patch that changes a map's look won't show until its `assets/map-art` file is deleted and fetched again.
 - Test map clicks with a real mouse, not a simulated click event: moving a world map node during hover once swallowed every real click, and simulated clicks didn't show it.
 - Don't redraw maps with AI: markers use exact coordinates on the image, so the art has to keep the same layout. maplestory.io's `/map/<id>/render` has its own unknown origin, so `fetch_map_art.py` finds it by matching the render to the minimap and fine-tunes it with footholds, then crops to the map's bounds.
