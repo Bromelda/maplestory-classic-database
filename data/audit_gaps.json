@@ -1,0 +1,173 @@
+{
+  "generated": "2026-11-03",
+  "summary": {
+    "monsters_total": 83,
+    "live_nonvariant_monsters": 69,
+    "live_nonvariant_monsters_missing_meso_range": 31,
+    "items_total": 848,
+    "equipment_items": 476,
+    "equipment_items_with_clean_roll_ranges": 0
+  },
+  "missing_meso_ranges": [
+    {
+      "id": "tutorial_jr_sentinel",
+      "name": "Tutorial Jr. Sentinel",
+      "level": 1
+    },
+    {
+      "id": "ghost_stump",
+      "name": "Ghost Stump",
+      "level": 19
+    },
+    {
+      "id": "orange_slime",
+      "name": "Orange Slime",
+      "level": 20
+    },
+    {
+      "id": "wooden_mask",
+      "name": "Wooden Mask",
+      "level": 23
+    },
+    {
+      "id": "rocky_mask",
+      "name": "Rocky Mask",
+      "level": 24
+    },
+    {
+      "id": "fairy_1",
+      "name": "Fairy 1",
+      "level": 29
+    },
+    {
+      "id": "fairy_3",
+      "name": "Fairy 3",
+      "level": 29
+    },
+    {
+      "id": "fairy_4",
+      "name": "Fairy 4",
+      "level": 29
+    },
+    {
+      "id": "ligator",
+      "name": "Ligator",
+      "level": 31
+    },
+    {
+      "id": "fire_boar",
+      "name": "Fire Boar",
+      "level": 32
+    },
+    {
+      "id": "king_slime",
+      "name": "King Slime",
+      "level": 32
+    },
+    {
+      "id": "jr_boogie_1",
+      "name": "Jr. Boogie 1",
+      "level": 35
+    },
+    {
+      "id": "jr_boogie_2",
+      "name": "Jr. Boogie 2",
+      "level": 35
+    },
+    {
+      "id": "stumpy",
+      "name": "Stumpy",
+      "level": 35
+    },
+    {
+      "id": "cold_eye",
+      "name": "Cold Eye",
+      "level": 40
+    },
+    {
+      "id": "skeledog",
+      "name": "Skeledog",
+      "level": 44
+    },
+    {
+      "id": "tortie",
+      "name": "Tortie",
+      "level": 46
+    },
+    {
+      "id": "mummydog",
+      "name": "Mummydog",
+      "level": 47
+    },
+    {
+      "id": "clang",
+      "name": "Clang",
+      "level": 49
+    },
+    {
+      "id": "croco",
+      "name": "Croco",
+      "level": 52
+    },
+    {
+      "id": "malady",
+      "name": "Malady",
+      "level": 55
+    },
+    {
+      "id": "stone_golem",
+      "name": "Stone Golem",
+      "level": 56
+    },
+    {
+      "id": "skeleton_soldier",
+      "name": "Skeleton Soldier",
+      "level": 57
+    },
+    {
+      "id": "dark_stone_golem",
+      "name": "Dark Stone Golem",
+      "level": 58
+    },
+    {
+      "id": "red_drake",
+      "name": "Red Drake",
+      "level": 60
+    },
+    {
+      "id": "wild_kargo",
+      "name": "Wild Kargo",
+      "level": 62
+    },
+    {
+      "id": "officer_skeleton",
+      "name": "Officer Skeleton",
+      "level": 63
+    },
+    {
+      "id": "tauromacis",
+      "name": "Tauromacis",
+      "level": 70
+    },
+    {
+      "id": "commander_skeleton",
+      "name": "Commander Skeleton",
+      "level": 73
+    },
+    {
+      "id": "taurospear",
+      "name": "Taurospear",
+      "level": 75
+    },
+    {
+      "id": "jr_balrog",
+      "name": "Jr. Balrog",
+      "level": 80
+    }
+  ],
+  "notes": [
+    "Unknown values stay unknown; do not backfill from old GMS/MSEA/v83 tables.",
+    "Unreleased Forgotten Hollow and special/test monster variants are excluded from the live meso-gap count.",
+    "NiaDB remains manual cross-check only until explicit permission is granted for automated reuse."
+  ]
+}
