@@ -18,6 +18,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 - **Quests**: all 325 current quests as step-by-step guides. Each one covers who to talk to (circled on the minimap), what to kill or collect and who drops it, where to turn it in, rewards, and what it unlocks next. Tick off finished quests to track your progress; it's saved in your browser. Ended events and Forgotten Hollow quests are left out.
 - **NPCs**: all 187 NPCs with every location circled on the in-game minimap, plus the quests they give and accept. NPCs also show as ◆ markers on every map.
 - **Market**: typical Free Market prices for about 1,500 items, with a 7-day trend, prices by stat roll (for example clean versus +8 ATT Work Gloves), and the character names of shops selling near that price. Each item links to [Cozy Market](https://cozy.markets/market) for live shops and channels. Monster drop tables show roughly what each drop is worth.
+- **Skills**: a skill-point planner for every Classic job (1st and 2nd), with every skill's numbers at every level straight from the game files. Spend points with + / − and see what each level does and what the next one adds. SP is counted at 3 per level from level 11. The plan saves to your character, and the calculator uses it: your skill level, mastery, Rage, Precise Strikes and Focus are all picked up automatically. Skills changed in the Oct 29 patch are marked.
 - **Saved characters**: keep several characters (main, alts) in your browser. Each one remembers its stats, gear and skill settings for the calculator, and its own quest progress. Tap the 👤 chip at the top to switch. The Quests tab can show only the quests your character can do right now.
 - **Share builds**: the calculator's **Share build** button makes a link with your setup. Whoever opens it sees your build and can save it as their own character.
 - **Patches**: Classic World patch notes, maintenance, events and Cash Shop posts from Nexon, linked to the full post.
@@ -49,6 +50,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 | Maps, portals, spawns, drops | [MapleClassic Wiki](https://mapleclassic.wiki) (CC BY-NC-SA 4.0) |
 | Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg) |
 | Quests and NPC positions | Classic World game data (maplestory.io) + MapleClassic Wiki, via [Club FM](https://maplefm.gg) |
+| Skills (every level) | Classic World game files via maplestory.io (launch v1.0.0), with Oct 29 patch changes applied or flagged |
 | Free Market prices | [Club FM](https://maplefm.gg) public price summary, loaded live in the browser and refreshed daily by Club FM |
 | Job levels and instructors | Game quest data plus [Henesys.gg](https://henesys.gg/guides/beginner), [Metaroad](https://metaroad.gg/maplestory-classic/meta/beginners-guide-maplestory-classic-world), [MapleStory-Classic.com](https://maplestory-classic.com/guides/first-job-advancement-guide) |
 
@@ -89,7 +91,6 @@ GitHub Pages needs a public repo, or a paid plan for a private one. Turn it on u
 
 ## Roadmap
 
-- Skill presets and a skill-point planner (needs per-level skill data, waiting on NiaDB's permission)
 - The real in-game Victoria Island world map in place of the schematic
 - Forgotten Hollow, Orbis and El Nath once they open in Classic
 

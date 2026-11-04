@@ -366,3 +366,34 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
   .char-chip { font-size: .78em; padding: 4px 10px; }
   .char-bar, .shared-bar { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- skill planner ---------- */
+.sk-hero .sk-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: min(100%, 420px); }
+.sk-hero .cf span { color: rgba(255,255,255,.85); }
+.sk-hero .cf input, .sk-hero .cf select { background: rgba(0,0,0,.25); border-color: rgba(255,255,255,.3); color: #fff; }
+.sk-actions { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 14px; }
+.sk-actions .btn { border: 1px solid var(--accent); cursor: pointer; font: inherit; font-weight: 600; font-size: .88em; }
+.sk-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 960px) { .sk-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.sk-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+.sk-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.sk-head h3 { margin: 0; font-size: 1.05rem; }
+.sk-head .sub { color: var(--muted); font-weight: 400; font-size: .8em; }
+.sp { font-variant-numeric: tabular-nums; color: var(--muted); }
+.sp b { color: var(--text); font-size: 1.1rem; }
+.sp.over b { color: #ff8b91; }
+.sk-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.sk-row:last-child { border-bottom: 0; }
+.sk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sk-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sk-row.on .sk-name b { color: var(--accent); }
+.sk-now { font-size: .86em; }
+.sk-next { font-size: .78em; color: var(--muted); }
+.sk-note { font-size: .76em; color: #f3c56b; }
+.stepper { display: flex; align-items: center; gap: 4px; flex: none; }
+.stepper button { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: 1.1rem; cursor: pointer; }
+.stepper button.mx { width: auto; padding: 0 8px; font-size: .78rem; font-weight: 600; color: var(--accent); }
+.stepper button:disabled { opacity: .35; cursor: default; }
+.stepper span { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); font-size: .9em; }
+.stepper span b { color: var(--text); }
+@media (max-width: 600px) { .sk-hero .sk-pick { grid-template-columns: 1fr 1fr; } .sk-hero .sk-pick label:last-child { grid-column: 1 / -1; } .stepper button.mx { display: none; } }

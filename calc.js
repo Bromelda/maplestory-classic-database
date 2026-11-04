@@ -87,6 +87,8 @@ const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target"].inclu
 function encodeBuild(name) {
   const o = { n: name };
   for (const k of BUILD_KEYS) if (calc[k] !== DEFAULTS[k]) o[k] = calc[k];
+  const p = plan(); if (Object.keys(p).length) o.p = p;
+  if (activeChar().job2) o.j = activeChar().job2;
   const bytes = new TextEncoder().encode(JSON.stringify(o));
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
@@ -104,14 +106,16 @@ function readSharedBuild() {
     for (const k of BUILD_KEYS) if (k in o && typeof o[k] === typeof DEFAULTS[k]) clean[k] = o[k];
     if (!WEAPONS[clean.cls || DEFAULTS.cls]) return false;
     calc = { ...DEFAULTS, ...clean };
-    shared = { from: String(o.n || "A shared build").slice(0, 40) };
+    const sp = {};
+    for (const [k, v] of Object.entries(o.p || {})) if (/^\d+$/.test(k) && Number.isInteger(v) && v > 0 && v <= 30) sp[k] = v;
+    shared = { from: String(o.n || "A shared build").slice(0, 40), skills: sp, job2: Number(o.j) || null };
     return true;
   } catch { return false; }
 }
 function leaveShared(save) {
   if (save) {
     const id = "c" + Date.now();
-    chars.list.push({ id, name: shared.from, calc: { ...calc }, done: [] });
+    chars.list.push({ id, name: shared.from, calc: { ...calc }, done: [], skills: { ...shared.skills }, job2: shared.job2 });
     chars.active = id;
     doneSet = new Set();
     shared = null;
@@ -187,19 +191,59 @@ function bindCharBar() {
   $("#shareBtn").onclick = shareBuild;
 }
 
+const hasSkillData = () => typeof SK !== "undefined" && SK.jobs.length > 0;
+const SPELL_ELEMENT = { "Fire Arrow": "Fire", "Poison Breath": "Poison", "Cold Beam": "Ice", "Thunder Bolt": "Lightning", "Holy Arrow": "Holy" };
 function currentSkill() {
+  if (hasSkillData()) {
+    const sk = SK.byId[Number(calc.skillId)];
+    return sk && sk.attack ? sk : null;
+  }
   return (SKILLS[calc.cls] || []).find((s) => s.id === calc.skillId) || null;
 }
 function skillsForWeapon() {
+  if (hasSkillData()) {
+    const magic = !!WEAPONS[calc.cls][calc.weapon].magic, code = WEAPON_CODE[calc.weapon];
+    const list = classJobs(calc.cls).flatMap((j) => j.skills)
+      .filter((s) => s.attack && s.magic === magic && (!s.weapons.length || s.weapons.includes(code)));
+    // the same skill can exist in several 2nd jobs (e.g. Rush): keep the character's own copy
+    const job2 = typeof shared !== "undefined" && shared ? shared.job2 : activeChar().job2;
+    const byName = new Map();
+    for (const s of list) if (!byName.has(s.name) || s.job === job2) byName.set(s.name, s);
+    return [...byName.values()];
+  }
   return (SKILLS[calc.cls] || []).filter((s) => !s.weapons || s.weapons.includes(calc.weapon));
 }
+// the character's 2nd job decides which copy of a shared skill (e.g. Sword Mastery) is used
+function classSkill(name) {
+  const list = (SK.byName[name] || []).filter((s) => classJobs(calc.cls).some((j) => j.job === s.job));
+  const c2 = typeof shared !== "undefined" && shared ? null : activeChar().job2;
+  return list.find((s) => s.job === c2) || list[0] || null;
+}
+function passive(name, field) {
+  if (!hasSkillData()) return 0;
+  const s = classSkill(name);
+  return s ? skillAt(s, planLevel(s.id))[field] || 0 : 0;
+}
+function masterySkill() { return hasSkillData() ? classSkill(MASTERY_SKILL[calc.weapon]) : null; }
 
 // ---------- damage math ----------
 function masteryFactor(level, formula) {
   return (level / 10 + 0.1) * (formula === "wiki" ? 0.8 : 0.7);
 }
-function totalAP(c) { return c.ap + (c.cls === "Warrior" && c.rage ? 40 : 0); }
-function critRate(c) { return c.crit + (c.cls === "Warrior" && c.precise ? 5 : 0); }
+function totalAP(c) {
+  if (hasSkillData()) return c.ap + (c.cls === "Warrior" ? passive("Rage", "indiePad") : 0);
+  return c.ap + (c.cls === "Warrior" && c.rage ? 40 : 0);
+}
+function critRate(c) {
+  if (hasSkillData()) return c.crit + (c.cls === "Warrior" ? passive("Precise Strikes", "crtX") : 0);
+  return c.crit + (c.cls === "Warrior" && c.precise ? 5 : 0);
+}
+// physical mastery comes from the planned level of the weapon's Mastery skill
+function physMastery(c) {
+  const ms = masterySkill();
+  if (!ms) return c.mastery;
+  return skillAt(ms, planLevel(ms.id)).mastery || 0;
+}
 
 function rawRange(c) {
   const sk = currentSkill();
@@ -212,11 +256,12 @@ function rawRange(c) {
   }
   const val = (k) => (k === "STR+DEX" ? c.STR + c.DEX : c[k]);
   const P = val(w.stats[0]), Q = val(w.stats[1]);
-  const motion = sk?.motion || c.motion;
+  const motion = sk?.rule?.motion || sk?.motion || c.motion;
   let M = w.shoot ?? (motion === "swing" ? w.mult[0] : motion === "stab" ? w.mult[1] : 0.6 * w.mult[0] + 0.4 * w.mult[1]);
-  let m = masteryFactor(c.mastery, c.formula);
-  if (sk?.lucky7) { M = 3.0; m = 0.5; }
-  if (sk?.drain) M = 2.5;
+  let m = masteryFactor(physMastery(c), c.formula);
+  const rule = sk?.rule || sk || {};
+  if (rule.lucky7) { M = 3.0; m = 0.5; }
+  if (rule.drain) M = 2.5;
   const A = (c.formula === "wiki" ? 1 : 2) * totalAP(c);
   return {
     min: S * c.watk * (0.8 + (P * m * M + Q + A) / 100),
@@ -254,6 +299,13 @@ function accuracy(c) {
     Warrior: common / 2.5 + 10, Bowman: common / 4.8 + 20, Thief: common / 4 + 15,
     Magician: (1.2 * c.INT + 2 * c.level + 0.6 * c.LUK) / 5.1 + 20,
   }[c.cls];
+  if (hasSkillData()) {
+    const ms = masterySkill();
+    const bonus = (ms ? skillAt(ms, planLevel(ms.id)).x || 0 : 0)
+      + (c.cls === "Warrior" ? passive("Precise Strikes", "accX") : 0)
+      + (c.cls === "Bowman" ? passive("Focus", "indieAcc") : 0);
+    return Math.floor(base) + (c.accExtra || 0) + bonus;
+  }
   return Math.floor(base) + (c.accExtra || 0) + (c.cls === "Warrior" && c.precise ? 20 : 0);
 }
 function hitChance(acc, playerLv, mob) {
@@ -311,6 +363,13 @@ function calcMonsters() {
 function applySkill() {
   const sk = currentSkill();
   if (!sk) { if (calc.skillId === "basic") { calc.skill = 100; calc.hits = 1; } return; }
+  if (sk.levels) {
+    const l = skillAt(sk, usedLevel(sk));
+    calc.skill = l.damage || l.mad || 100;
+    calc.hits = skillHits(l);
+    if (sk.magic) { calc.mastery = l.mastery || 0; calc.element = SPELL_ELEMENT[sk.name] || "None"; }
+    return;
+  }
   if (sk.pct != null) calc.skill = sk.pct;
   calc.hits = sk.hits;
   if (sk.mastery != null) calc.mastery = sk.mastery;
@@ -320,16 +379,18 @@ function applySkill() {
 function renderCalc() {
   const view = $("#calcView");
   if (!WEAPONS[calc.cls][calc.weapon]) calc.weapon = Object.keys(WEAPONS[calc.cls])[0];
-  if (calc.skillId !== "basic" && calc.skillId !== "custom" && !skillsForWeapon().some((s) => s.id === calc.skillId)) {
-    calc.skillId = WEAPONS[calc.cls][calc.weapon].magic ? "energy-bolt" : "basic";
+  const badBasic = calc.skillId === "basic" && WEAPONS[calc.cls][calc.weapon].magic;
+  if (badBasic || (calc.skillId !== "basic" && calc.skillId !== "custom" && !skillsForWeapon().some((s) => String(s.id) === String(calc.skillId)))) {
+    calc.skillId = defaultSkill();
     applySkill();
   }
   const w = WEAPONS[calc.cls][calc.weapon];
   const magic = !!w.magic;
   const sk = currentSkill();
   const skillOpts = [...(magic ? [] : [["basic", "Regular attack (100%)"]]),
-    ...skillsForWeapon().map((s) => [s.id, `${s.name} · Lv ${s.lv}${s.pct != null ? ` · ${s.pct}%${s.hits > 1 ? ` ×${s.hits}` : ""}` : ""}`]),
+    ...skillsForWeapon().map((s) => [s.id, s.levels ? `${s.name}${s.jobName !== calc.cls ? ` · ${s.jobName.replace(/^Wizard \((.+)\)$/, "$1")}` : ""}` : `${s.name} · Lv ${s.lv}${s.pct != null ? ` · ${s.pct}%${s.hits > 1 ? ` ×${s.hits}` : ""}` : ""}`]),
     ["custom", "Custom (type the % yourself)"]];
+  const ms = masterySkill();
   const mobs = calcMonsters();
   view.innerHTML = `
     <section class="calc-hero">
@@ -354,17 +415,19 @@ function renderCalc() {
         </fieldset>
         <fieldset><legend>Skill</legend>
           ${sel("skillId", "Skill", skillOpts)}
-          ${num("skill", magic ? "Spell power" : "Damage %", 1, 9999, sk ? `<a href="${NIADB}${sk.src}" target="_blank" rel="noopener">Max level value · NiaDB ↗</a>${sk.note ? ` ${esc(sk.note)}` : ""}` : calc.skillId === "custom" ? "From your skill's tooltip" : "")}
+          ${sk?.levels ? `<label class="cf"><span>Skill level</span><input type="number" id="c_skLv" min="1" max="${sk.max}" value="${usedLevel(sk)}" inputmode="numeric"><small>1–${sk.max}. Saved to your skill plan.</small></label>` : ""}
+          ${num("skill", magic ? "Spell power" : "Damage %", 1, 9999, sk?.levels ? (sk.note ? esc(sk.note) : "From the game files") : sk ? `<a href="${NIADB}${sk.src}" target="_blank" rel="noopener">Max level value · NiaDB ↗</a>${sk.note ? ` ${esc(sk.note)}` : ""}` : calc.skillId === "custom" ? "From your skill's tooltip" : "")}
           ${num("hits", "Hits per use", 1, 10)}
           ${magic ? sel("element", "Spell element", ELEMENTS.map((e) => [e, e]), false) : ""}
           ${sk?.mobs > 1 ? `<p class="cf-note full">Hits up to ${sk.mobs} monsters at once.</p>` : ""}
         </fieldset>
         <fieldset><legend>Attack</legend>
           ${magic ? num("matk", "Magic Attack", 0, 9999, "Wand/staff + gear (not INT)") : num("watk", "Weapon Attack", 0, 9999, calc.weapon === "Claw" ? "Claw + gloves + stars" : calc.cls === "Bowman" ? "Bow/crossbow + gear + arrows" : "Weapon + gloves + gear")}
-          ${num("mastery", magic ? "Spell mastery" : "Mastery", 0, 10, magic ? "0–10. Max-level spells = 10" : "0–10. Mastery skill level ÷ 2")}
+          ${!magic && ms ? `<label class="cf"><span>${esc(ms.name)} level</span><input type="number" id="c_msLv" min="0" max="${ms.max}" value="${planLevel(ms.id)}" inputmode="numeric"><small>0–${ms.max} · mastery ${physMastery(calc)}, +${skillAt(ms, planLevel(ms.id)).x || 0} accuracy</small></label>`
+            : num("mastery", magic ? "Spell mastery" : "Mastery", 0, 10, magic ? "0–10. Set by the spell's level" : "0–10. Mastery skill level ÷ 2")}
           ${magic ? "" : num("ap", "Attack Power", 0, 999, "Other buffs / consumables")}
           ${num("accExtra", "Bonus accuracy", 0, 999, "From gear and skills")}
-          ${calc.cls === "Warrior" ? chk("rage", "Rage (Fighter)", "+40 Attack Power at max level") + chk("precise", "Precise Strikes (max)", "+20 accuracy, +5% crit rate") : ""}
+          ${hasSkillData() ? buffInputs() : calc.cls === "Warrior" ? chk("rage", "Rage (Fighter)", "+40 Attack Power at max level") + chk("precise", "Precise Strikes (max)", "+20 accuracy, +5% crit rate") : ""}
         </fieldset>
         <details class="calc-more"><summary>Critical hits &amp; formula</summary>
           <fieldset>
@@ -393,14 +456,23 @@ function renderCalc() {
     <button type="button" id="calcBar" class="calc-bar" aria-label="Jump to results"></button>`;
 
   bindCharBar();
+  view.querySelectorAll("[data-plan]").forEach((el) => el.addEventListener("input", () => {
+    setPlanLevel(Number(el.dataset.plan), Number(el.value) || 0); renderCalcOut();
+    const hint = el.parentElement.querySelector("small[data-desc]"); const s = SK.byId[Number(el.dataset.plan)];
+    if (hint && s) hint.textContent = describeLevel(s, skillAt(s, planLevel(s.id)));
+  }));
+  const skLv = $("#c_skLv");
+  if (skLv) skLv.addEventListener("input", () => { const s = currentSkill(); setPlanLevel(s.id, Number(skLv.value) || 1); applySkill(); saveCalc(); renderCalc(); });
+  const msLv = $("#c_msLv");
+  if (msLv) msLv.addEventListener("input", () => { setPlanLevel(masterySkill().id, Number(msLv.value) || 0); renderCalcOut(); msLv.parentElement.querySelector("small").textContent = `0–${masterySkill().max} · mastery ${physMastery(calc)}, +${skillAt(masterySkill(), planLevel(masterySkill().id)).x || 0} accuracy`; });
   view.querySelectorAll(".class-btn").forEach((b) => b.addEventListener("click", () => {
     calc.cls = b.dataset.cls;
     calc.weapon = Object.keys(WEAPONS[calc.cls])[0];
-    calc.skillId = calc.cls === "Magician" ? "energy-bolt" : "basic";
+    calc.skillId = defaultSkill();
     applySkill();
     saveCalc(); renderCalc();
   }));
-  view.querySelectorAll(".calc-form input, .calc-form select, #c_target, #c_near").forEach((el) => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
+  view.querySelectorAll(".calc-form input:not([data-plan]):not(#c_skLv):not(#c_msLv), .calc-form select, #c_target, #c_near").forEach((el) => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
     const id = el.id.slice(2);
     calc[id] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : Number(el.value) || 0;
     if (id === "skillId") applySkill();
@@ -409,6 +481,22 @@ function renderCalc() {
     if (["weapon", "skillId"].includes(id)) renderCalc(); else renderCalcOut();
   }));
   renderCalcOut();
+}
+
+function defaultSkill() {
+  if (!WEAPONS[calc.cls][calc.weapon].magic) return "basic";
+  const first = skillsForWeapon()[0];
+  return first ? String(first.id) : "custom";
+}
+
+function buffInputs() {
+  const rows = { Warrior: [["Rage", "Attack Power buff (Fighter)"], ["Precise Strikes", "Accuracy and crit rate (passive)"]], Bowman: [["Focus", "Accuracy buff"]] }[calc.cls] || [];
+  return rows.map(([name, what]) => {
+    const s = classSkill(name);
+    if (!s) return "";
+    const lv = planLevel(s.id);
+    return `<label class="cf"><span>${esc(name)} level</span><input type="number" data-plan="${s.id}" min="0" max="${s.max}" value="${lv}" inputmode="numeric"><small data-desc>${esc(lv ? describeLevel(s, skillAt(s, lv)) : what + ". 0 = not used")}</small></label>`;
+  }).join("");
 }
 
 function verdictBadge(v) { return `<span class="verdict ${v[0]}">${v[1]}</span>`; }

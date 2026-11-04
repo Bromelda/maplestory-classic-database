@@ -2,7 +2,7 @@
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
 const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta"];
-const OPTIONAL = ["log", "patches"]; // fine if missing
+const OPTIONAL = ["log", "patches", "skills"]; // fine if missing
 const db = {};
 const byId = {};
 const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
@@ -144,6 +144,7 @@ async function load() {
   for (const list of Object.values(idx.spawnsOf)) list.sort((a, b) => b.count - a.count);
   if (db.meta?.built_from) $("#builtFrom").textContent = `Data: ${db.meta.built_from}.`;
 
+  if (typeof buildSkills === "function") buildSkills();
   bind();
   renderWorld();
   renderCharChip();
@@ -212,6 +213,7 @@ function switchCharacter(id) {
   doneSet = new Set(activeChar().done || []);
   saveChars();
   if (typeof loadCalcFromChar === "function") loadCalcFromChar();
+  if (state.tab === "skills") renderSkillsTab();
 }
 function charSummary(c) {
   const k = c.calc || {};
@@ -268,12 +270,15 @@ function switchTab(tab) {
   const isWorld = tab === "world";
   const isFeed = FEED_TABS.includes(tab);
   const isCalc = tab === "calc";
+  const isSkills = tab === "skills";
+  $("#skillsView").hidden = !isSkills;
   $("#worldView").hidden = !isWorld;
-  $("#tableWrap").hidden = isWorld || isFeed || isCalc;
+  $("#tableWrap").hidden = isWorld || isFeed || isCalc || isSkills;
   $("#feedView").hidden = !isFeed;
   $("#calcView").hidden = !isCalc;
-  $("#controls").hidden = isWorld || isCalc;
+  $("#controls").hidden = isWorld || isCalc || isSkills;
   if (isCalc) { renderCalc(); return; }
+  if (isSkills) { renderSkillsTab(); return; }
   if (isFeed) {
     ["#variantsWrap", "#catWrap", "#marketBar", "#qareaWrap", "#hideDoneWrap"].forEach((x) => { $(x).hidden = true; });
     document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = true; });
@@ -398,7 +403,7 @@ function filtered() {
 
 function renderTable() {
   const tab = state.tab;
-  if (tab === "world" || tab === "calc") return;
+  if (tab === "world" || tab === "calc" || tab === "skills") return;
   if (FEED_TABS.includes(tab)) return renderFeed();
   if (tab === "market" && (!db.market || db.marketError)) {
     $("#table").innerHTML = `<tbody><tr><td style="padding:20px;white-space:normal">${db.marketError
