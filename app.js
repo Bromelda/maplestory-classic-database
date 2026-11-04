@@ -2,7 +2,7 @@
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
 const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta", "worldmap"];
-const OPTIONAL = ["log", "patches", "skills"]; // fine if missing
+const OPTIONAL = ["log", "patches", "skills", "gear"]; // fine if missing
 const db = {};
 const byId = {};
 const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };

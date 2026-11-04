@@ -19,7 +19,7 @@ const WEAPONS = {
     "Spear": { mult: [1.5, 3.5], stats: ["STR", "DEX"] },
     "Polearm": { mult: [3.5, 1.5], stats: ["STR", "DEX"] },
   },
-  Magician: { "Wand / Staff": { magic: true } },
+  Magician: { "Wand": { magic: true }, "Staff": { magic: true } },
   Bowman: {
     "Bow": { shoot: 2.5, stats: ["DEX", "STR"] },
     "Crossbow": { shoot: 2.5, stats: ["DEX", "STR"] },
@@ -64,7 +64,7 @@ const ELEMENTS = ["None", "Fire", "Ice", "Lightning", "Poison", "Holy"];
 const DEFAULTS = {
   cls: "Warrior", weapon: "1H Sword", motion: "avg", level: 30, STR: 132, DEX: 30, INT: 4, LUK: 4,
   watk: 47, matk: 0, ap: 0, mastery: 0, skillId: "basic", skill: 100, hits: 1, crit: 5, critdmg: 20,
-  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "",
+  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {},
 };
 
 // The calculator edits the active saved character (see app.js). A shared build link
@@ -83,10 +83,11 @@ function loadCalcFromChar() {
 }
 
 // ---------- shareable builds ----------
-const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target"].includes(k));
+const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear"].includes(k));
 function encodeBuild(name) {
   const o = { n: name };
   for (const k of BUILD_KEYS) if (calc[k] !== DEFAULTS[k]) o[k] = calc[k];
+  if (Object.keys(calc.gear).length) o.g = calc.gear;
   const p = plan(); if (Object.keys(p).length) o.p = p;
   if (activeChar().job2) o.j = activeChar().job2;
   const bytes = new TextEncoder().encode(JSON.stringify(o));
@@ -105,7 +106,9 @@ function readSharedBuild() {
     const clean = {};
     for (const k of BUILD_KEYS) if (k in o && typeof o[k] === typeof DEFAULTS[k]) clean[k] = o[k];
     if (!WEAPONS[clean.cls || DEFAULTS.cls]) return false;
-    calc = { ...DEFAULTS, ...clean };
+    const gear = {};
+    for (const [slot, gid] of Object.entries(o.g || {})) if (Number.isInteger(gid)) gear[slot] = gid;
+    calc = { ...DEFAULTS, ...clean, gear };
     const sp = {};
     for (const [k, v] of Object.entries(o.p || {})) if (/^\d+$/.test(k) && Number.isInteger(v) && v > 0 && v <= 30) sp[k] = v;
     shared = { from: String(o.n || "A shared build").slice(0, 40), skills: sp, job2: Number(o.j) || null };
@@ -225,6 +228,64 @@ function passive(name, field) {
   return s ? skillAt(s, planLevel(s.id))[field] || 0 : 0;
 }
 function masterySkill() { return hasSkillData() ? classSkill(MASTERY_SKILL[calc.weapon]) : null; }
+
+// ---------- gear ----------
+// Picked items are added to what's typed in, so the typed numbers stay as they are if the gear changes.
+const CLASS_BIT = { Warrior: 1, Magician: 2, Bowman: 4, Thief: 8 };
+const ARMOR_SLOTS = [["hat", "Hat"], ["top", "Top"], ["bottom", "Bottom"], ["overall", "Overall"], ["shoes", "Shoes"], ["gloves", "Gloves"], ["cape", "Cape"], ["earrings", "Earrings"], ["shield", "Shield"]];
+const NO_SHIELD = new Set(["2H Sword", "2H Axe", "2H Blunt", "Spear", "Polearm", "Bow", "Crossbow", "Claw"]);
+const GEAR_FIELD = { STR: "STR", DEX: "DEX", INT: "INT", LUK: "LUK", ATT: "watk", MATT: "matk", ACC: "accExtra", CRIT: "crit", CRITDMG: "critdmg" };
+const GEAR_LABEL = { ATT: "ATT", MATT: "Magic ATT", ACC: "accuracy", CRIT: "crit rate", CRITDMG: "crit damage" };
+let armorOpen = false;
+
+function gearFor(c, slot) {
+  return (db.gear || []).filter((g) => g.slot === slot && (slot === "weapon" ? g.weapon === c.weapon : !g.job || g.job & CLASS_BIT[c.cls]));
+}
+function wornGear(c) {
+  return Object.entries(c.gear).flatMap(([slot, gid]) => {
+    if (slot === "shield" && NO_SHIELD.has(c.weapon)) return [];
+    const it = gearFor(c, slot).find((g) => g.gid === gid);
+    return it ? [it] : [];
+  });
+}
+function withGear(c) {
+  const total = { ...c };
+  for (const it of wornGear(c)) for (const [k, v] of Object.entries(it.stats)) total[GEAR_FIELD[k]] += v;
+  return total;
+}
+function gearStatText(stats, magic) {
+  return Object.entries(stats).filter(([k]) => !(magic && k === "ATT")).map(([k, v]) => `${v > 0 ? "+" : ""}${v}${/CRIT/.test(k) ? "%" : ""} ${GEAR_LABEL[k] || k}`).join(", ");
+}
+function gearSelect(slot, label) {
+  const magic = !!WEAPONS[calc.cls][calc.weapon].magic;
+  const opts = gearFor(calc, slot).map((g) => {
+    const stats = gearStatText(g.stats, magic);
+    return `<option value="${g.gid}" ${calc.gear[slot] === g.gid ? "selected" : ""}>Lv ${g.level} · ${esc(g.name)}${stats ? ` (${esc(stats)})` : ""}</option>`;
+  }).join("");
+  return `<label class="cf full"><span>${label}</span><select data-slot="${slot}"><option value="">None</option>${opts}</select></label>`;
+}
+function setGear(slot, gid) {
+  const g = { ...calc.gear };
+  if (gid) g[slot] = gid; else delete g[slot];
+  if (gid && slot === "overall") { delete g.top; delete g.bottom; }
+  if (gid && (slot === "top" || slot === "bottom")) delete g.overall;
+  // the attack typed so far was standing in for a weapon, so the real one replaces it
+  if (gid && slot === "weapon" && !calc.gear.weapon) { calc.watk = 0; calc.matk = 0; }
+  calc.gear = g;
+  saveCalc();
+  renderCalc();
+  $(`[data-slot="${slot}"]`)?.focus({ preventScroll: true });
+}
+function gearNote() {
+  const magic = !!WEAPONS[calc.cls][calc.weapon].magic;
+  const worn = wornGear(calc);
+  const total = {};
+  for (const it of worn) for (const [k, v] of Object.entries(it.stats)) total[k] = (total[k] || 0) + v;
+  const stats = gearStatText(total, magic);
+  const tooHigh = worn.filter((g) => g.level > calc.level).map((g) => `${esc(g.name)} needs level ${g.level}.`).join(" ");
+  const noAttack = !calc.gear.weapon && !(magic ? calc.matk : calc.watk) ? "Pick your weapon, or type its attack under Attack." : "";
+  return [stats && `Gear adds ${esc(stats)}.`, tooHigh, noAttack].filter(Boolean).join(" ");
+}
 
 // ---------- damage math ----------
 function masteryFactor(level, formula) {
@@ -384,9 +445,15 @@ function renderCalc() {
     calc.skillId = defaultSkill();
     applySkill();
   }
+  // gear this class or weapon can't use comes off
+  const wearable = {};
+  for (const [slot, gid] of Object.entries(calc.gear)) if (gearFor(calc, slot).some((g) => g.gid === gid)) wearable[slot] = gid;
+  calc.gear = wearable;
   const w = WEAPONS[calc.cls][calc.weapon];
   const magic = !!w.magic;
   const sk = currentSkill();
+  const hasGear = wornGear(calc).length > 0;
+  const armor = ARMOR_SLOTS.filter(([slot]) => !(slot === "shield" && NO_SHIELD.has(calc.weapon)));
   const skillOpts = [...(magic ? [] : [["basic", "Regular attack (100%)"]]),
     ...skillsForWeapon().map((s) => [s.id, s.levels ? `${s.name}${s.jobName !== calc.cls ? ` · ${s.jobName.replace(/^Wizard \((.+)\)$/, "$1")}` : ""}` : `${s.name} · Lv ${s.lv}${s.pct != null ? ` · ${s.pct}%${s.hits > 1 ? ` ×${s.hits}` : ""}` : ""}`]),
     ["custom", "Custom (type the % yourself)"]];
@@ -406,12 +473,18 @@ function renderCalc() {
     <div class="calc-grid">
       <form class="calc-form" onsubmit="return false">
         <fieldset><legend>Character</legend>
-          ${sel("weapon", "Weapon", Object.keys(WEAPONS[calc.cls]).map((k) => [k, k]), false)}
+          ${sel("weapon", "Weapon type", Object.keys(WEAPONS[calc.cls]).map((k) => [k, k]), false)}
           ${num("level", "Level", 1, 200)}
+          ${db.gear?.length ? gearSelect("weapon", "Weapon") : ""}
           ${w.mult && !sk?.motion ? sel("motion", "Attack motion", [["avg", "Average (60% swing / 40% stab)"], ["swing", "Swing"], ["stab", "Stab"]]) : ""}
+          <p class="cf-note full" id="gearNote"></p>
         </fieldset>
-        <fieldset><legend>Total stats (with gear)</legend>
+        ${db.gear?.length ? `<details class="calc-more" id="armorMore" ${armorOpen || armor.some(([slot]) => calc.gear[slot]) ? "open" : ""}><summary>Armor &amp; accessories</summary>
+          <fieldset>${armor.map(([slot, label]) => gearSelect(slot, label)).join("")}</fieldset>
+        </details>` : ""}
+        <fieldset><legend>${hasGear ? "Base stats (without gear)" : "Total stats (with gear)"}</legend>
           ${num("STR", "STR")}${num("DEX", "DEX")}${num("INT", "INT")}${num("LUK", "LUK")}
+          <p class="cf-note full">${hasGear ? "The gear you picked is added to these for you." : "If you pick your gear above, enter your stats without it instead."}</p>
         </fieldset>
         <fieldset><legend>Skill</legend>
           ${sel("skillId", "Skill", skillOpts)}
@@ -422,11 +495,11 @@ function renderCalc() {
           ${sk?.mobs > 1 ? `<p class="cf-note full">Hits up to ${sk.mobs} monsters at once.</p>` : ""}
         </fieldset>
         <fieldset><legend>Attack</legend>
-          ${magic ? num("matk", "Magic Attack", 0, 9999, "Wand/staff + gear (not INT)") : num("watk", "Weapon Attack", 0, 9999, calc.weapon === "Claw" ? "Claw + gloves + stars" : calc.cls === "Bowman" ? "Bow/crossbow + gear + arrows" : "Weapon + gloves + gear")}
+          ${magic ? num("matk", "Magic Attack", 0, 9999, hasGear ? "On top of your gear: scrolls and buffs" : "Wand/staff + gear (not INT)") : num("watk", "Weapon Attack", 0, 9999, hasGear ? (calc.weapon === "Claw" ? "On top of your gear: stars, scrolls and buffs" : calc.cls === "Bowman" ? "On top of your gear: arrows, scrolls and buffs" : "On top of your gear: scrolls and buffs") : calc.weapon === "Claw" ? "Claw + gloves + stars" : calc.cls === "Bowman" ? "Bow/crossbow + gear + arrows" : "Weapon + gloves + gear")}
           ${!magic && ms ? `<label class="cf"><span>${esc(ms.name)} level</span><input type="number" id="c_msLv" min="0" max="${ms.max}" value="${planLevel(ms.id)}" inputmode="numeric"><small>0–${ms.max} · mastery ${physMastery(calc)}, +${skillAt(ms, planLevel(ms.id)).x || 0} accuracy</small></label>`
             : num("mastery", magic ? "Spell mastery" : "Mastery", 0, 10, magic ? "0–10. Set by the spell's level" : "0–10. Mastery skill level ÷ 2")}
           ${magic ? "" : num("ap", "Attack Power", 0, 999, "Other buffs / consumables")}
-          ${num("accExtra", "Bonus accuracy", 0, 999, "From gear and skills")}
+          ${num("accExtra", "Bonus accuracy", 0, 999, hasGear ? "On top of your gear and skills" : "From gear and skills")}
           ${hasSkillData() ? buffInputs() : calc.cls === "Warrior" ? chk("rage", "Rage (Fighter)", "+40 Attack Power at max level") + chk("precise", "Precise Strikes (max)", "+20 accuracy, +5% crit rate") : ""}
         </fieldset>
         <details class="calc-more"><summary>Critical hits &amp; formula</summary>
@@ -456,6 +529,8 @@ function renderCalc() {
     <button type="button" id="calcBar" class="calc-bar" aria-label="Jump to results"></button>`;
 
   bindCharBar();
+  view.querySelectorAll("[data-slot]").forEach((el) => el.addEventListener("change", () => setGear(el.dataset.slot, Number(el.value) || 0)));
+  $("#armorMore")?.addEventListener("toggle", (e) => { armorOpen = e.target.open; });
   view.querySelectorAll("[data-plan]").forEach((el) => el.addEventListener("input", () => {
     setPlanLevel(Number(el.dataset.plan), Number(el.value) || 0); renderCalcOut();
     const hint = el.parentElement.querySelector("small[data-desc]"); const s = SK.byId[Number(el.dataset.plan)];
@@ -472,7 +547,7 @@ function renderCalc() {
     applySkill();
     saveCalc(); renderCalc();
   }));
-  view.querySelectorAll(".calc-form input:not([data-plan]):not(#c_skLv):not(#c_msLv), .calc-form select, #c_target, #c_near").forEach((el) => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
+  view.querySelectorAll(".calc-form input:not([data-plan]):not(#c_skLv):not(#c_msLv), .calc-form select:not([data-slot]), #c_target, #c_near").forEach((el) => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
     const id = el.id.slice(2);
     calc[id] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : Number(el.value) || 0;
     if (id === "skillId") applySkill();
@@ -502,7 +577,8 @@ function buffInputs() {
 function verdictBadge(v) { return `<span class="verdict ${v[0]}">${v[1]}</span>`; }
 
 function renderCalcOut() {
-  const c = calc;
+  const c = withGear(calc);
+  $("#gearNote").textContent = gearNote();
   const r = rawRange(c);
   const acc = accuracy(c);
   const cr = critRate(c);

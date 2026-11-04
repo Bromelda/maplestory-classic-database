@@ -80,6 +80,17 @@ ZONE_ALIAS = {
 
 BUILD_DAY = __import__("datetime").date.today().isoformat()
 
+# Every wearable item with stats goes in the calculator's gear lists (data/gear.json), including
+# what only shops sell. Rings, face items and cash items have no stats in the game data.
+WEAPON_KINDS = {
+    "One-Handed Sword": "1H Sword", "Two-Handed Sword": "2H Sword", "One-Handed Axe": "1H Axe", "Two-Handed Axe": "2H Axe",
+    "One-Handed Blunt Weapon": "1H Blunt", "Two-Handed Blunt": "2H Blunt", "Spear": "Spear", "Pole Arm": "Polearm",
+    "Wand": "Wand", "Staff": "Staff", "Bow": "Bow", "Crossbow": "Crossbow", "Claw": "Claw", "Dagger": "Dagger",
+}
+ARMOR_KINDS = {"Hat": "hat", "Top": "top", "Bottom": "bottom", "Overall": "overall", "Shoes": "shoes",
+               "Glove": "gloves", "Cape": "cape", "Earrings": "earrings", "Shield": "shield"}
+GEAR_STATS = ("STR", "DEX", "INT", "LUK", "ATT", "MATT", "ACC", "CRIT", "CRITDMG")
+
 
 def job_text(ids):
     """Game job ids -> readable requirement ('' = any job)."""
@@ -92,6 +103,23 @@ def job_text(ids):
         if n and n not in out:
             out.append(n)
     return " / ".join(out) or None
+
+
+def build_gear(itemdb):
+    """Rows are [name, id, required level, job mask, cash?, kind, sell price, stats]."""
+    gear = []
+    for r in itemdb["items"]:
+        if len(r) < 8 or not r[7] or r[4] or r[5] >= len(itemdb["kinds"]) or r[0].startswith("Wizet"):  # Wizet = GM-only items
+            continue
+        group, _, kind = itemdb["kinds"][r[5]].partition(":")
+        slot = "weapon" if kind in WEAPON_KINDS else ARMOR_KINDS.get(kind)
+        if group != "Equip" or not slot:
+            continue
+        row = {"gid": r[1], "name": r[0], "slot": slot, "level": r[2], "job": r[3], "stats": {k: r[7][k] for k in GEAR_STATS if r[7].get(k)}}
+        if slot == "weapon":
+            row["weapon"] = WEAPON_KINDS[kind]
+        gear.append(row)
+    return sorted(gear, key=lambda g: (g["level"], g["name"]))
 
 
 def zone_for(m):
@@ -357,16 +385,17 @@ def main():
             for x in q[lst]:
                 assert x["item"] in item_ids, (q["name"], x)
 
+    gear = build_gear(itemdb)
     meta = {
         "built_from": f"Club FM public data, built {world.get('built')}",
         "classic_version": "MapleStory Classic World (game version 0.9.0 drop logs)",
     }
-    for fname, data in [("monsters", monsters), ("items", items), ("maps", maps), ("npcs", npcs), ("quests", quests)]:
+    for fname, data in [("monsters", monsters), ("items", items), ("maps", maps), ("npcs", npcs), ("quests", quests), ("gear", gear)]:
         (OUT / f"{fname}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
     (OUT / "meta.json").write_text(json.dumps(meta, indent=2))
     print(f"monsters {len(monsters)}, items {len(items)}, maps {len(maps)}, "
           f"drop rows {sum(len(m['drops']) for m in monsters)}, npcs {len(npcs)}, "
-          f"quests {len(quests)} (skipped {skipped})")
+          f"quests {len(quests)} (skipped {skipped}), gear {len(gear)}")
 
 
 if __name__ == "__main__":
