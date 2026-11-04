@@ -4,7 +4,7 @@
   "name": "Classic World Cash Shop Update: Nov. 4",
   "category": "sale",
   "date": "2026-11-03",
-  "summary": "",
+  "summary": "Mystery Fashion Crate Update!",
   "url": "https://www.nexon.com/maplestory/news/sale/47031/classic-world-cash-shop-update-nov-4"
  },
  {
@@ -12,7 +12,7 @@
   "name": "[Completed] Unscheduled Emergency Maintenance - October 30, 2026",
   "category": "maintenance",
   "date": "2026-10-30",
-  "summary": "",
+  "summary": "The maintenance has been completed and we have extended Cash Shop items in your inventory for 2 hours. Please restart your Nexon Launcher or Steam to ensure you receive the latest client update.",
   "url": "https://www.nexon.com/maplestory/news/maintenance/47370/unscheduled-emergency-maintenance-october-30-2026"
  },
  {
@@ -20,7 +20,7 @@
   "name": "[Completed] Scheduled Maintenance - October 29, 2026",
   "category": "maintenance",
   "date": "2026-10-29",
-  "summary": "",
+  "summary": "The maintenance has been completed and we have extended Cash Shop items in your inventory for 4 hours.",
   "url": "https://www.nexon.com/maplestory/news/maintenance/47298/scheduled-maintenance-october-29-2026"
  },
  {
@@ -28,7 +28,7 @@
   "name": "[Update Oct 28] Classic World Cash Shop Update: Oct. 28",
   "category": "sale",
   "date": "2026-10-27",
-  "summary": "",
+  "summary": "Halloween Mystery Fashion Crate, Mystery Styles Update, and more!",
   "url": "https://www.nexon.com/maplestory/news/sale/46602/classic-world-cash-shop-update-oct-28"
  },
  {
@@ -36,7 +36,303 @@
   "name": "Introducing the Debt System in MapleStory Classic World",
   "category": "general",
   "date": "2026-10-22",
-  "summary": "",
+  "summary": "Click here for the details of the new Debt System!",
   "url": "https://www.nexon.com/maplestory/news/general/47102/introducing-the-debt-system-in-maplestory-classic-world"
+ },
+ {
+  "id": 47098,
+  "name": "[Completed] Unscheduled Maintenance - October 22, 2026",
+  "category": "maintenance",
+  "date": "2026-10-22",
+  "summary": "The maintenance has been completed and we have extended Cash Shop items in your inventory for 2 hours.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/47098/unscheduled-maintenance-october-22-2026"
+ },
+ {
+  "id": 46800,
+  "name": "[Completed] Scheduled Grand Launch - October 21, 2026",
+  "category": "maintenance",
+  "date": "2026-10-21",
+  "summary": "The maintenance has been completed and we have extended Cash Shop items in your inventory for 5 hours.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/46800/scheduled-grand-launch-october-21-2026"
+ },
+ {
+  "id": 46370,
+  "name": "The Grand Launch of Global MapleStory Classic World!",
+  "category": "general",
+  "date": "2026-10-21",
+  "summary": "Grand Launch brings Housing in Henesys and Kerning City, Grand Launch events, and so much more!",
+  "url": "https://www.nexon.com/maplestory/news/general/46370/the-grand-launch-of-global-maplestory-classic-world"
+ },
+ {
+  "id": 46506,
+  "name": "Grand Launch Release Notes",
+  "category": "general",
+  "date": "2026-10-20",
+  "summary": "Click here to read the release notes for the Global MapleStory Classic World Grand Launch!",
+  "url": "https://www.nexon.com/maplestory/news/general/46506/grand-launch-release-notes"
+ },
+ {
+  "id": 46362,
+  "name": "Grand Launch Cash Shop Update",
+  "category": "sale",
+  "date": "2026-10-20",
+  "summary": "Beauty Essentials Pack, Mystery Fashion Crate, and more!",
+  "url": "https://www.nexon.com/maplestory/news/sale/46362/grand-launch-cash-shop-update"
+ },
+ {
+  "id": 46730,
+  "name": "Changes to Megaphone Level Requirements Notice",
+  "category": "general",
+  "date": "2026-10-16",
+  "summary": "Click here for details on the updated Megaphone requirements.",
+  "url": "https://www.nexon.com/maplestory/news/general/46730/changes-to-megaphone-level-requirements-notice"
+ },
+ {
+  "id": 46523,
+  "name": "[Completed] Scheduled Minor Patch Maintenance - October 15, 2026",
+  "category": "maintenance",
+  "date": "2026-10-15",
+  "summary": "The maintenance has been completed and we have extended Cash Shop items in your inventory for 3 hours.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/46523/scheduled-minor-patch-maintenance-october-15-2026"
+ },
+ {
+  "id": 46321,
+  "name": "[Completed] Unscheduled Maintenance - October 8, 2026",
+  "category": "maintenance",
+  "date": "2026-10-08",
+  "summary": "We will be performing an unscheduled maintenance starting on Thursday, October 8, 2026 at 7:00 AM PDT (10:00 AM EDT / 4:00 PM CEST / 1:00 AM AEDT October 9).",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/46321/unscheduled-maintenance-october-8-2026"
+ },
+ {
+  "id": 45490,
+  "name": "Founder's Access Has Begun!",
+  "category": "general",
+  "date": "2026-10-06",
+  "summary": "Founder's Access for Global MapleStory Classic World is now live!",
+  "url": "https://www.nexon.com/maplestory/news/general/45490/founder-s-access-has-begun"
+ },
+ {
+  "id": 45819,
+  "name": "Founder's Access Cash Shop",
+  "category": "sale",
+  "date": "2026-10-05",
+  "summary": "Check out the Cash Shop details for Founder's Access in Global MapleStory Classic World!",
+  "url": "https://www.nexon.com/maplestory/news/sale/45819/founder-s-access-cash-shop"
+ },
+ {
+  "id": 45621,
+  "name": "Founder's Access Release Notes",
+  "category": "general",
+  "date": "2026-10-03",
+  "summary": "Click here to read the release notes for the Global MapleStory Classic World Founder's Access.",
+  "url": "https://www.nexon.com/maplestory/news/general/45621/founder-s-access-release-notes"
+ },
+ {
+  "id": 45681,
+  "name": "Inkwell on the Future of Global MapleStory and Classic World",
+  "category": "general",
+  "date": "2026-10-02",
+  "summary": "Click here to read more about Inkwell on the Future of Global MapleStory and Classic World.",
+  "url": "https://www.nexon.com/maplestory/news/general/45681/inkwell-on-the-future-of-global-maplestory-and-classic-world"
+ },
+ {
+  "id": 45521,
+  "name": "Founder's Access Pre-Download Instructions Nexon Launcher and Steam",
+  "category": "general",
+  "date": "2026-09-29",
+  "summary": "Click here for the steps to pre-download Founder's Access on Nexon Launcher or Steam!",
+  "url": "https://www.nexon.com/maplestory/news/general/45521/founder-s-access-pre-download-instructions-nexon-launcher-and-steam"
+ },
+ {
+  "id": 45385,
+  "name": "MapleStory Classic World FAQ",
+  "category": "general",
+  "date": "2026-09-29",
+  "summary": "Click here for more details and answers to frequently asked questions about MapleStory Classic World.",
+  "url": "https://www.nexon.com/maplestory/news/general/45385/maplestory-classic-world-faq"
+ },
+ {
+  "id": 45230,
+  "name": "Maple Memo: Notice Regarding Account Sanctions Across Global MapleStory and Global MapleStory Classic World",
+  "category": "general",
+  "date": "2026-09-22",
+  "summary": "Click here to read more on the Account Sanctions Across Global MapleStory and Global MapleStory Classic World Notice.",
+  "url": "https://www.nexon.com/maplestory/news/general/45230/maple-memo-notice-regarding-account-sanctions-across-global-maplestory-and-global-maplestory-classic-world"
+ },
+ {
+  "id": 44825,
+  "name": "Maple Memo: Notice Regarding Unauthorized MapleStory Servers",
+  "category": "general",
+  "date": "2026-09-11",
+  "summary": "Click here for more details regarding unauthorized MapleStory servers.",
+  "url": "https://www.nexon.com/maplestory/news/general/44825/maple-memo-notice-regarding-unauthorized-maplestory-servers"
+ },
+ {
+  "id": 44883,
+  "name": "Founder's Package Purchase Guide",
+  "category": "general",
+  "date": "2026-09-02",
+  "summary": "Click here for Founder's Package Purchase Guide!",
+  "url": "https://www.nexon.com/maplestory/news/general/44883/founder-s-package-purchase-guide"
+ },
+ {
+  "id": 44134,
+  "name": "Classic World Founder's Packages Now On Sale!",
+  "category": "sale",
+  "date": "2026-09-02",
+  "summary": "Start playing Classic World early on Tuesday, October 6 with Classic World Founder's Packages!",
+  "url": "https://www.nexon.com/maplestory/news/sale/44134/classic-world-founder-s-packages-now-on-sale"
+ },
+ {
+  "id": 44359,
+  "name": "Ossyria Exploration Report",
+  "category": "general",
+  "date": "2026-08-21",
+  "summary": "Take a look at what we achieved together from the Classic World Closed Online Test #2 and a very special message from Inkwell.",
+  "url": "https://www.nexon.com/maplestory/news/general/44359/ossyria-exploration-report"
+ },
+ {
+  "id": 43962,
+  "name": "[Completed] Scheduled Maintenance - August 11, 2026",
+  "category": "maintenance",
+  "date": "2026-08-11",
+  "summary": "The maintenance has been completed.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/43962/scheduled-maintenance-august-11-2026"
+ },
+ {
+  "id": 43903,
+  "name": "[Completed] Unscheduled Maintenance - August 10, 2026",
+  "category": "maintenance",
+  "date": "2026-08-10",
+  "summary": "The maintenance has been completed.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/43903/unscheduled-maintenance-august-10-2026"
+ },
+ {
+  "id": 43846,
+  "name": "[Completed] Unscheduled Maintenance - August 7, 2026",
+  "category": "maintenance",
+  "date": "2026-08-07",
+  "summary": "The maintenance has been completed.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/43846/unscheduled-maintenance-august-7-2026"
+ },
+ {
+  "id": 43808,
+  "name": "Classic World: Closed Online Test #2 Known Issues",
+  "category": "maintenance",
+  "date": "2026-08-06",
+  "summary": "Here you’ll find a list of known issues from the MapleStory Classic World Closed Online Test #2.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/43808/classic-world-closed-online-test-2-known-issues"
+ },
+ {
+  "id": 43432,
+  "name": "Closed Online Test #2 Release Notes",
+  "category": "general",
+  "date": "2026-08-03",
+  "summary": "Click here to read the release notes for the Global MapleStory Classic World Closed Online Test #2.",
+  "url": "https://www.nexon.com/maplestory/news/general/43432/closed-online-test-2-release-notes"
+ },
+ {
+  "id": 42364,
+  "name": "Sign Up for Global MapleStory Classic World Closed Online Test #2",
+  "category": "general",
+  "date": "2026-07-16",
+  "summary": "Sign-ups for the upcoming Global MapleStory Classic World Closed Online Test #2 on August 4, 2026 are now open!",
+  "url": "https://www.nexon.com/maplestory/news/general/42364/sign-up-for-global-maplestory-classic-world-closed-online-test-2"
+ },
+ {
+  "id": 41040,
+  "name": "Victoria Island Exploration Report",
+  "category": "general",
+  "date": "2026-05-22",
+  "summary": "Take a look at what we achieved together from the Classic World Closed Online Test and a very special message from Inkwell.",
+  "url": "https://www.nexon.com/maplestory/news/general/41040/victoria-island-exploration-report"
+ },
+ {
+  "id": 40325,
+  "name": "Regarding Unauthorized Access to Closed Online Test",
+  "category": "general",
+  "date": "2026-04-22",
+  "summary": "Unauthorized Access to Closed Online Test have been identified and actions have been taken. ",
+  "url": "https://www.nexon.com/maplestory/news/general/40325/regarding-unauthorized-access-to-closed-online-test"
+ },
+ {
+  "id": 40017,
+  "name": "Closed Online Test Content Update",
+  "category": "general",
+  "date": "2026-04-21",
+  "summary": "Additional content has been added to the MapleStory Classic World Online Test!",
+  "url": "https://www.nexon.com/maplestory/news/general/40017/closed-online-test-content-update"
+ },
+ {
+  "id": 39942,
+  "name": "[Completed] Unscheduled Server Maintenance - April 17, 2026",
+  "category": "maintenance",
+  "date": "2026-04-16",
+  "summary": "The maintenance has been completed. Please restart your Nexon Launcher to ensure you receive the latest client update.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/39942/unscheduled-server-maintenance-april-17-2026"
+ },
+ {
+  "id": 39217,
+  "name": "Closed Online Test Release Notes",
+  "category": "general",
+  "date": "2026-04-14",
+  "summary": "Click here to read the release notes for the Global MapleStory Classic World Closed Online Test.",
+  "url": "https://www.nexon.com/maplestory/news/general/39217/closed-online-test-release-notes"
+ },
+ {
+  "id": 39378,
+  "name": "Sign Ups are Closed for MapleStory Classic World Closed Online Test",
+  "category": "general",
+  "date": "2026-04-08",
+  "summary": "MapleStory Classic World Closed Online Test Sign Ups are officially closed as of April 7, 2026!",
+  "url": "https://www.nexon.com/maplestory/news/general/39378/sign-ups-are-closed-for-maplestory-classic-world-closed-online-test"
+ },
+ {
+  "id": 35337,
+  "name": "Sign Up for the Global MapleStory Classic World Closed Online Test",
+  "category": "general",
+  "date": "2026-03-10",
+  "summary": "Sign-ups for the upcoming Global MapleStory Classic World Closed Online Test on April 16, 2026 are now open!",
+  "url": "https://www.nexon.com/maplestory/news/general/35337/sign-up-for-the-global-maplestory-classic-world-closed-online-test"
+ },
+ {
+  "id": 36686,
+  "name": "PC Cafe Event + Giveaway Announcement",
+  "category": "general",
+  "date": "2026-02-27",
+  "summary": "Thank you for joining us at the PC Cafe Event! Click here for the Giveaway winner details.",
+  "url": "https://www.nexon.com/maplestory/news/general/36686/pc-cafe-event-giveaway-announcement"
+ },
+ {
+  "id": 34769,
+  "name": "PC Cafe Event: Perks and More Information Revealed!",
+  "category": "general",
+  "date": "2025-12-22",
+  "summary": "Perks and more information revealed for Classic World PC Cafe Event!",
+  "url": "https://www.nexon.com/maplestory/news/general/34769/pc-cafe-event-perks-and-more-information-revealed"
+ },
+ {
+  "id": 33974,
+  "name": "Global MapleStory Classic World PC Cafe Event Sign-up!",
+  "category": "general",
+  "date": "2025-12-16",
+  "summary": "Sign up for this limited-time opportunity to shape the development of Global MapleStory Classic World!",
+  "url": "https://www.nexon.com/maplestory/news/general/33974/global-maplestory-classic-world-pc-cafe-event-sign-up"
+ },
+ {
+  "id": 27587,
+  "name": "Global MapleStory Classic World Playtest Sneak Peek",
+  "category": "general",
+  "date": "2025-08-15",
+  "summary": "Take a look at the Global MapleStory Classic World Playtest video!",
+  "url": "https://www.nexon.com/maplestory/news/general/27587/global-maplestory-classic-world-playtest-sneak-peek"
+ },
+ {
+  "id": 27035,
+  "name": "Sign up for Global MapleStory Classic World Playtest!",
+  "category": "general",
+  "date": "2025-05-15",
+  "summary": "Here's your chance for an exclusive first look at Global MapleStory Classic World during an upcoming in-person playtest!",
+  "url": "https://www.nexon.com/maplestory/news/general/27035/sign-up-for-global-maplestory-classic-world-playtest"
  }
 ]
