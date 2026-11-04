@@ -75,7 +75,7 @@ const ELEMENTS = ["None", "Fire", "Ice", "Lightning", "Poison", "Holy"];
 const DEFAULTS = {
   cls: "Warrior", weapon: "1H Sword", motion: "avg", level: 30, STR: 132, DEX: 30, INT: 4, LUK: 4,
   watk: 47, matk: 0, ap: 0, mastery: 0, skillId: "basic", skill: 100, hits: 1, crit: 5, critdmg: 20,
-  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {}, gearBonus: {}, buffs: {}, potions: [], mobSort: "level",
+  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {}, gearBonus: {}, buffs: {}, potions: [], mobSort: "level", guide: "exp", uptime: 50,
 };
 
 // The calculator edits the active saved character (see app.js). A shared build link
@@ -94,7 +94,7 @@ function loadCalcFromChar() {
 }
 
 // ---------- shareable builds ----------
-const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear", "gearBonus", "buffs", "potions", "mobSort"].includes(k));
+const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear", "gearBonus", "buffs", "potions", "mobSort", "guide", "uptime"].includes(k));
 function encodeBuild(name) {
   const o = { n: name };
   for (const k of BUILD_KEYS) if (calc[k] !== DEFAULTS[k]) o[k] = calc[k];
@@ -291,7 +291,7 @@ function statSkills() {
   const byName = new Map();
   for (const s of classJobs(calc.cls).flatMap((j) => j.skills)) {
     const top = s.levels[s.levels.length - 1] || {};
-    if (s.attack || !Object.keys(SKILL_STATS).some((k) => top[k])) continue;
+    if (s.attack || !(Object.keys(SKILL_STATS).some((k) => top[k]) || /Booster$/.test(s.name))) continue;
     if (s.weapons.length && !s.weapons.includes(code)) continue;
     if (!byName.has(s.name) || s.job === job2) byName.set(s.name, { skill: s, timed: !!top.time });
   }
@@ -323,7 +323,7 @@ function withGear(c) {
 }
 function gearStatText(it) {
   const spellWeapon = it.slot === "weapon" && WEAPONS[calc.cls][calc.weapon].magic;
-  return Object.entries(it.stats).filter(([k]) => !(spellWeapon && k === "ATT"))
+  return Object.entries(it.stats).filter(([k]) => k !== "ASPD" && !(spellWeapon && k === "ATT"))
     .map(([k, v]) => `${v > 0 ? "+" : ""}${v}${/CRIT/.test(k) ? "%" : ""} ${GEAR_LABEL[k] || k}`).join(", ");
 }
 // what's stopping this item being worn, counting stats from the other gear too
@@ -473,6 +473,94 @@ function closePicker() {
   picker.list = false;
   renderPicker();
   $(`[data-tile="${slot}"]`)?.focus({ preventScroll: true });
+}
+
+// ---------- what to fight: kills, EXP, mesos and drops per hour ----------
+// Attack time and spawn supply: NiaDB's formula pages (linked under the results). These are estimates: walking,
+// looting and other players are covered only by the "time spent attacking" setting.
+const SPAWNS_PER_POINT = (3600 / 7.56) * 0.75; // solo: 75% of a map's spawn points are filled
+const MESO_CHANCE = 0.68; // the average of the player-counted monsters, for those with no count
+const SCROLL_CATEGORY = { "1H Sword": "One-Handed Sword", "2H Sword": "Two-Handed Sword", "1H Axe": "One-Handed Axe", "2H Axe": "Two-Handed Axe", "1H Blunt": "One-Handed BW", "2H Blunt": "Two-Handed BW" };
+const PRICES_URL = "https://raw.githubusercontent.com/maplefm/maplefm.github.io/live/data/summary-public.json";
+const prices = { byName: null, at: null, failed: false };
+async function loadPrices() {
+  try {
+    const res = await fetch(PRICES_URL, { cache: "no-cache" });
+    if (!res.ok) throw new Error(res.status);
+    const raw = await res.json();
+    prices.byName = Object.fromEntries(raw.rows.map((r) => [r.item.toLowerCase(), r.typ]));
+    prices.at = raw.at;
+  } catch { prices.failed = true; }
+  if (state.tab === "calc" && $("#calcBest")) renderCalcOut();
+}
+function shortNum(n) {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e4) return `${Math.round(n / 1e3)}k`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
+  return String(Math.round(n));
+}
+function attackSeconds(c) {
+  const sk = currentSkill();
+  const motion = sk?.rule?.motion || sk?.motion || c.motion;
+  const base = c.weapon === "Crossbow" ? 820 : ["Spear", "Polearm"].includes(c.weapon) && motion === "stab" ? 750 : 800;
+  const weapon = wornGear(c).find((g) => g.slot === "weapon");
+  let tier = isSpell(c) ? 6 : weapon?.stats.ASPD ?? 6;
+  for (const row of statSkills()) if (/Booster$/.test(row.skill.name) && calc.buffs[row.skill.name]) tier += skillAt(row.skill, usedLevel(row.skill)).x || 0;
+  tier = Math.max(0, Math.min(10, tier));
+  return (30 * Math.ceil((base * (10 + tier)) / 16 / 30)) / 1000;
+}
+function targetsPerAttack() {
+  const sk = currentSkill();
+  const most = sk?.levels ? skillAt(sk, usedLevel(sk)).mobCount || 1 : sk?.mobs || 1;
+  return Math.min(most, 2); // skills that hit more than this rarely find more on every attack
+}
+// one lucky drop in 20 kills shouldn't look like a 5% rate: a cautious low estimate that gets closer to the counted rate with more kills
+function cautiousRate(rate, kills) {
+  const p = rate / 100;
+  if (!kills) return p;
+  const z = 1.28, z2 = z * z;
+  return Math.max(0, (p + z2 / (2 * kills) - z * Math.sqrt((p * (1 - p)) / kills + z2 / (4 * kills * kills))) / (1 + z2 / kills));
+}
+function dropList(m) {
+  return m.drops.filter((d) => d.item !== "meso").map((d) => {
+    const it = byId.items[d.item];
+    return { item: it, id: d.item, name: it?.name || d.item, rate: d.rate, kills: d.kills, price: (it && prices.byName?.[it.name.toLowerCase()]) ?? null, mine: it ? usefulToClass(it) : false };
+  });
+}
+function usefulToClass(it) {
+  if (it.type === "Equip") {
+    const g = (db.gear || []).find((x) => x.gid === it.gid);
+    if (!g) return false;
+    return g.slot === "weapon" ? !!WEAPONS[calc.cls][g.weapon] && (!g.job || !!(g.job & CLASS_BIT[calc.cls])) : !!g.job && !!(g.job & CLASS_BIT[calc.cls]);
+  }
+  if (it.type !== "Use" || !/Scroll/.test(it.name)) return false;
+  return it.category === (SCROLL_CATEGORY[calc.weapon] || calc.weapon) || it.name.includes(`${MAIN_STATS[calc.cls][0]} Scroll`);
+}
+function hourly(m, mm, c) {
+  const best = idx.spawnsOf[m.id]?.[0];
+  const isBoss = !!m.boss; // bosses come back on their own timers, so a per-hour number would mislead
+  const seconds = attackSeconds(c);
+  const uptime = (Number(c.uptime) || 50) / 100;
+  const wanted = mm.withMiss === Infinity ? 0 : ((3600 / seconds) * uptime * targetsPerAttack()) / mm.withMiss;
+  const supply = best ? best.count * SPAWNS_PER_POINT : 0;
+  const kills = isBoss ? 0 : Math.min(wanted, supply);
+  const mesoRow = m.drops.find((d) => d.item === "meso");
+  const amount = m.meso ? (m.meso.min + m.meso.max) / 2 : Math.floor(2.1 * m.level) + 3;
+  const drops = dropList(m);
+  const counted = drops.filter((d) => d.rate != null && d.price != null);
+  const valuePerKill = counted.reduce((a, d) => a + cautiousRate(d.rate, d.kills) * d.price, 0);
+  return {
+    kills, best, isBoss, cappedBySpawns: !isBoss && wanted > supply, exp: kills * m.exp,
+    meso: kills * (mesoRow?.rate != null ? mesoRow.rate / 100 : MESO_CHANCE) * amount, mesoGuess: mesoRow?.rate == null || !m.meso,
+    value: kills * valuePerKill, hasCounts: counted.length > 0, killsCounted: Math.max(0, ...counted.map((d) => d.kills || 0)),
+    top: [...drops].filter((d) => d.price != null).sort((a, b) => b.price - a.price),
+    uncounted: drops.filter((d) => d.rate == null).length,
+  };
+}
+function dropLine(d) {
+  const chance = d.rate != null ? `${rateText(d.rate)}${d.kills && d.kills < 100 ? ` (only ${d.kills} kills counted)` : ""}` : "chance not counted yet";
+  return `<li>${d.item ? link("item", d.id, d.name) : esc(d.name)}${d.mine ? ' <span class="badge">For you</span>' : ""}<span class="right">${d.price != null ? `${shortNum(d.price)} · ` : ""}${chance}</span></li>`;
 }
 
 // ---------- stats that come from the character sheet ----------
@@ -780,7 +868,7 @@ function renderCalc() {
         <section class="calc-card" id="calcMatchCard">
           <div class="card-head"><h3>Every monster</h3>
             <select id="c_mobSort" aria-label="Sort monsters">
-              ${[["level", "By level"], ["exp", "Most EXP per attack"], ["fast", "Fewest attacks"]].map(([v, t]) => `<option value="${v}" ${calc.mobSort === v ? "selected" : ""}>${t}</option>`).join("")}
+              ${[["level", "By level"], ["exp", "Most EXP per hour"], ["meso", "Most mesos per hour"], ["drops", "Best drops per hour"], ["fast", "Fewest attacks"]].map(([v, t]) => `<option value="${v}" ${calc.mobSort === v ? "selected" : ""}>${t}</option>`).join("")}
             </select>
             <label class="check"><input type="checkbox" id="c_near" ${calc.near ? "checked" : ""}> Near my level only</label></div>
           <div id="calcTable"></div>
@@ -863,6 +951,7 @@ function renderCalc() {
   for (const id of ["level", "hits"]) $(`#c_${id}`)?.addEventListener("blur", (e) => { if (!Number(e.target.value)) e.target.value = calc[id]; });
   renderPicker();
   renderCalcOut();
+  if (!prices.byName && !prices.failed && !prices.loading) { prices.loading = true; loadPrices(); }
 }
 
 function defaultSkill() {
@@ -952,6 +1041,7 @@ function renderCalcOut() {
   if (target) {
     const mm = matchup(r, c, target);
     const where = (idx.spawnsOf[target.id] || []).slice(0, 2);
+    const rate = hourly(target, mm, c);
     $("#calcMatch").innerHTML = `
       <div class="match">
         <div class="match-mob">${sprite(target, 90)}<div><b>${link("monster", target.id)}</b><span>Lv ${target.level} · ${fmt(target.hp)} HP</span>${verdictBadge(mm.verdict)}</div></div>
@@ -962,30 +1052,69 @@ function renderCalcOut() {
           <div><span>Accuracy for 100%</span><b>${mm.need100 ?? "—"}<small> (you: ${acc})</small></b></div>
           <div><span>${r.magic ? "Magic" : "Weapon"} defense</span><b>${fmt(mm.def)}</b></div>
           <div><span>EXP each</span><b>${fmt(target.exp)}</b></div>
+          ${rate.isBoss ? "" : `<div><span>Kills / hour</span><b>${shortNum(rate.kills)}</b></div>
+          <div><span>EXP / hour</span><b>${shortNum(rate.exp)}</b></div>
+          <div><span>Mesos / hour</span><b>${shortNum(rate.meso)}${rate.mesoGuess ? "<small> est.</small>" : ""}</b></div>
+          <div><span>Drop value / hour</span><b>${rate.hasCounts ? shortNum(rate.value) : "—"}${rate.hasCounts ? "" : "<small> not counted</small>"}</b></div>`}
         </div>
+        ${rate.top.length ? `<h4 class="cx-drops-title">Most valuable drops</h4><ul class="cx-drops">${rate.top.slice(0, 5).map(dropLine).join("")}</ul>` : ""}
         <p class="match-note">${esc(mm.verdict[2])}${mm.el > 1 ? " It's weak to your element (+25%)." : mm.el < 1 ? " It resists your element (−25%)." : ""}${target.level > c.level ? ` It's ${target.level - c.level} levels above you, which lowers your damage${target.level - c.level >= 1 ? " and accuracy" : ""}.` : ""}${mm.p < 1 && mm.withMiss !== Infinity ? ` Counting misses, expect about ${mm.withMiss} ${c.hits > 1 ? "uses" : "attacks"}.` : ""}${where.length ? ` Found in ${where.map((x) => link("map", x.map)).join(", ")}.` : ""}</p>
       </div>`;
   } else {
     $("#calcMatch").innerHTML = `<p class="sub empty">Pick a monster to see if you can take it on: hits to kill, hit chance and the accuracy you need.</p>`;
   }
 
-  // best training
-  const all = calcMonsters().map((m) => ({ m, mm: matchup(r, c, m) }));
-  const expPer = ({ m, mm }) => (mm.withMiss === Infinity ? 0 : m.exp / mm.withMiss);
-  const best = all.filter((x) => !x.m.boss && x.m.exp > 0 && idx.spawnsOf[x.m.id] && x.mm.p >= 0.6 && x.m.level >= c.level - 20 && x.m.level <= c.level + 15)
-    .sort((a, b) => expPer(b) - expPer(a)).slice(0, 3);
+  // what to fight
+  const all = calcMonsters().map((m) => { const mm = matchup(r, c, m); return { m, mm, rate: hourly(m, mm, c) }; });
   const toLevel = expToNext(c.level);
-  $("#calcBest").innerHTML = `<div class="card-head"><h3>Best training for you</h3></div>` + (best.length
-    ? `<div class="cx-best">${best.map(({ m, mm }, i) => {
-        const where = idx.spawnsOf[m.id][0];
-        return `<button type="button" class="cx-best-card" data-pick="${m.id}">
-          <span class="cx-best-rank">${i + 1}</span><span class="cx-best-spr">${sprite(m, 52)}</span>
-          <b>${esc(m.name)}</b><small>Lv ${m.level} · ${mm.uses} ${c.hits > 1 ? "uses" : "hits"} · ${Math.round(mm.p * 100)}% hit</small>
-          <strong>${expPer({ m, mm }).toFixed(1)} EXP per attack</strong>
-          <small>About ${fmt(Math.ceil(toLevel / m.exp))} kills to level ${c.level + 1}</small>
-          <small>${esc(getEntity("map", where.map)?.name || "")} (×${where.count})</small></button>`;
-      }).join("")}</div><p class="sub small">Based on EXP per attack with your current damage and hit chance. Busy maps and attack speed aren't counted.</p>`
-    : `<p class="sub empty">Nothing near your level looks good yet. Try more attack or accuracy.</p>`);
+  const usable = all.filter((x) => !x.m.boss && x.m.exp > 0 && x.rate.best && x.mm.p >= 0.5 && x.mm.withMiss !== Infinity && x.m.level <= c.level + 15);
+  const mode = ["exp", "meso", "drops"].includes(c.guide) ? c.guide : "exp";
+  const byMode = {
+    exp: (a, b) => b.rate.exp - a.rate.exp,
+    meso: (a, b) => b.rate.meso - a.rate.meso,
+    // monsters with counted drops first, then the rest by their most valuable drop
+    drops: (a, b) => b.rate.value - a.rate.value || (b.rate.top[0]?.price || 0) - (a.rate.top[0]?.price || 0),
+  };
+  const picks = [...usable].sort(byMode[mode]).slice(0, 5);
+  // monsters that could be great for drops but have no counted rates can't be ranked, so they're listed apart
+  const unknowns = mode !== "drops" ? [] : usable.filter((x) => !x.rate.hasCounts && x.rate.top.length)
+    .sort((a, b) => Number(!!b.rate.top.find((d) => d.mine)) - Number(!!a.rate.top.find((d) => d.mine)) || b.rate.top[0].price - a.rate.top[0].price).slice(0, 4);
+  const hitWord = (n) => `${n} ${c.hits > 1 ? (n === 1 ? "use" : "uses") : (n === 1 ? "hit" : "hits")}`;
+  const topDrops = (rate) => {
+    const top = rate.top[0], mine = rate.top.find((d) => d.mine);
+    const say = (d) => `${esc(d.name)} (${shortNum(d.price)}${d.rate != null ? `, ${rateText(d.rate)}` : ", chance not counted"})`;
+    return (top ? `<small>Top drop: ${say(top)}</small>` : "") + (mine && mine !== top ? `<small class="cx-mine">For you: ${say(mine)}</small>` : top?.mine ? `<small class="cx-mine">That's useful for your class</small>` : "");
+  };
+  const uptimeNow = Number(c.uptime) || 50;
+  const countedCount = usable.filter((x) => x.rate.hasCounts).length;
+  $("#calcBest").innerHTML = `<div class="card-head"><h3>What to fight</h3>
+      <label class="cx-uptime"><span>Time spent attacking</span><select id="guideUptime">${[[30, "30% (relaxed)"], [50, "50% (normal)"], [70, "70% (focused)"]].map(([v, t]) => `<option value="${v}" ${uptimeNow === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+    <div class="cx-modes" role="radiogroup" aria-label="What to fight for">
+      ${[["exp", "Fastest levels"], ["meso", "Most mesos"], ["drops", "Best drops"]].map(([v, t]) => `<button type="button" class="cx-mode ${mode === v ? "on" : ""}" data-guide="${v}" role="radio" aria-checked="${mode === v}">${t}</button>`).join("")}
+    </div>` + (picks.length
+    ? `<div class="cx-guide">${picks.map(({ m, mm, rate }, i) => {
+        const hoursLeft = rate.exp > 0 ? toLevel / rate.exp : null;
+        return `<button type="button" class="cx-guide-row" data-pick="${m.id}">
+          <span class="cx-guide-rank">${i + 1}</span><span class="cx-guide-spr">${sprite(m, 44)}</span>
+          <span class="cx-guide-main"><b>${esc(m.name)}</b>
+            <small>Lv ${m.level} · ${hitWord(mm.uses)} · ${Math.round(mm.p * 100)}% hit · ${esc(getEntity("map", rate.best.map)?.name || "")}</small>
+            <span class="cx-guide-nums"><i class="${mode === "exp" ? "on" : ""}"><b>${shortNum(rate.exp)}</b> EXP/hr</i><i class="${mode === "meso" ? "on" : ""}"><b>${shortNum(rate.meso)}</b> mesos/hr</i><i class="${mode === "drops" ? "on" : ""}"><b>${rate.hasCounts ? shortNum(rate.value) : "?"}</b> drop value/hr</i></span>
+            <small>${shortNum(rate.kills)} kills/hr${hoursLeft != null ? ` · about ${hoursLeft < 1 ? `${Math.max(1, Math.round(hoursLeft * 60))} min` : `${hoursLeft.toFixed(hoursLeft < 10 ? 1 : 0)} hours`} to level ${c.level + 1}` : ""}${rate.cappedBySpawns ? " · limited by spawns" : ""}</small>
+            ${rate.hasCounts && rate.killsCounted < 100 ? `<small>Drop value is from only ${rate.killsCounted} counted kills, so it could be off</small>` : ""}
+            ${topDrops(rate)}
+          </span></button>`;
+      }).join("")}</div>`
+    : `<p class="sub empty">Nothing you can reliably hit yet. Try more accuracy or a lower-level area.</p>`) +
+    (unknowns.length ? `<h4 class="cx-drops-title">Valuable drops, but no rates counted yet</h4><div class="cx-guide">${unknowns.map(({ m, mm, rate }) => `<button type="button" class="cx-guide-row" data-pick="${m.id}">
+        <span class="cx-guide-spr">${sprite(m, 44)}</span>
+        <span class="cx-guide-main"><b>${esc(m.name)}</b><small>Lv ${m.level} · ${hitWord(mm.uses)} · ${shortNum(rate.exp)} EXP/hr · ${shortNum(rate.meso)} mesos/hr</small>${topDrops(rate)}</span></button>`).join("")}</div>` : "") +
+    `<p class="sub small">Rough estimates for one person hunting alone, counting your attack speed, hit chance, up to 2 monsters per attack for skills that hit several, and monster spawns. Real numbers depend on the map, other players and how fast you loot.</p>
+    <p class="sub small">Drop value is rate × recent price, from <a href="https://maplefm.gg" target="_blank" rel="noopener">Club FM</a>${prices.at ? ` (${new Date(prices.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })})` : ""}. ${prices.failed ? "Prices couldn't be loaded right now. " : !prices.byName ? "Prices are loading. " : ""}Only ${countedCount} of these ${usable.length} monsters have counted drop rates so far, so drop value is only a guide. Rates from only a few kills are counted cautiously. "?" means no rate has been counted yet. Meso estimates use a formula by azzybish and ohmi, shared on NiaDB.</p>`;
+  $("#calcBest").querySelectorAll("[data-guide]").forEach((b) => b.addEventListener("click", () => {
+    calc.guide = b.dataset.guide; saveCalc(); renderCalcOut();
+    $(`[data-guide="${calc.guide}"]`)?.focus({ preventScroll: true });
+  }));
+  $("#guideUptime").addEventListener("change", (e) => { calc.uptime = Number(e.target.value); saveCalc(); renderCalcOut(); });
   $("#calcBest").querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
     calc.target = b.dataset.pick; saveCalc();
     $("#c_target").value = calc.target;
@@ -994,23 +1123,26 @@ function renderCalcOut() {
   }));
 
   // table
-  const sorters = { exp: (a, b) => expPer(b) - expPer(a), fast: (a, b) => a.mm.withMiss - b.mm.withMiss };
+  const hourCell = (rate, v) => (rate.isBoss ? "—" : shortNum(v));
+  const sorters = { exp: (a, b) => b.rate.exp - a.rate.exp, meso: (a, b) => b.rate.meso - a.rate.meso, drops: (a, b) => b.rate.value - a.rate.value, fast: (a, b) => a.mm.withMiss - b.mm.withMiss };
   const shown = all.filter(({ m }) => !c.near || (m.level >= c.level - 15 && m.level <= c.level + 10) || m.boss);
   if (sorters[c.mobSort]) shown.sort(sorters[c.mobSort]);
-  const rows = shown.map(({ m, mm }) => {
+  const rows = shown.map(({ m, mm, rate }) => {
     return `<tr class="pick ${m.id === c.target ? "selected" : ""}" data-pick="${m.id}">
       <td><span class="spr-cell">${sprite(m, 26)}</span>${esc(m.name)}${m.boss ? ' <span class="badge">Boss</span>' : ""}</td>
       <td class="num">${m.level}</td>
       <td class="num wide-only">${fmt(mm.min)}–${fmt(mm.max)}</td>
       <td class="num"><b>${mm.uses}</b></td>
       <td class="num ${mm.p >= 0.99 ? "" : mm.p < 0.5 ? "bad" : "warn"}">${Math.round(mm.p * 100)}%</td>
-      <td class="num">${expPer({ m, mm }).toFixed(1)}</td>
+      <td class="num">${hourCell(rate, rate.exp)}</td>
+      <td class="num wide-only">${hourCell(rate, rate.meso)}</td>
+      <td class="num wide-only">${rate.hasCounts ? hourCell(rate, rate.value) : "—"}</td>
       <td class="num wide-only">${verdictBadge(mm.verdict)}</td></tr>`;
   }).join("");
-  $("#calcTable").innerHTML = `<div class="calc-tablewrap"><table><thead><tr><th>Monster</th><th class="num">Lv</th><th class="num wide-only">Damage</th><th class="num">${c.hits > 1 ? "Uses" : "Hits"}</th><th class="num">Hit %</th><th class="num">EXP / attack</th><th class="num wide-only">Verdict</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="7" class="sub">No monsters in range.</td></tr>`}</tbody></table></div>
+  $("#calcTable").innerHTML = `<div class="calc-tablewrap"><table><thead><tr><th>Monster</th><th class="num">Lv</th><th class="num wide-only">Damage</th><th class="num">${c.hits > 1 ? "Uses" : "Hits"}</th><th class="num">Hit %</th><th class="num">EXP/hr</th><th class="num wide-only">Mesos/hr</th><th class="num wide-only">Drops/hr</th><th class="num wide-only">Verdict</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="9" class="sub">No monsters in range.</td></tr>`}</tbody></table></div>
     <p class="sub small">Tap a row to see the full matchup above. Hits = average needed, with crits. Damage is after the monster's defense${r.magic ? ", element" : ""} and the level-gap penalty.</p>
-    <p class="sub small">Formulas: NiaDB (<a href="https://meowdb.com/msclassic/formulas/damage" target="_blank" rel="noopener">damage</a>, <a href="https://meowdb.com/msclassic/formulas" target="_blank" rel="noopener">stats and accuracy</a>, <a href="https://meowdb.com/msclassic/formulas/leveling" target="_blank" rel="noopener">HP, AP and EXP</a>), <a href="https://fullboosts.com/blog/maplestory-classic/articles/maplestory-classic-damage-formula-guide" target="_blank" rel="noopener">FullBoosts</a>, <a href="https://ms-classic.com/guides/accuracy-and-hit-rate-explained" target="_blank" rel="noopener">MS-Classic</a>. Skill values: NiaDB skill pages (linked). Monster stats, items and requirements: Classic game files.</p>`;
+    <p class="sub small">Formulas: NiaDB (<a href="https://meowdb.com/msclassic/formulas/damage" target="_blank" rel="noopener">damage</a>, <a href="https://meowdb.com/msclassic/formulas" target="_blank" rel="noopener">stats and accuracy</a>, <a href="https://meowdb.com/msclassic/formulas/leveling" target="_blank" rel="noopener">HP, AP, EXP and mesos</a>, <a href="https://meowdb.com/msclassic/formulas/attack-speed" target="_blank" rel="noopener">attack speed</a>, <a href="https://meowdb.com/msclassic/formulas/spawns" target="_blank" rel="noopener">spawns</a>), <a href="https://fullboosts.com/blog/maplestory-classic/articles/maplestory-classic-damage-formula-guide" target="_blank" rel="noopener">FullBoosts</a>, <a href="https://ms-classic.com/guides/accuracy-and-hit-rate-explained" target="_blank" rel="noopener">MS-Classic</a>. Skill values: NiaDB skill pages (linked). Monster stats, items and requirements: Classic game files.</p>`;
   $("#calcTable").querySelectorAll("tr[data-pick]").forEach((tr) => tr.addEventListener("click", (e) => {
     calc.target = tr.dataset.pick; saveCalc();
     $("#c_target").value = calc.target;

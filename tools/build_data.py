@@ -89,7 +89,7 @@ WEAPON_KINDS = {
 }
 ARMOR_KINDS = {"Hat": "hat", "Top": "top", "Bottom": "bottom", "Overall": "overall", "Shoes": "shoes",
                "Glove": "gloves", "Cape": "cape", "Earrings": "earrings", "Shield": "shield"}
-GEAR_STATS = ("ATT", "MATT", "STR", "DEX", "INT", "LUK", "ACC", "CRIT", "CRITDMG", "HP", "MP", "WDEF", "MDEF", "AVOID", "SPEED", "JUMP")
+GEAR_STATS = ("ATT", "MATT", "STR", "DEX", "INT", "LUK", "ACC", "CRIT", "CRITDMG", "HP", "MP", "WDEF", "MDEF", "AVOID", "SPEED", "JUMP", "ASPD")
 
 
 def job_text(ids):

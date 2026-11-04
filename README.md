@@ -25,7 +25,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 - **Calculator**: pick your class, weapon and skill (attack skills preset at max level, with values from NiaDB's skill pages), then wear your gear from every weapon and armor piece with stats in the game files, wands and staffs included, plus your throwing stars or arrows, or type your stats in yourself. Each piece can also take bonus stats, for scrolls or a better or worse roll, and they count toward your damage. Turn on your buffs and potions, and spell elements are set from the skill. Auto-assign spreads your AP around your gear's requirements. You get:
   - your damage range, average and max crit
   - a character sheet with your HP, MP, defense, avoid and more
-  - the best monsters to train on, by EXP per attack
+  - a guide to what to fight: estimated kills, EXP, mesos and drop value per hour for your build, ranked for fastest levels, most mesos or best drops, with the drops your class can use marked
   - your accuracy
   - a **"Fight a monster"** matchup: damage, hits to kill, hit chance, the accuracy you need for 100%, and a verdict (One-shot / Easy / Good / Slow / Too tough / Hard to hit)
   - a table of every monster near your level
@@ -54,6 +54,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 | World maps and their nodes | Classic World game files, via [maplestory.io](https://maplestory.io) (`tools/fetch_worldmap.py`) |
 | Quests and NPC positions | Classic World game data (maplestory.io) + MapleClassic Wiki, via [Club FM](https://maplefm.gg) |
 | Skills (every level) | Classic World game files via maplestory.io (launch v1.0.0), with Oct 29 patch changes applied or flagged |
+| Drop values in the what-to-fight guide | [Club FM](https://maplefm.gg) public price summary, loaded live in the browser |
 | Calculator gear lists | Classic World game files, via [Club FM](https://maplefm.gg) / maplestory.io (`data/gear.json`, `data/ammo.json`) |
 | Job levels and instructors | Game quest data plus [Henesys.gg](https://henesys.gg/guides/beginner), [Metaroad](https://metaroad.gg/maplestory-classic/meta/beginners-guide-maplestory-classic-world), [MapleStory-Classic.com](https://maplestory-classic.com/guides/first-job-advancement-guide) |
 
