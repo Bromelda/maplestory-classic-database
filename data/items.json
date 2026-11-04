@@ -1,0 +1,13 @@
+[
+  { "id": "snail_shell", "name": "Snail Shell", "type": "Etc", "verified": false },
+  { "id": "blue_snail_shell", "name": "Blue Snail Shell", "type": "Etc", "verified": false },
+  { "id": "red_snail_shell", "name": "Red Snail Shell", "type": "Etc", "verified": false },
+  { "id": "squishy_liquid", "name": "Squishy Liquid", "type": "Etc", "verified": false },
+  { "id": "orange_mushroom_cap", "name": "Orange Mushroom Cap", "type": "Etc", "verified": false },
+  { "id": "green_mushroom_cap", "name": "Green Mushroom Cap", "type": "Etc", "verified": false },
+  { "id": "horny_mushroom_cap", "name": "Horny Mushroom Cap", "type": "Etc", "verified": false },
+  { "id": "red_potion", "name": "Red Potion", "type": "Use", "price": 50, "effect": "Recovers 50 HP", "verified": false },
+  { "id": "orange_potion", "name": "Orange Potion", "type": "Use", "price": 160, "effect": "Recovers 150 HP", "verified": false },
+  { "id": "white_potion", "name": "White Potion", "type": "Use", "price": 320, "effect": "Recovers 300 HP", "verified": false },
+  { "id": "blue_potion", "name": "Blue Potion", "type": "Use", "price": 200, "effect": "Recovers 100 MP", "verified": false }
+]

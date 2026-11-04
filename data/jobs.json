@@ -1,0 +1,25 @@
+[
+  { "id": "beginner", "name": "Beginner", "branch": "Beginner", "advancement": 0, "level": 1, "notes": "Every character starts here on Maple Island." },
+
+  { "id": "warrior", "name": "Warrior", "branch": "Warrior", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Dances with Balrog", "location": "Perion", "stat": "STR" },
+  { "id": "fighter", "name": "Fighter", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR" },
+  { "id": "page", "name": "Page", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR" },
+  { "id": "spearman", "name": "Spearman", "branch": "Warrior", "advancement": 2, "level": 30, "from": "warrior", "stat": "STR" },
+
+  { "id": "magician", "name": "Magician", "branch": "Magician", "advancement": 1, "level": 8, "from": "beginner", "instructor": "Grendel the Really Old", "location": "Ellinia", "stat": "INT" },
+  { "id": "fp_wizard", "name": "Wizard (Fire/Poison)", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT" },
+  { "id": "il_wizard", "name": "Wizard (Ice/Lightning)", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT" },
+  { "id": "cleric", "name": "Cleric", "branch": "Magician", "advancement": 2, "level": 30, "from": "magician", "stat": "INT" },
+
+  { "id": "bowman", "name": "Bowman", "branch": "Bowman", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Athena Pierce", "location": "Henesys", "stat": "DEX" },
+  { "id": "hunter", "name": "Hunter", "branch": "Bowman", "advancement": 2, "level": 30, "from": "bowman", "stat": "DEX" },
+  { "id": "crossbowman", "name": "Crossbowman", "branch": "Bowman", "advancement": 2, "level": 30, "from": "bowman", "stat": "DEX" },
+
+  { "id": "thief", "name": "Thief", "branch": "Thief", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Dark Lord", "location": "Kerning City", "stat": "LUK" },
+  { "id": "assassin", "name": "Assassin", "branch": "Thief", "advancement": 2, "level": 30, "from": "thief", "stat": "LUK" },
+  { "id": "bandit", "name": "Bandit", "branch": "Thief", "advancement": 2, "level": 30, "from": "thief", "stat": "LUK" },
+
+  { "id": "pirate", "name": "Pirate", "branch": "Pirate", "advancement": 1, "level": 10, "from": "beginner", "instructor": "Kyrin", "location": "Nautilus", "stat": "STR / DEX" },
+  { "id": "brawler", "name": "Brawler", "branch": "Pirate", "advancement": 2, "level": 30, "from": "pirate", "stat": "STR" },
+  { "id": "gunslinger", "name": "Gunslinger", "branch": "Pirate", "advancement": 2, "level": 30, "from": "pirate", "stat": "DEX" }
+]

@@ -1,0 +1,9 @@
+[
+  { "id": "snail", "name": "Snail", "level": 1, "hp": 8, "mp": 0, "exp": 3, "drops": ["snail_shell", "red_potion"], "maps": ["maple_island_snail_ground", "henesys_hunting_ground_1"], "verified": false },
+  { "id": "blue_snail", "name": "Blue Snail", "level": 2, "hp": 15, "mp": 0, "exp": 4, "drops": ["blue_snail_shell", "red_potion"], "maps": ["maple_island_snail_ground", "henesys_hunting_ground_1"], "verified": false },
+  { "id": "red_snail", "name": "Red Snail", "level": 4, "hp": 45, "mp": 0, "exp": 8, "drops": ["red_snail_shell", "red_potion"], "maps": ["henesys_hunting_ground_1"], "verified": false },
+  { "id": "slime", "name": "Slime", "level": 6, "hp": 50, "mp": 0, "exp": 10, "drops": ["squishy_liquid", "red_potion", "blue_potion"], "maps": ["ellinia_forest"], "verified": false },
+  { "id": "orange_mushroom", "name": "Orange Mushroom", "level": 8, "hp": 80, "mp": 0, "exp": 15, "drops": ["orange_mushroom_cap", "orange_potion"], "maps": ["henesys_hunting_ground_2"], "verified": false },
+  { "id": "green_mushroom", "name": "Green Mushroom", "level": 15, "hp": 250, "mp": 0, "exp": 26, "drops": ["green_mushroom_cap", "orange_potion"], "maps": ["henesys_hunting_ground_2"], "verified": false },
+  { "id": "horny_mushroom", "name": "Horny Mushroom", "level": 22, "hp": 400, "mp": 0, "exp": 35, "drops": ["horny_mushroom_cap", "white_potion"], "maps": ["ant_tunnel"], "verified": false }
+]

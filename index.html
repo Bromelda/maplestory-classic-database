@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MapleStory Classic DB</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>🍁 MapleStory Classic DB</h1>
+    <nav id="tabs">
+      <button data-tab="monsters" class="active">Monsters</button>
+      <button data-tab="items">Items</button>
+      <button data-tab="maps">Maps</button>
+      <button data-tab="jobs">Jobs</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="controls">
+      <input id="search" type="search" placeholder="Search by name…" autocomplete="off">
+      <label>Lv <input id="minLv" type="number" min="0" max="200" placeholder="min"></label>
+      <label>to <input id="maxLv" type="number" min="0" max="200" placeholder="max"></label>
+      <span id="count"></span>
+    </section>
+
+    <div id="layout">
+      <div id="tableWrap"><table id="table"></table></div>
+      <aside id="detail" hidden></aside>
+    </div>
+  </main>
+
+  <footer>Unofficial fan project. Not affiliated with Nexon. Rows marked <span class="unv">?</span> are unverified.</footer>
+  <script src="app.js"></script>
+</body>
+</html>

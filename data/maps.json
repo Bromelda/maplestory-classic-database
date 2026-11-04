@@ -1,0 +1,7 @@
+[
+  { "id": "maple_island_snail_ground", "name": "Snail Hunting Ground", "region": "Maple Island", "verified": false },
+  { "id": "henesys_hunting_ground_1", "name": "Henesys Hunting Ground I", "region": "Victoria Island – Henesys", "connects": ["henesys_hunting_ground_2"], "verified": false },
+  { "id": "henesys_hunting_ground_2", "name": "Henesys Hunting Ground II", "region": "Victoria Island – Henesys", "connects": ["henesys_hunting_ground_1"], "verified": false },
+  { "id": "ellinia_forest", "name": "Ellinia Forest", "region": "Victoria Island – Ellinia", "verified": false },
+  { "id": "ant_tunnel", "name": "Ant Tunnel", "region": "Victoria Island – Sleepywood", "verified": false }
+]
