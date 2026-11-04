@@ -254,7 +254,7 @@ def main():
             "id": slug(name),
             "gid": gid,
             "name": name,
-            "type": kind.split(":")[0] if kind else None,
+            "type": (kind.split(":")[0] if kind else ("Mesos" if name == "Meso" else None)),
             "category": kind.split(":")[1] if kind else None,
             "level": (row[2] or None) if row else None,
             "sell": (row[6] or None) if row else None,
@@ -270,6 +270,10 @@ def main():
         for p in mp["portals"]:
             portals.append({"to": slug(p[0]), "kind": p[1], "x": p[2], "y": p[3]})
         spawns = [{"monster": slug(mn), "count": c} for mn, c in mp["mobs"]]
+        # party-quest / event monsters are kept in a separate list in the source
+        for mn, c in mp.get("vmobs") or []:
+            if slug(mn) in {slug(x) for x in mobs_src} and not any(sp["monster"] == slug(mn) for sp in spawns):
+                spawns.append({"monster": slug(mn), "count": c})
         respawn = {slug(k): v for k, v in (mp.get("respawn") or {}).items()}
         mm = mp.get("mm")
         maps.append({
@@ -290,8 +294,15 @@ def main():
             "minimap": bool(mm) and (OUT.parent / "assets" / "minimap" / f"{mp['id']}.png").exists(),
             "mobpos": [[slug(gid_to_mob.get(g, str(g))), x, y] for g, x, y in mp["mobpos"]],
         })
+    mob_lv = {mo["id"]: mo["level"] for mo in monsters}
     for m in maps:
         m["zone"] = zone_for(m)
+        m["levels_from_mobs"] = False
+        if not m["levels"] and m["spawns"]:
+            lvs = [mob_lv[s["monster"]] for s in m["spawns"] if s["monster"] in mob_lv and mob_lv[s["monster"]] < 200]
+            if lvs:
+                m["levels"] = [min(lvs), max(lvs)]
+                m["levels_from_mobs"] = True
 
     # ---------- NPCs ----------
     npcs = {}

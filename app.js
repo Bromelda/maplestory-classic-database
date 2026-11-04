@@ -524,7 +524,17 @@ function mapDetail(m) {
   m.spawns.forEach((s, i) => { colorOf[s.monster] = MOB_COLORS[i % MOB_COLORS.length]; });
   const total = m.spawns.reduce((a, x) => a + x.count, 0);
   let html = `<h2>${esc(m.name)}</h2><p class="sub">${esc(m.zone)} · ${esc(m.type || m.region)}${m.region === "Hidden Street" ? ' · <span class="badge hidden">Hidden Street</span>' : ""}</p>`;
-  html += dl([["Level range", m.levels ? levelText(m.levels) : null], ["Total monsters", total || null]]);
+  html += dl([["Level range", m.levels ? levelText(m.levels) + (m.levels_from_mobs ? ' <span class="sub">(from its monsters)</span>' : "") : null], ["Total monsters", total || null]]);
+  const walkIn = [...(idx.incoming[m.id] || [])].some((id) => id !== m.id);
+  if (!walkIn) {
+    const npcIds = m.npcs.map((n) => n.npc).join(" ");
+    const how = /2nd_job_test/.test(npcIds)
+      ? "This is a 2nd job test map. Your job instructor sends you here during the 2nd job advancement at level 30."
+      : /^1st Accompaniment/.test(m.name)
+        ? `This is a Kerning City Party Quest stage. You enter it with a party through ${getEntity("npc", "lakelis") ? link("npc", "lakelis") : "Lakelis"} in Kerning City.`
+        : "No walking portal leads here. You get in through an NPC or a quest.";
+    html += `<div class="note">${how}</div>`;
+  }
   html += mapLayout(m, colorOf);
   const isHidden = m.region === "Hidden Street";
   if (isHidden) html += howToGetHere(m);
