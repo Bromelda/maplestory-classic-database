@@ -38,6 +38,12 @@ PATCHED = {
 }
 PATCH_NOTE = "v1.1.0 patch, Oct 29, 2026"
 
+# Manual Classic-only meso ranges with direct evidence. Keep these small and sourced.
+# They are used only when the upstream Classic dataset has no observed meso range.
+MESO_OVERRIDES = {
+    "Fire Boar": {"min": 63, "max": 77, "basis": "reported"},
+}
+
 # Second Classic source that matched each monster's level/HP/EXP.
 NIADB_MATCH = "NiaDB"
 ORG_MATCH = "MapleStoryClassic.org"
@@ -141,6 +147,8 @@ def main():
         meso = None
         if m.get("meso") and m["meso"][0] is not None:
             meso = {"min": m["meso"][0], "max": m["meso"][1], "basis": m["meso"][3]}
+        elif name in MESO_OVERRIDES:
+            meso = dict(MESO_OVERRIDES[name])
         d = sorted(drops_by_mob.get(name, []), key=lambda x: -(x["rate"] or 0))
         monsters.append({
             "id": slug(name),
