@@ -23,7 +23,7 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patche
 - **Monsters / Items**: stats, Classic drop tables with rates and kill counts, sprites.
 - **Quests**: 325 quests as step-by-step guides, a tracker per character, and an "Only quests for my character" filter.
 - **NPCs**: 187 NPCs, each location circled on the minimap.
-- **Calculator**: Classic damage and accuracy formulas, gear pickers (`data/gear.json`, every non-cash weapon and armor item with stats; stats are added to the typed numbers), a skill and skill-level picker, a "Fight a monster" verdict, and a hits-to-kill table.
+- **Calculator**: Classic damage and accuracy formulas, equipment tiles with a search list (`data/gear.json`, every non-cash weapon and armor item with stats; stats are added to the typed numbers), item icons and requirements (`tools/fetch_gear_info.py` → `assets/item`, `data/gear_info.json`), AP auto-assign, a character sheet, best training picks, a skill and skill-level picker, a "Fight a monster" verdict, and a hits-to-kill table.
 - **Skills**: an SP planner for every 1st and 2nd job skill at every level. It saves to the character, and the calculator uses it.
 - **Saved characters**: multiple characters in localStorage, each with its own calc setup, skill plan and quest progress.
   Share build creates a `?build=` link.
@@ -69,7 +69,9 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patche
 
 ## Gotchas learned
 
-- `data/items.json` only has items that drop or are used in quests. Shop-only gear is in `data/gear.json`, so it's in the calculator but has no item page. Arrows and throwing stars have no attack numbers in the game data, so they stay typed in.
+- GitHub Pages lets browsers reuse files for 10 minutes, so a mix of old and new files can break a page right after a push. When `style.css`, `app.js`, `skills.js` or `calc.js` change, raise the `?v=` number on all four in `index.html`.
+- The calculator's sheet (avoid, DEF, HP/MP, AP) and EXP to level use individual facts from NiaDB's formula pages, each linked under the results. Their reuse policy allows that with a link to the exact page, but not crawling or copying whole pages, so read them by hand and never fetch their data files.
+- `data/items.json` only has items that drop or are used in quests. Shop-only gear is in `data/gear.json`, so it's in the calculator but has no item page. Club FM's item list has no attack for throwing stars and arrows, so `tools/fetch_ammo.py` gets it from maplestory.io (`incWAT`) into `data/ammo.json`.
 - The Free Market's 20 numbered rooms are left out on purpose (`FREE_MARKET_ROOM` in `tools/build_data.py`, and their minimaps are removed in the workflow). Only Free Market Entrance stays, because it has four NPCs and two quests start there. The site has no market prices either.
 - Map art is only fetched once per map and comes from MCW v1 (launch v1.0.0), so a patch that changes a map's look won't show until its `assets/map-art` file is deleted and fetched again.
 - Test map clicks with a real mouse, not a simulated click event: moving a world map node during hover once swallowed every real click, and simulated clicks didn't show it.

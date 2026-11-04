@@ -2,6 +2,7 @@
 // Damage formulas: community-datamined Classic formulas (NiaMeowDB, FullBoosts, MS-Classic agree),
 // with an optional MapleClassic Wiki variant for physical hits.
 // Accuracy / hit chance: NiaMeowDB and MS-Classic (they match).
+// Avoid, defense, HP/MP, AP and EXP to level: NiaDB's formula pages (linked under the results).
 // Skill presets: max-level values, each read from its own NiaDB skill page (linked).
 // Loaded after app.js; uses its helpers (db, idx, $, esc, fmt, link, sprite, getEntity).
 
@@ -9,6 +10,15 @@ const NIADB = "https://meowdb.com/msclassic/skills/";
 
 // Weapon multipliers (Classic): [swing, stab]; ranged weapons shoot at 2.5.
 const WEAPONS = {
+  Beginner: {
+    "1H Sword": { mult: [1.8, 1.8], stats: ["STR", "DEX"] },
+    "1H Axe": { mult: [2.4, 1.2], stats: ["STR", "DEX"] },
+    "1H Blunt": { mult: [2.4, 1.2], stats: ["STR", "DEX"] },
+    "2H Sword": { mult: [2.5, 2.5], stats: ["STR", "DEX"] },
+    "Spear": { mult: [1.5, 3.5], stats: ["STR", "DEX"] },
+    "Dagger": { mult: [1.0, 2.0], stats: ["LUK", "STR+DEX"] },
+    "Wand": { mult: [1.8, 1.8], stats: ["STR", "DEX"] },
+  },
   Warrior: {
     "1H Sword": { mult: [1.8, 1.8], stats: ["STR", "DEX"] },
     "2H Sword": { mult: [2.5, 2.5], stats: ["STR", "DEX"] },
@@ -19,7 +29,8 @@ const WEAPONS = {
     "Spear": { mult: [1.5, 3.5], stats: ["STR", "DEX"] },
     "Polearm": { mult: [3.5, 1.5], stats: ["STR", "DEX"] },
   },
-  Magician: { "Wand": { magic: true }, "Staff": { magic: true } },
+  // magic: casts spells; a regular attack is still a physical hit with the weapon
+  Magician: { "Wand": { magic: true, mult: [1.8, 1.8], stats: ["STR", "DEX"] }, "Staff": { magic: true, mult: [1.8, 1.8], stats: ["STR", "DEX"] } },
   Bowman: {
     "Bow": { shoot: 2.5, stats: ["DEX", "STR"] },
     "Crossbow": { shoot: 2.5, stats: ["DEX", "STR"] },
@@ -29,7 +40,7 @@ const WEAPONS = {
     "Dagger": { mult: [1.0, 2.0], stats: ["LUK", "STR+DEX"] },
   },
 };
-const CLASS_ICON = { Warrior: "⚔️", Magician: "🔮", Bowman: "🏹", Thief: "🗡️" };
+const CLASS_ICON = { Beginner: "🍃", Warrior: "⚔️", Magician: "🔮", Bowman: "🏹", Thief: "🗡️" };
 
 // Attack skills at max level (NiaDB skill pages, checked 2026-11-03).
 // pct = damage % (spell power for magic), hits per use, mobs = targets, weapons = which weapons can use it.
@@ -64,7 +75,7 @@ const ELEMENTS = ["None", "Fire", "Ice", "Lightning", "Poison", "Holy"];
 const DEFAULTS = {
   cls: "Warrior", weapon: "1H Sword", motion: "avg", level: 30, STR: 132, DEX: 30, INT: 4, LUK: 4,
   watk: 47, matk: 0, ap: 0, mastery: 0, skillId: "basic", skill: 100, hits: 1, crit: 5, critdmg: 20,
-  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {},
+  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {}, mobSort: "level",
 };
 
 // The calculator edits the active saved character (see app.js). A shared build link
@@ -83,7 +94,7 @@ function loadCalcFromChar() {
 }
 
 // ---------- shareable builds ----------
-const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear"].includes(k));
+const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear", "mobSort"].includes(k));
 function encodeBuild(name) {
   const o = { n: name };
   for (const k of BUILD_KEYS) if (calc[k] !== DEFAULTS[k]) o[k] = calc[k];
@@ -231,15 +242,20 @@ function masterySkill() { return hasSkillData() ? classSkill(MASTERY_SKILL[calc.
 
 // ---------- gear ----------
 // Picked items are added to what's typed in, so the typed numbers stay as they are if the gear changes.
-const CLASS_BIT = { Warrior: 1, Magician: 2, Bowman: 4, Thief: 8 };
-const ARMOR_SLOTS = [["hat", "Hat"], ["top", "Top"], ["bottom", "Bottom"], ["overall", "Overall"], ["shoes", "Shoes"], ["gloves", "Gloves"], ["cape", "Cape"], ["earrings", "Earrings"], ["shield", "Shield"]];
+const CLASS_BIT = { Beginner: 0, Warrior: 1, Magician: 2, Bowman: 4, Thief: 8 };
+const ARMOR_TILES = [["hat", "Hat", "🎩"], ["top", "Top / Overall", "👕"], ["bottom", "Bottom", "👖"], ["shoes", "Shoes", "👟"], ["gloves", "Gloves", "🧤"], ["cape", "Cape", "🧥"], ["earrings", "Earrings", "💎"], ["shield", "Shield", "🛡️"]];
 const NO_SHIELD = new Set(["2H Sword", "2H Axe", "2H Blunt", "Spear", "Polearm", "Bow", "Crossbow", "Claw"]);
 const GEAR_FIELD = { STR: "STR", DEX: "DEX", INT: "INT", LUK: "LUK", ATT: "watk", MATT: "matk", ACC: "accExtra", CRIT: "crit", CRITDMG: "critdmg" };
-const GEAR_LABEL = { ATT: "ATT", MATT: "Magic ATT", ACC: "accuracy", CRIT: "crit rate", CRITDMG: "crit damage" };
-let armorOpen = false;
+const GEAR_LABEL = { ATT: "ATT", MATT: "Magic ATT", ACC: "accuracy", CRIT: "crit rate", CRITDMG: "crit damage", WDEF: "weapon DEF", MDEF: "magic DEF", AVOID: "avoid", SPEED: "speed", JUMP: "jump" };
+const AMMO_LABEL = { Claw: "Throwing stars", Bow: "Arrows", Crossbow: "Arrows" };
+// [main stat, second stat] for auto-assign; the rest of the AP goes to the main stat
+const MAIN_STATS = { Beginner: ["STR", "DEX"], Warrior: ["STR", "DEX"], Magician: ["INT", "LUK"], Bowman: ["DEX", "STR"], Thief: ["LUK", "DEX"] };
+const picker = { slot: null, mine: false };
 
 function gearFor(c, slot) {
-  return (db.gear || []).filter((g) => g.slot === slot && (slot === "weapon" ? g.weapon === c.weapon : !g.job || g.job & CLASS_BIT[c.cls]));
+  if (slot === "ammo") return (db.ammo || []).filter((a) => a.weapon === c.weapon);
+  const bit = CLASS_BIT[c.cls];
+  return (db.gear || []).filter((g) => g.slot === slot && (slot !== "weapon" || g.weapon === c.weapon) && (!g.job || g.job & bit));
 }
 function wornGear(c) {
   return Object.entries(c.gear).flatMap(([slot, gid]) => {
@@ -248,43 +264,174 @@ function wornGear(c) {
     return it ? [it] : [];
   });
 }
-function withGear(c) {
-  const total = { ...c };
-  for (const it of wornGear(c)) for (const [k, v] of Object.entries(it.stats)) total[GEAR_FIELD[k]] += v;
+function gearTotals(c) {
+  const total = {};
+  for (const it of wornGear(c)) for (const [k, v] of Object.entries(it.stats)) total[k] = (total[k] || 0) + v;
   return total;
 }
-function gearStatText(stats, magic) {
-  return Object.entries(stats).filter(([k]) => !(magic && k === "ATT")).map(([k, v]) => `${v > 0 ? "+" : ""}${v}${/CRIT/.test(k) ? "%" : ""} ${GEAR_LABEL[k] || k}`).join(", ");
+function withGear(c) {
+  const total = { ...c };
+  for (const [k, v] of Object.entries(gearTotals(c))) if (GEAR_FIELD[k]) total[GEAR_FIELD[k]] += v;
+  return total;
 }
-function gearSelect(slot, label) {
-  const magic = !!WEAPONS[calc.cls][calc.weapon].magic;
-  const opts = gearFor(calc, slot).map((g) => {
-    const stats = gearStatText(g.stats, magic);
-    return `<option value="${g.gid}" ${calc.gear[slot] === g.gid ? "selected" : ""}>Lv ${g.level} · ${esc(g.name)}${stats ? ` (${esc(stats)})` : ""}</option>`;
-  }).join("");
-  return `<label class="cf full"><span>${label}</span><select data-slot="${slot}"><option value="">None</option>${opts}</select></label>`;
+function gearStatText(it) {
+  const spellWeapon = it.slot === "weapon" && WEAPONS[calc.cls][calc.weapon].magic;
+  return Object.entries(it.stats).filter(([k]) => !(spellWeapon && k === "ATT"))
+    .map(([k, v]) => `${v > 0 ? "+" : ""}${v}${/CRIT/.test(k) ? "%" : ""} ${GEAR_LABEL[k] || k}`).join(", ");
+}
+// what's stopping this item being worn, counting stats from the other gear too
+function gearNeeds(it, total) {
+  const needs = [];
+  if (it.level > total.level) needs.push(`Lv ${it.level}`);
+  const req = db.gear_info?.[it.gid] || {};
+  for (const k of ["STR", "DEX", "INT", "LUK"]) if (req[k] > total[k]) needs.push(`${req[k]} ${k}`);
+  return needs;
+}
+const itemIcon = (gid) => `<img src="assets/item/${gid}.png" alt="" loading="lazy" onerror="this.remove()">`;
+
+function wornIn(slot) {
+  const id = (s) => calc.gear[s] && gearFor(calc, s).find((g) => g.gid === calc.gear[s]);
+  return slot === "top" ? id("overall") || id("top") : id(slot);
+}
+function gearTile(slot, label, glyph, wide = false) {
+  const it = wornIn(slot);
+  const covered = slot === "bottom" && calc.gear.overall;
+  return `<button type="button" class="cx-tile ${it ? "on" : ""} ${wide ? "wide" : ""}" data-tile="${slot}" aria-expanded="${picker.slot === slot}" ${covered ? "disabled" : ""}>
+    <span class="cx-ico">${it ? itemIcon(it.gid) : `<i>${glyph}</i>`}</span>
+    <span class="cx-tile-text"><small>${esc(label)}</small><b>${it ? esc(it.name) : covered ? "Covered by overall" : "Empty"}</b>
+      ${it ? `<em>${esc(gearStatText(it))}</em>` : ""}<strong class="t-need"></strong></span></button>`;
 }
 function setGear(slot, gid) {
   const g = { ...calc.gear };
   if (gid) g[slot] = gid; else delete g[slot];
+  if (!gid && slot === "top") delete g.overall;
   if (gid && slot === "overall") { delete g.top; delete g.bottom; }
   if (gid && (slot === "top" || slot === "bottom")) delete g.overall;
   // the attack typed so far was standing in for a weapon, so the real one replaces it
   if (gid && slot === "weapon" && !calc.gear.weapon) { calc.watk = 0; calc.matk = 0; }
   calc.gear = g;
+  picker.slot = null;
   saveCalc();
   renderCalc();
-  $(`[data-slot="${slot}"]`)?.focus({ preventScroll: true });
+  const tile = $(`[data-tile="${slot === "overall" ? "top" : slot}"]`);
+  tile?.focus({ preventScroll: true });
+  tile?.scrollIntoView({ block: "nearest" });
 }
-function gearNote() {
-  const magic = !!WEAPONS[calc.cls][calc.weapon].magic;
-  const worn = wornGear(calc);
-  const total = {};
-  for (const it of worn) for (const [k, v] of Object.entries(it.stats)) total[k] = (total[k] || 0) + v;
-  const stats = gearStatText(total, magic);
-  const tooHigh = worn.filter((g) => g.level > calc.level).map((g) => `${esc(g.name)} needs level ${g.level}.`).join(" ");
-  const noAttack = !calc.gear.weapon && !(magic ? calc.matk : calc.watk) ? "Pick your weapon, or type its attack under Attack." : "";
-  return [stats && `Gear adds ${esc(stats)}.`, tooHigh, noAttack].filter(Boolean).join(" ");
+function pickerItems(slot) {
+  const list = slot === "top" ? [...gearFor(calc, "top"), ...gearFor(calc, "overall")] : gearFor(calc, slot);
+  return list.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+}
+function renderPickerList() {
+  const q = ($("#gpSearch")?.value || "").trim().toLowerCase();
+  const total = withGear(calc);
+  const current = wornIn(picker.slot);
+  const rows = pickerItems(picker.slot).filter((g) => (!q || g.name.toLowerCase().includes(q)) && (!picker.mine || g.level <= calc.level));
+  $("#gpList").innerHTML = (current ? `<button type="button" class="cx-pick-row clear" data-gid="" data-real="${picker.slot}"><span class="cx-ico"><i>✕</i></span><span><b>Take it off</b></span></button>` : "") +
+    (rows.map((g) => {
+      const needs = gearNeeds(g, total);
+      return `<button type="button" class="cx-pick-row ${current?.gid === g.gid ? "on" : ""}" data-gid="${g.gid}" data-real="${g.slot}">
+        <span class="cx-ico">${itemIcon(g.gid)}</span>
+        <span><b>${esc(g.name)}</b><small>${g.level ? `Lv ${g.level}` : "No level needed"}${g.stats && gearStatText(g) ? ` · ${esc(gearStatText(g))}` : ""}</small>${needs.length ? `<strong>Needs ${esc(needs.join(", "))}</strong>` : ""}</span></button>`;
+    }).join("") || `<p class="sub empty">Nothing matches.</p>`);
+}
+function renderPicker() {
+  const box = $("#gearPicker");
+  if (!box) return;
+  document.querySelectorAll("[data-tile]").forEach((t) => {
+    const on = t.dataset.tile === picker.slot;
+    t.classList.toggle("open", on);
+    t.setAttribute("aria-expanded", on);
+  });
+  box.hidden = !picker.slot;
+  if (!picker.slot) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="cx-pick-head">
+      <input id="gpSearch" type="search" placeholder="Search items…" autocomplete="off" aria-label="Search items">
+      <label class="check"><input id="gpMine" type="checkbox" ${picker.mine ? "checked" : ""}> Up to my level</label>
+      <button type="button" class="cx-pick-close" id="gpClose" aria-label="Close">✕</button>
+    </div><div class="cx-pick-list" id="gpList"></div>`;
+  renderPickerList();
+  $("#gpSearch").addEventListener("input", renderPickerList);
+  $("#gpMine").addEventListener("change", (e) => { picker.mine = e.target.checked; renderPickerList(); });
+  $("#gpClose").addEventListener("click", () => closePicker());
+  $("#gpList").addEventListener("click", (e) => {
+    const row = e.target.closest("[data-gid]");
+    if (row) setGear(row.dataset.real, Number(row.dataset.gid) || 0);
+  });
+  box.addEventListener("keydown", (e) => { if (e.key === "Escape") closePicker(); });
+  box.scrollIntoView({ block: "nearest" });
+  // no keyboard popping up on phones until someone taps the search box
+  if (!isPhone()) $("#gpSearch").focus({ preventScroll: true });
+}
+function closePicker() {
+  const slot = picker.slot;
+  picker.slot = null;
+  renderPicker();
+  $(`[data-tile="${slot}"]`)?.focus({ preventScroll: true });
+}
+
+// ---------- stats that come from the character sheet ----------
+const AP_AT = (level) => 25 + 5 * (level - 1);
+const GROWTH = { Warrior: [28, 12, 350, 150], Bowman: [22, 17, 250, 250], Thief: [22, 17, 250, 250], Magician: [16, 22, 150, 350] };
+function baseHpMp(cls, level) {
+  if (!GROWTH[cls]) return [50 + 16 * (level - 1), 5 + 12 * (level - 1)];
+  const [hpL, mpL, hpA, mpA] = GROWTH[cls];
+  const b = Math.min(level, 10) - 1, n = Math.max(0, level - 10), a = level >= 30 ? 2 : 1;
+  return [50 + 16 * b + hpA * a + hpL * n, 5 + 12 * b + mpA * a + mpL * n];
+}
+function expToNext(level) {
+  if (level <= 5) return (Math.floor(level * level / 2) + 15) * level;
+  if (level <= 50) { const q = Math.floor(level * level / 3); return (q + 19) * q; }
+  return Math.trunc(expToNext(level - 1) * (level <= 89 ? 1.0548 : 2.1));
+}
+function sheet(c) {
+  const g = gearTotals(calc);
+  const [hp, mp] = baseHpMp(c.cls, c.level);
+  return {
+    hp: Math.trunc(hp * (1 + (c.cls === "Warrior" ? passive("Max HP Increase", "mhpR") : 0) / 100)) + (g.HP || 0),
+    mp: Math.trunc(mp * (1 + (c.cls === "Magician" ? passive("Max MP Increase", "mmpR") : 0) / 100)) + (g.MP || 0),
+    wdef: Math.floor(c.STR / 4) + (g.WDEF || 0),
+    mdef: Math.floor(c.INT / 4) + (g.MDEF || 0),
+    avoid: Math.floor(c.LUK / 3) + Math.floor(c.DEX / 6) + 5 + (g.AVOID || 0),
+    magic: Math.floor(c.INT / 2) + c.matk,
+    speed: g.SPEED || 0,
+    jump: g.JUMP || 0,
+  };
+}
+function autoAssign() {
+  const [main] = MAIN_STATS[calc.cls];
+  const bonus = gearTotals(calc);
+  const base = { STR: 4, DEX: 4, INT: 4, LUK: 4 };
+  for (const it of wornGear(calc)) {
+    const req = db.gear_info?.[it.gid] || {};
+    for (const k of Object.keys(base)) base[k] = Math.max(base[k], (req[k] || 0) - (bonus[k] || 0));
+  }
+  base[main] += Math.max(0, AP_AT(calc.level) - Object.values(base).reduce((a, b) => a + b, 0));
+  Object.assign(calc, base);
+  saveCalc();
+  renderCalc();
+}
+// the parts of the form that follow the level and stats
+function refreshBuild() {
+  const total = withGear(calc);
+  const worn = (slot) => wornIn(slot);
+  document.querySelectorAll("[data-tile]").forEach((t) => {
+    const it = worn(t.dataset.tile);
+    const needs = it ? gearNeeds(it, total) : [];
+    t.classList.toggle("warn", needs.length > 0);
+    t.querySelector(".t-need").textContent = needs.length ? `Needs ${needs.join(", ")}` : "";
+  });
+  const weaponless = !calc.gear.weapon && !(isSpell(calc) ? calc.matk : calc.watk);
+  $("#gearNote").textContent = weaponless ? "Pick your weapon, or type its attack under Attack." : "";
+  const used = calc.STR + calc.DEX + calc.INT + calc.LUK, all = AP_AT(calc.level);
+  const hasGear = wornGear(calc).length > 0;
+  $("#apBar").style.width = `${Math.min(100, (used / all) * 100)}%`;
+  $("#apBar").classList.toggle("over", used > all && hasGear);
+  $("#apText").innerHTML = `<b>${used}</b> of ${all} AP at level ${calc.level}`;
+  $("#apHint").textContent = used > all
+    ? (hasGear ? `${used - all} AP over. Quest rewards or scrolls can explain a little of that.` : "That's more than your AP, so it must include your gear. That's fine if you haven't picked any.")
+    : used < all ? `${all - used} AP left to spend.` : "All your AP is spent.";
+  const slider = $("#levelR");
+  if (slider && Number(slider.value) !== calc.level) slider.value = calc.level;
 }
 
 // ---------- damage math ----------
@@ -301,16 +448,19 @@ function critRate(c) {
 }
 // physical mastery comes from the planned level of the weapon's Mastery skill
 function physMastery(c) {
+  if (WEAPONS[c.cls][c.weapon].magic) return 0; // no mastery skill for a wand or staff's physical hit
   const ms = masterySkill();
   if (!ms) return c.mastery;
   return skillAt(ms, planLevel(ms.id)).mastery || 0;
 }
 
+function isSpell(c) { return !!WEAPONS[c.cls][c.weapon].magic && c.skillId !== "basic"; }
+
 function rawRange(c) {
   const sk = currentSkill();
   const S = c.skill / 100;
   const w = WEAPONS[c.cls][c.weapon];
-  if (w.magic) {
+  if (isSpell(c)) {
     const m = masteryFactor(c.mastery, "majority");
     const total = Math.floor(c.INT / 2) + c.matk;
     return { min: S * total * (1 + (c.INT * m) / 125), max: S * total * (1 + c.INT / 125), magic: true };
@@ -357,7 +507,7 @@ function vsMonster(r, c, mob) {
 function accuracy(c) {
   const common = 1.2 * c.DEX + 2 * c.level + 0.6 * c.LUK;
   const base = {
-    Warrior: common / 2.5 + 10, Bowman: common / 4.8 + 20, Thief: common / 4 + 15,
+    Beginner: common / 2.5 + 5, Warrior: common / 2.5 + 10, Bowman: common / 4.8 + 20, Thief: common / 4 + 15,
     Magician: (1.2 * c.INT + 2 * c.level + 0.6 * c.LUK) / 5.1 + 20,
   }[c.cls];
   if (hasSkillData()) {
@@ -423,7 +573,7 @@ function calcMonsters() {
 
 function applySkill() {
   const sk = currentSkill();
-  if (!sk) { if (calc.skillId === "basic") { calc.skill = 100; calc.hits = 1; } return; }
+  if (!sk) { if (calc.skillId === "basic") { calc.skill = 100; calc.hits = 1; calc.element = "None"; } return; }
   if (sk.levels) {
     const l = skillAt(sk, usedLevel(sk));
     calc.skill = l.damage || l.mad || 100;
@@ -440,8 +590,7 @@ function applySkill() {
 function renderCalc() {
   const view = $("#calcView");
   if (!WEAPONS[calc.cls][calc.weapon]) calc.weapon = Object.keys(WEAPONS[calc.cls])[0];
-  const badBasic = calc.skillId === "basic" && WEAPONS[calc.cls][calc.weapon].magic;
-  if (badBasic || (calc.skillId !== "basic" && calc.skillId !== "custom" && !skillsForWeapon().some((s) => String(s.id) === String(calc.skillId)))) {
+  if (calc.skillId !== "basic" && calc.skillId !== "custom" && !skillsForWeapon().some((s) => String(s.id) === String(calc.skillId))) {
     calc.skillId = defaultSkill();
     applySkill();
   }
@@ -450,41 +599,49 @@ function renderCalc() {
   for (const [slot, gid] of Object.entries(calc.gear)) if (gearFor(calc, slot).some((g) => g.gid === gid)) wearable[slot] = gid;
   calc.gear = wearable;
   const w = WEAPONS[calc.cls][calc.weapon];
-  const magic = !!w.magic;
+  const magic = isSpell(calc);
   const sk = currentSkill();
   const hasGear = wornGear(calc).length > 0;
-  const armor = ARMOR_SLOTS.filter(([slot]) => !(slot === "shield" && NO_SHIELD.has(calc.weapon)));
-  const skillOpts = [...(magic ? [] : [["basic", "Regular attack (100%)"]]),
+  const armor = ARMOR_TILES.filter(([slot]) => !(slot === "shield" && NO_SHIELD.has(calc.weapon)));
+  const skillOpts = [["basic", w.magic ? "Regular attack (physical hit)" : "Regular attack (100%)"],
     ...skillsForWeapon().map((s) => [s.id, s.levels ? `${s.name}${s.jobName !== calc.cls ? ` · ${s.jobName.replace(/^Wizard \((.+)\)$/, "$1")}` : ""}` : `${s.name} · Lv ${s.lv}${s.pct != null ? ` · ${s.pct}%${s.hits > 1 ? ` ×${s.hits}` : ""}` : ""}`]),
     ["custom", "Custom (type the % yourself)"]];
   const ms = masterySkill();
   const mobs = calcMonsters();
   view.innerHTML = `
-    <section class="calc-hero">
-      <div>
-        <h2>Damage calculator</h2>
-        <p>Enter your character, pick a skill, and see your damage, your hit chance, and how many hits every monster takes. Uses Classic World's own formulas.</p>
-      </div>
-      <div class="class-pick" role="radiogroup" aria-label="Class">
-        ${Object.keys(WEAPONS).map((k) => `<button type="button" class="class-btn ${calc.cls === k ? "on" : ""}" data-cls="${k}" role="radio" aria-checked="${calc.cls === k}"><span>${CLASS_ICON[k]}</span>${k}</button>`).join("")}
+    <section class="cx-intro">
+      <div><h2>Damage calculator</h2>
+        <p>Build your character, wear your gear, and see what you can fight.</p></div>
+      <div class="cx-jobs" role="radiogroup" aria-label="Class">
+        ${Object.keys(WEAPONS).map((k) => `<button type="button" class="cx-job ${calc.cls === k ? "on" : ""}" data-cls="${k}" role="radio" aria-checked="${calc.cls === k}"><span>${CLASS_ICON[k]}</span>${k}</button>`).join("")}
       </div>
     </section>
     ${charBar()}
     <div class="calc-grid">
       <form class="calc-form" onsubmit="return false">
-        <fieldset><legend>Character</legend>
-          ${sel("weapon", "Weapon type", Object.keys(WEAPONS[calc.cls]).map((k) => [k, k]), false)}
-          ${num("level", "Level", 1, 200)}
-          ${db.gear?.length ? gearSelect("weapon", "Weapon") : ""}
-          ${w.mult && !sk?.motion ? sel("motion", "Attack motion", [["avg", "Average (60% swing / 40% stab)"], ["swing", "Swing"], ["stab", "Stab"]]) : ""}
-          <p class="cf-note full" id="gearNote"></p>
+        <fieldset><legend>Level</legend>
+          <div class="cx-level full">
+            <input type="range" id="levelR" min="1" max="120" value="${Math.min(calc.level, 120)}" aria-label="Level slider">
+            ${num("level", "Level", 1, 200)}
+          </div>
         </fieldset>
-        ${db.gear?.length ? `<details class="calc-more" id="armorMore" ${armorOpen || armor.some(([slot]) => calc.gear[slot]) ? "open" : ""}><summary>Armor &amp; accessories</summary>
-          <fieldset>${armor.map(([slot, label]) => gearSelect(slot, label)).join("")}</fieldset>
-        </details>` : ""}
-        <fieldset><legend>${hasGear ? "Base stats (without gear)" : "Total stats (with gear)"}</legend>
+        ${db.gear?.length ? `<section class="cx-gear" aria-label="Equipment">
+          <h3>Equipment</h3>
+          <div class="cx-tiles">
+            ${sel("weapon", "Weapon type", Object.keys(WEAPONS[calc.cls]).map((k) => [k, k]))}
+            ${gearTile("weapon", "Weapon", "⚔️", true)}
+            ${AMMO_LABEL[calc.weapon] && db.ammo?.length ? gearTile("ammo", AMMO_LABEL[calc.weapon], "🎯", true) : ""}
+            ${armor.map(([slot, label, glyph]) => gearTile(slot, label, glyph)).join("")}
+          </div>
+          <div id="gearPicker" class="cx-picker" hidden></div>
+          <p class="cf-note" id="gearNote"></p>
+        </section>` : `<fieldset><legend>Weapon</legend>${sel("weapon", "Weapon type", Object.keys(WEAPONS[calc.cls]).map((k) => [k, k]))}<p class="cf-note full" id="gearNote"></p></fieldset>`}
+        ${w.mult && w.mult[0] !== w.mult[1] && !sk?.rule?.motion && !sk?.motion ? `<fieldset><legend>Attack motion</legend>${sel("motion", "Swing or stab", [["avg", "Average (60% swing / 40% stab)"], ["swing", "Swing"], ["stab", "Stab"]])}</fieldset>` : ""}
+        <fieldset><legend>${hasGear ? "Base stats (without gear)" : "Stats"}</legend>
+          <div class="cx-ap full"><div class="cx-ap-top"><span id="apText"></span><button type="button" class="cx-auto" id="apAuto">Auto-assign</button></div>
+            <div class="cx-ap-track"><div id="apBar"></div></div><small id="apHint"></small></div>
           ${num("STR", "STR")}${num("DEX", "DEX")}${num("INT", "INT")}${num("LUK", "LUK")}
-          <p class="cf-note full">${hasGear ? "The gear you picked is added to these for you." : "If you pick your gear above, enter your stats without it instead."}</p>
+          <p class="cf-note full">${hasGear ? "The gear you picked is added to these for you." : "Pick your gear above and enter your stats without it, or leave it empty and enter your totals."}</p>
         </fieldset>
         <fieldset><legend>Skill</legend>
           ${sel("skillId", "Skill", skillOpts)}
@@ -495,9 +652,9 @@ function renderCalc() {
           ${sk?.mobs > 1 ? `<p class="cf-note full">Hits up to ${sk.mobs} monsters at once.</p>` : ""}
         </fieldset>
         <fieldset><legend>Attack</legend>
-          ${magic ? num("matk", "Magic Attack", 0, 9999, hasGear ? "On top of your gear: scrolls and buffs" : "Wand/staff + gear (not INT)") : num("watk", "Weapon Attack", 0, 9999, hasGear ? (calc.weapon === "Claw" ? "On top of your gear: stars, scrolls and buffs" : calc.cls === "Bowman" ? "On top of your gear: arrows, scrolls and buffs" : "On top of your gear: scrolls and buffs") : calc.weapon === "Claw" ? "Claw + gloves + stars" : calc.cls === "Bowman" ? "Bow/crossbow + gear + arrows" : "Weapon + gloves + gear")}
+          ${magic ? num("matk", "Magic Attack", 0, 9999, hasGear ? "On top of your gear: scrolls and buffs" : "Wand/staff + gear (not INT)") : num("watk", "Weapon Attack", 0, 9999, hasGear ? "On top of your gear: scrolls and buffs" : calc.weapon === "Claw" ? "Claw + gloves + stars" : calc.cls === "Bowman" ? "Bow/crossbow + gear + arrows" : "Weapon + gloves + gear")}
           ${!magic && ms ? `<label class="cf"><span>${esc(ms.name)} level</span><input type="number" id="c_msLv" min="0" max="${ms.max}" value="${planLevel(ms.id)}" inputmode="numeric"><small>0–${ms.max} · mastery ${physMastery(calc)}, +${skillAt(ms, planLevel(ms.id)).x || 0} accuracy</small></label>`
-            : num("mastery", magic ? "Spell mastery" : "Mastery", 0, 10, magic ? "0–10. Set by the spell's level" : "0–10. Mastery skill level ÷ 2")}
+            : w.magic && !magic ? "" : num("mastery", magic ? "Spell mastery" : "Mastery", 0, 10, magic ? "0–10. Set by the spell's level" : "0–10. Mastery skill level ÷ 2")}
           ${magic ? "" : num("ap", "Attack Power", 0, 999, "Other buffs / consumables")}
           ${num("accExtra", "Bonus accuracy", 0, 999, hasGear ? "On top of your gear and skills" : "From gear and skills")}
           ${hasSkillData() ? buffInputs() : calc.cls === "Warrior" ? chk("rage", "Rage (Fighter)", "+40 Attack Power at max level") + chk("precise", "Precise Strikes (max)", "+20 accuracy, +5% crit rate") : ""}
@@ -512,6 +669,7 @@ function renderCalc() {
       </form>
       <div class="calc-out">
         <div id="calcSummary"></div>
+        <section class="calc-card" id="calcSheet"></section>
         <section class="calc-card">
           <div class="card-head"><h3>Fight a monster</h3>
             <select id="c_target" aria-label="Pick a monster"><option value="">Pick a monster…</option>
@@ -519,8 +677,12 @@ function renderCalc() {
             </select></div>
           <div id="calcMatch"></div>
         </section>
+        <section class="calc-card" id="calcBest"></section>
         <section class="calc-card" id="calcMatchCard">
           <div class="card-head"><h3>Every monster</h3>
+            <select id="c_mobSort" aria-label="Sort monsters">
+              ${[["level", "By level"], ["exp", "Most EXP per attack"], ["fast", "Fewest attacks"]].map(([v, t]) => `<option value="${v}" ${calc.mobSort === v ? "selected" : ""}>${t}</option>`).join("")}
+            </select>
             <label class="check"><input type="checkbox" id="c_near" ${calc.near ? "checked" : ""}> Near my level only</label></div>
           <div id="calcTable"></div>
         </section>
@@ -529,8 +691,17 @@ function renderCalc() {
     <button type="button" id="calcBar" class="calc-bar" aria-label="Jump to results"></button>`;
 
   bindCharBar();
-  view.querySelectorAll("[data-slot]").forEach((el) => el.addEventListener("change", () => setGear(el.dataset.slot, Number(el.value) || 0)));
-  $("#armorMore")?.addEventListener("toggle", (e) => { armorOpen = e.target.open; });
+  view.querySelectorAll("[data-tile]").forEach((t) => t.addEventListener("click", () => {
+    picker.slot = picker.slot === t.dataset.tile ? null : t.dataset.tile;
+    renderPicker();
+  }));
+  $("#apAuto").addEventListener("click", autoAssign);
+  $("#levelR").addEventListener("input", (e) => {
+    calc.level = Number(e.target.value);
+    $("#c_level").value = calc.level;
+    saveCalc();
+    renderCalcOut();
+  });
   view.querySelectorAll("[data-plan]").forEach((el) => el.addEventListener("input", () => {
     setPlanLevel(Number(el.dataset.plan), Number(el.value) || 0); renderCalcOut();
     const hint = el.parentElement.querySelector("small[data-desc]"); const s = SK.byId[Number(el.dataset.plan)];
@@ -540,14 +711,15 @@ function renderCalc() {
   if (skLv) skLv.addEventListener("input", () => { const s = currentSkill(); setPlanLevel(s.id, Number(skLv.value) || 1); applySkill(); saveCalc(); renderCalc(); });
   const msLv = $("#c_msLv");
   if (msLv) msLv.addEventListener("input", () => { setPlanLevel(masterySkill().id, Number(msLv.value) || 0); renderCalcOut(); msLv.parentElement.querySelector("small").textContent = `0–${masterySkill().max} · mastery ${physMastery(calc)}, +${skillAt(masterySkill(), planLevel(masterySkill().id)).x || 0} accuracy`; });
-  view.querySelectorAll(".class-btn").forEach((b) => b.addEventListener("click", () => {
+  view.querySelectorAll(".cx-job").forEach((b) => b.addEventListener("click", () => {
     calc.cls = b.dataset.cls;
     calc.weapon = Object.keys(WEAPONS[calc.cls])[0];
     calc.skillId = defaultSkill();
     applySkill();
+    picker.slot = null;
     saveCalc(); renderCalc();
   }));
-  view.querySelectorAll(".calc-form input:not([data-plan]):not(#c_skLv):not(#c_msLv), .calc-form select:not([data-slot]), #c_target, #c_near").forEach((el) => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
+  view.querySelectorAll(".calc-form input:not([data-plan]):not(#c_skLv):not(#c_msLv):not(#levelR), .calc-form select, #c_target, #c_near, #c_mobSort").forEach((el) => el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
     const id = el.id.slice(2);
     calc[id] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : Number(el.value) || 0;
     if (id === "skillId") applySkill();
@@ -555,13 +727,14 @@ function renderCalc() {
     saveCalc();
     if (["weapon", "skillId"].includes(id)) renderCalc(); else renderCalcOut();
   }));
+  renderPicker();
   renderCalcOut();
 }
 
 function defaultSkill() {
   if (!WEAPONS[calc.cls][calc.weapon].magic) return "basic";
   const first = skillsForWeapon()[0];
-  return first ? String(first.id) : "custom";
+  return first ? String(first.id) : "basic";
 }
 
 function buffInputs() {
@@ -578,25 +751,47 @@ function verdictBadge(v) { return `<span class="verdict ${v[0]}">${v[1]}</span>`
 
 function renderCalcOut() {
   const c = withGear(calc);
-  $("#gearNote").textContent = gearNote();
+  refreshBuild();
   const r = rawRange(c);
   const acc = accuracy(c);
   const cr = critRate(c);
   const avgRaw = ((r.min + r.max) / 2) * (1 + (cr / 100) * (c.critdmg / 100));
   const sk = currentSkill();
   const skillName = sk ? sk.name : c.skillId === "custom" ? `Custom ${c.skill}%` : "Regular attack";
+  const lo = clampDmg(r.min), hi = clampDmg(r.max), top = clampDmg(r.max * (1 + c.critdmg / 100));
+  const pos = (v) => `${Math.max(0, Math.min(100, (v / Math.max(1, top)) * 100)).toFixed(1)}%`;
   $("#calcSummary").innerHTML = `
-    <section class="calc-big">
-      <div class="calc-big-label">${esc(skillName)}${c.hits > 1 ? ` · ${c.hits} hits` : ""}</div>
-      <div class="calc-big-num">${fmt(clampDmg(r.min))}<span>–</span>${fmt(clampDmg(r.max))}</div>
-      <div class="calc-stats">
+    <section class="cx-dmg">
+      <div class="cx-dmg-top"><span>${esc(skillName)}${c.hits > 1 ? ` · ${c.hits} hits` : ""}</span><span>${esc(c.cls)} · Lv ${c.level} · ${esc(c.weapon)}</span></div>
+      <div class="cx-dmg-num">${fmt(lo)}<i>–</i>${fmt(hi)}</div>
+      <div class="cx-range" aria-hidden="true">
+        <div class="cx-range-hit" style="left:${pos(lo)};right:calc(100% - ${pos(hi)})"></div>
+        <div class="cx-range-crit" style="left:${pos(hi)};right:0"></div>
+      </div>
+      <div class="cx-range-labels" aria-hidden="true"><span>0</span><span>max crit ${fmt(top)}</span></div>
+      <div class="cx-dmg-stats">
         <div><b>${fmt(Math.round(avgRaw * c.hits))}</b><span>avg per ${c.hits > 1 ? "use" : "hit"}</span></div>
-        <div><b>${fmt(clampDmg(r.max * (1 + c.critdmg / 100)))}</b><span>max crit</span></div>
         <div><b>${acc}</b><span>accuracy</span></div>
         <div><b>${cr}%</b><span>crit rate</span></div>
+        <div><b>${c.critdmg}%</b><span>crit damage</span></div>
       </div>
       <p>Before monster defense. ${r.magic ? "Spells use INT and Magic Attack." : ""}</p>
     </section>`;
+
+  const fs = sheet(c);
+  const bonus = gearTotals(calc);
+  const stat = (k) => `<div class="cx-stat main"><span>${k}</span><b>${fmt(c[k])}</b>${bonus[k] ? `<small>+${bonus[k]} gear</small>` : ""}</div>`;
+  const line = (label, value) => `<div class="cx-stat"><span>${label}</span><b>${value}</b></div>`;
+  $("#calcSheet").innerHTML = `<div class="card-head"><h3>Character sheet</h3></div>
+    <div class="cx-sheet">
+      ${["STR", "DEX", "INT", "LUK"].map(stat).join("")}
+      ${line("HP", fmt(fs.hp))}${line("MP", fmt(fs.mp))}
+      ${line("Weapon ATT", fmt(c.watk))}${line("Magic", fmt(fs.magic))}
+      ${line("Attack Power", fmt(totalAP(c)))}${line("Avoid", fmt(fs.avoid))}
+      ${line("Weapon DEF", fmt(fs.wdef))}${line("Magic DEF", fmt(fs.mdef))}
+      ${fs.speed ? line("Speed", `+${fs.speed}`) : ""}${fs.jump ? line("Jump", `+${fs.jump}`) : ""}
+    </div>
+    <p class="sub small">From your stats and gear. Most buffs and defense skills aren't counted here.</p>`;
 
   // matchup
   const target = c.target && getEntity("monster", c.target);
@@ -630,22 +825,48 @@ function renderCalcOut() {
     $("#calcMatch").innerHTML = `<p class="sub empty">Pick a monster to see if you can take it on: hits to kill, hit chance and the accuracy you need.</p>`;
   }
 
+  // best training
+  const all = calcMonsters().map((m) => ({ m, mm: matchup(r, c, m) }));
+  const expPer = ({ m, mm }) => (mm.withMiss === Infinity ? 0 : m.exp / mm.withMiss);
+  const best = all.filter((x) => !x.m.boss && x.m.exp > 0 && idx.spawnsOf[x.m.id] && x.mm.p >= 0.6 && x.m.level >= c.level - 20 && x.m.level <= c.level + 15)
+    .sort((a, b) => expPer(b) - expPer(a)).slice(0, 3);
+  const toLevel = expToNext(c.level);
+  $("#calcBest").innerHTML = `<div class="card-head"><h3>Best training for you</h3></div>` + (best.length
+    ? `<div class="cx-best">${best.map(({ m, mm }, i) => {
+        const where = idx.spawnsOf[m.id][0];
+        return `<button type="button" class="cx-best-card" data-pick="${m.id}">
+          <span class="cx-best-rank">${i + 1}</span><span class="cx-best-spr">${sprite(m, 52)}</span>
+          <b>${esc(m.name)}</b><small>Lv ${m.level} · ${mm.uses} ${c.hits > 1 ? "uses" : "hits"} · ${Math.round(mm.p * 100)}% hit</small>
+          <strong>${expPer({ m, mm }).toFixed(1)} EXP per attack</strong>
+          <small>About ${fmt(Math.ceil(toLevel / m.exp))} kills to level ${c.level + 1}</small>
+          <small>${esc(getEntity("map", where.map)?.name || "")} (×${where.count})</small></button>`;
+      }).join("")}</div><p class="sub small">Based on EXP per attack with your current damage and hit chance. Busy maps and attack speed aren't counted.</p>`
+    : `<p class="sub empty">Nothing near your level looks good yet. Try more attack or accuracy.</p>`);
+  $("#calcBest").querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
+    calc.target = b.dataset.pick; saveCalc();
+    $("#c_target").value = calc.target;
+    renderCalcOut();
+    $("#calcMatch").scrollIntoView({ behavior: "smooth", block: "center" });
+  }));
+
   // table
-  const mobs = calcMonsters().filter((m) => !c.near || (m.level >= c.level - 15 && m.level <= c.level + 10) || m.boss);
-  const rows = mobs.map((m) => {
-    const mm = matchup(r, c, m);
+  const sorters = { exp: (a, b) => expPer(b) - expPer(a), fast: (a, b) => a.mm.withMiss - b.mm.withMiss };
+  const shown = all.filter(({ m }) => !c.near || (m.level >= c.level - 15 && m.level <= c.level + 10) || m.boss);
+  if (sorters[c.mobSort]) shown.sort(sorters[c.mobSort]);
+  const rows = shown.map(({ m, mm }) => {
     return `<tr class="pick ${m.id === c.target ? "selected" : ""}" data-pick="${m.id}">
       <td><span class="spr-cell">${sprite(m, 26)}</span>${esc(m.name)}${m.boss ? ' <span class="badge">Boss</span>' : ""}</td>
       <td class="num">${m.level}</td>
       <td class="num wide-only">${fmt(mm.min)}–${fmt(mm.max)}</td>
       <td class="num"><b>${mm.uses}</b></td>
       <td class="num ${mm.p >= 0.99 ? "" : mm.p < 0.5 ? "bad" : "warn"}">${Math.round(mm.p * 100)}%</td>
+      <td class="num">${expPer({ m, mm }).toFixed(1)}</td>
       <td class="num wide-only">${verdictBadge(mm.verdict)}</td></tr>`;
   }).join("");
-  $("#calcTable").innerHTML = `<div class="calc-tablewrap"><table><thead><tr><th>Monster</th><th class="num">Lv</th><th class="num wide-only">Damage</th><th class="num">${c.hits > 1 ? "Uses" : "Hits"}</th><th class="num">Hit %</th><th class="num wide-only">Verdict</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="6" class="sub">No monsters in range.</td></tr>`}</tbody></table></div>
+  $("#calcTable").innerHTML = `<div class="calc-tablewrap"><table><thead><tr><th>Monster</th><th class="num">Lv</th><th class="num wide-only">Damage</th><th class="num">${c.hits > 1 ? "Uses" : "Hits"}</th><th class="num">Hit %</th><th class="num">EXP / attack</th><th class="num wide-only">Verdict</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="7" class="sub">No monsters in range.</td></tr>`}</tbody></table></div>
     <p class="sub small">Tap a row to see the full matchup above. Hits = average needed, with crits. Damage is after the monster's defense${r.magic ? ", element" : ""} and the level-gap penalty.</p>
-    <p class="sub small">Formulas: <a href="https://meowdb.com/msclassic/formulas/damage" target="_blank" rel="noopener">NiaDB</a>, <a href="https://fullboosts.com/blog/maplestory-classic/articles/maplestory-classic-damage-formula-guide" target="_blank" rel="noopener">FullBoosts</a>, <a href="https://ms-classic.com/guides/accuracy-and-hit-rate-explained" target="_blank" rel="noopener">MS-Classic</a>. Skill values: NiaDB skill pages (linked). Monster stats: Classic game files.</p>`;
+    <p class="sub small">Formulas: NiaDB (<a href="https://meowdb.com/msclassic/formulas/damage" target="_blank" rel="noopener">damage</a>, <a href="https://meowdb.com/msclassic/formulas" target="_blank" rel="noopener">stats and accuracy</a>, <a href="https://meowdb.com/msclassic/formulas/leveling" target="_blank" rel="noopener">HP, AP and EXP</a>), <a href="https://fullboosts.com/blog/maplestory-classic/articles/maplestory-classic-damage-formula-guide" target="_blank" rel="noopener">FullBoosts</a>, <a href="https://ms-classic.com/guides/accuracy-and-hit-rate-explained" target="_blank" rel="noopener">MS-Classic</a>. Skill values: NiaDB skill pages (linked). Monster stats, items and requirements: Classic game files.</p>`;
   $("#calcTable").querySelectorAll("tr[data-pick]").forEach((tr) => tr.addEventListener("click", (e) => {
     calc.target = tr.dataset.pick; saveCalc();
     $("#c_target").value = calc.target;

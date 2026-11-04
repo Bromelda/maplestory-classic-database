@@ -58,6 +58,14 @@ jobs:
         continue-on-error: true
         run: python3 tools/fetch_map_art.py
 
+      - name: Get throwing stars and arrows
+        continue-on-error: true
+        run: python3 tools/fetch_ammo.py "$RUNNER_TEMP/fm/data/itemdb.json"
+
+      - name: Get icons and requirements for new gear
+        continue-on-error: true
+        run: python3 tools/fetch_gear_info.py
+
       - name: Get the world maps
         continue-on-error: true
         run: python3 tools/fetch_worldmap.py

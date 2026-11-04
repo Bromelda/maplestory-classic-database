@@ -110,10 +110,10 @@ function usedLevel(sk) { return planLevel(sk.id) || sk.max; }
 
 // ---------- Skills tab (skill-point planner) ----------
 function spAvailable(level, tier) {
-  // Classic gives 3 SP per level from level 11 (MS-Classic, confirmed in game). 1st job skills are
-  // usually maxed with the points from levels 11–30, 2nd job with points from level 31 on.
-  if (tier === 1) return Math.max(0, Math.min(level, 30) - 10) * 3;
-  if (tier === 2) return Math.max(0, level - 30) * 3;
+  // Each job advancement gives 1 SP, then every level gives 3 (NiaDB's leveling formulas,
+  // https://meowdb.com/msclassic/formulas/leveling).
+  if (tier === 1) return level >= 10 ? 1 + (Math.min(level, 30) - 10) * 3 : 0;
+  if (tier === 2) return level >= 30 ? 1 + (Math.min(level, 70) - 30) * 3 : 0;
   return 0;
 }
 
@@ -163,7 +163,8 @@ function renderSkillsTab() {
       </div>
     </section>
     <div class="sk-actions"><button type="button" class="btn ghost" id="sk_reset">Reset plan</button>
-      <span class="sub small">Skill values come from the Classic game files. SP shown as 3 per level from level 11 (1st job until 30, then 2nd job). Check your in-game skill window for bonus points.</span></div>
+      <span class="sub small">Skill values come from the Classic game files. SP shown as 1 per job advancement plus 3 per level (<a href="https://meowdb.com/msclassic/formulas/leveling" target="_blank" rel="noopener">NiaDB</a>).</span></div>
+    ${first ? "" : `<p class="sub">Beginners don't have job skills to plan here yet. Pick a class to see its skills.</p>`}
     <div class="sk-grid">${tree(first, 1)}${tree(second, 2)}</div>`;
   view.querySelectorAll(".stepper button").forEach((b) => b.addEventListener("click", () => {
     const id = Number(b.dataset.sk), d = Number(b.dataset.d), sk = SK.byId[id];
