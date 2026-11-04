@@ -75,7 +75,7 @@ const ELEMENTS = ["None", "Fire", "Ice", "Lightning", "Poison", "Holy"];
 const DEFAULTS = {
   cls: "Warrior", weapon: "1H Sword", motion: "avg", level: 30, STR: 132, DEX: 30, INT: 4, LUK: 4,
   watk: 47, matk: 0, ap: 0, mastery: 0, skillId: "basic", skill: 100, hits: 1, crit: 5, critdmg: 20,
-  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {}, gearBonus: {}, buffs: {}, potions: [], mobSort: "level", guide: "exp", uptime: 50,
+  element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "", gear: {}, gearBonus: {}, buffs: {}, potions: [], mobSort: "level", guide: "exp", uptime: 50, party: 1, upSort: "gain",
 };
 
 // The calculator edits the active saved character (see app.js). A shared build link
@@ -94,7 +94,7 @@ function loadCalcFromChar() {
 }
 
 // ---------- shareable builds ----------
-const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear", "gearBonus", "buffs", "potions", "mobSort", "guide", "uptime"].includes(k));
+const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target", "gear", "gearBonus", "buffs", "potions", "mobSort", "guide", "uptime", "party", "upSort"].includes(k));
 function encodeBuild(name) {
   const o = { n: name };
   for (const k of BUILD_KEYS) if (calc[k] !== DEFAULTS[k]) o[k] = calc[k];
@@ -323,7 +323,7 @@ function withGear(c) {
 }
 function gearStatText(it) {
   const spellWeapon = it.slot === "weapon" && WEAPONS[calc.cls][calc.weapon].magic;
-  return Object.entries(it.stats).filter(([k]) => k !== "ASPD" && !(spellWeapon && k === "ATT"))
+  return Object.entries(it.stats).filter(([k]) => k !== "ASPD" && k !== "SLOTS" && !(spellWeapon && k === "ATT"))
     .map(([k, v]) => `${v > 0 ? "+" : ""}${v}${/CRIT/.test(k) ? "%" : ""} ${GEAR_LABEL[k] || k}`).join(", ");
 }
 // what's stopping this item being worn, counting stats from the other gear too
@@ -412,7 +412,8 @@ function renderBonus(box, it) {
   const label = (k) => BONUS_STATS.find(([s]) => s === k)[1];
   const more = BONUS_STATS.filter(([k]) => !main.includes(k));
   const moreSet = more.some(([k]) => calc.gearBonus[it.slot]?.[k]);
-  box.innerHTML = `<div class="cx-bonus-head"><span class="cx-ico">${itemIcon(it.gid)}</span><b>${esc(it.name)}</b>
+  const page = byId.items[slugify(it.name)];
+  box.innerHTML = `<div class="cx-bonus-head"><span class="cx-ico">${itemIcon(it.gid)}</span><b>${page ? link("item", page.id, it.name) : esc(it.name)}</b>
       <button type="button" class="cx-pick-close" id="gpClose" aria-label="Close">✕</button></div>
     <p class="cf-note">Scrolled it, or got a better or worse roll? Enter the difference here, like +14 Magic ATT from scrolls. Use a minus for a lower roll. It's added to your damage.</p>
     <div class="cx-bonus-grid">${main.map((k) => bonusField(it, k, label(k))).join("")}</div>
@@ -420,7 +421,9 @@ function renderBonus(box, it) {
       <div class="cx-bonus-grid">${more.map(([k, l]) => bonusField(it, k, l)).join("")}</div></details>
     <div class="cx-bonus-actions"><button type="button" class="cx-auto" id="gpChange">Change item</button>
       <button type="button" class="cx-auto" id="gpClear">Clear bonus</button>
-      <button type="button" class="cx-auto" id="gpOff">Take it off</button></div>`;
+      <button type="button" class="cx-auto" id="gpOff">Take it off</button></div>
+    ${scrollPanel(it)}`;
+  bindScrollPanel(it);
   box.querySelectorAll("[data-bonus]").forEach((el) => el.addEventListener("input", () => setBonus(it, el.dataset.bonus, parseInt(el.value, 10) || 0)));
   $("#gpChange").addEventListener("click", () => { picker.list = true; renderPicker(); });
   $("#gpClear").addEventListener("click", () => {
@@ -478,7 +481,6 @@ function closePicker() {
 // ---------- what to fight: kills, EXP, mesos and drops per hour ----------
 // Attack time and spawn supply: NiaDB's formula pages (linked under the results). These are estimates: walking,
 // looting and other players are covered only by the "time spent attacking" setting.
-const SPAWNS_PER_POINT = (3600 / 7.56) * 0.75; // solo: 75% of a map's spawn points are filled
 const MESO_CHANCE = 0.68; // the average of the player-counted monsters, for those with no count
 const SCROLL_CATEGORY = { "1H Sword": "One-Handed Sword", "2H Sword": "Two-Handed Sword", "1H Axe": "One-Handed Axe", "2H Axe": "Two-Handed Axe", "1H Blunt": "One-Handed BW", "2H Blunt": "Two-Handed BW" };
 const PRICES_URL = "https://raw.githubusercontent.com/maplefm/maplefm.github.io/live/data/summary-public.json";
@@ -492,6 +494,7 @@ async function loadPrices() {
     prices.at = raw.at;
   } catch { prices.failed = true; }
   if (state.tab === "calc" && $("#calcBest")) renderCalcOut();
+  if (state.tab === "home") renderHome();
 }
 function shortNum(n) {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -542,8 +545,11 @@ function hourly(m, mm, c) {
   const isBoss = !!m.boss; // bosses come back on their own timers, so a per-hour number would mislead
   const seconds = attackSeconds(c);
   const uptime = (Number(c.uptime) || 50) / 100;
-  const wanted = mm.withMiss === Infinity ? 0 : ((3600 / seconds) * uptime * targetsPerAttack()) / mm.withMiss;
-  const supply = best ? best.count * SPAWNS_PER_POINT : 0;
+  // a party is counted as same-level members doing the same damage to the same monsters
+  const party = Math.max(1, Math.min(6, Number(c.party) || 1));
+  const wanted = mm.withMiss === Infinity ? 0 : ((3600 / seconds) * uptime * targetsPerAttack() * party) / mm.withMiss;
+  const supply = best ? best.count * (3600 / 7.56) * Math.min(1, 0.75 + 0.05 * (party - 1)) : 0;
+  const partyBonus = party > 1 ? Math.min(0.3, 0.1 * (party - 1)) + 0.05 * (party - 1) : 0;
   const kills = isBoss ? 0 : Math.min(wanted, supply);
   const mesoRow = m.drops.find((d) => d.item === "meso");
   const amount = m.meso ? (m.meso.min + m.meso.max) / 2 : Math.floor(2.1 * m.level) + 3;
@@ -551,13 +557,204 @@ function hourly(m, mm, c) {
   const counted = drops.filter((d) => d.rate != null && d.price != null);
   const valuePerKill = counted.reduce((a, d) => a + cautiousRate(d.rate, d.kills) * d.price, 0);
   return {
-    kills, best, isBoss, cappedBySpawns: !isBoss && wanted > supply, exp: kills * m.exp,
-    meso: kills * (mesoRow?.rate != null ? mesoRow.rate / 100 : MESO_CHANCE) * amount, mesoGuess: mesoRow?.rate == null || !m.meso,
-    value: kills * valuePerKill, hasCounts: counted.length > 0, killsCounted: Math.max(0, ...counted.map((d) => d.kills || 0)),
+    kills, best, isBoss, cappedBySpawns: !isBoss && wanted > supply, exp: (kills * m.exp * (1 + partyBonus)) / party,
+    meso: (kills * (mesoRow?.rate != null ? mesoRow.rate / 100 : MESO_CHANCE) * amount) / party, mesoGuess: mesoRow?.rate == null || !m.meso,
+    value: (kills * valuePerKill) / party, hasCounts: counted.length > 0, killsCounted: Math.max(0, ...counted.map((d) => d.kills || 0)),
     top: [...drops].filter((d) => d.price != null).sort((a, b) => b.price - a.price),
     uncounted: drops.filter((d) => d.rate == null).length,
   };
 }
+// what a monster's touch does to you (NiaDB's damage taken formulas); monster skills can hit harder
+function mobDanger(m, c) {
+  const fs = sheet(c);
+  const eva = Math.max(0, fs.avoid), gap = Math.max(0, c.level - m.level);
+  const A = ((m.acc || 0) * 100) / (5 * (gap + 51));
+  const E = eva / (1 + eva / 80) / (1 + gap / 40);
+  const f = 0.15 + 0.2 / (1 + Math.exp((A - E) / 12));
+  const candidate = E > A * (1 + f) ? Math.max(0.02, Math.min(0.03, Math.exp((A - E) / 18) * 0.03))
+    : A > 0 ? Math.max(0, Math.min(1, (1 + f - E / A) / (2 * f))) : 0;
+  const def = Math.max(0, fs.wdef);
+  const taken = (raw) => Math.max(1, Math.trunc(raw * (1 - def / (def + 300 + 2 * raw)) - (def / 25 + c.level / 10)));
+  const low = taken((m.atk || 0) * 1.2), high = taken((m.atk || 0) * 1.4);
+  return { chance: candidate + (1 - candidate) * 0.08, low, high, hitsToDie: Math.ceil(Math.max(1, fs.hp) / Math.max(1, high)) };
+}
+
+// ---------- best upgrades ----------
+const UPGRADE_SLOTS = { weapon: "Weapon", ammo: "Ammo", hat: "Hat", top: "Top", bottom: "Bottom", overall: "Overall", shoes: "Shoes", gloves: "Gloves", cape: "Cape", earrings: "Earrings", shield: "Shield" };
+const DAMAGE_STATS = ["ATT", "MATT", "STR", "DEX", "INT", "LUK", "CRIT", "CRITDMG"];
+function avgHit(t) { const r = rawRange(t); return ((r.min + r.max) / 2) * (1 + (t.crit / 100) * (t.critdmg / 100)); }
+function bestUpgrades(limit) {
+  const base = withGear(calc);
+  const baseAvg = avgHit(base);
+  if (!baseAvg) return [];
+  const out = [];
+  for (const slot of Object.keys(UPGRADE_SLOTS)) {
+    if (slot === "shield" && NO_SHIELD.has(calc.weapon)) continue;
+    const off = slot === "overall" ? ["overall", "top", "bottom"] : slot === "top" || slot === "bottom" ? [slot, "overall"] : [slot];
+    const removed = {};
+    const take = (stats, sign) => { for (const [k, v] of Object.entries(stats || {})) if (GEAR_FIELD[k]) removed[GEAR_FIELD[k]] = (removed[GEAR_FIELD[k]] || 0) + sign * v; };
+    for (const s of off) {
+      const it = calc.gear[s] && gearFor(calc, s).find((g) => g.gid === calc.gear[s]);
+      if (it) { take(it.stats, -1); take(calc.gearBonus[s], -1); }
+    }
+    const typedWeapon = slot === "weapon" && !calc.gear.weapon;
+    for (const g of gearFor(calc, slot)) {
+      if (calc.gear[slot] === g.gid || !Object.keys(g.stats).some((k) => DAMAGE_STATS.includes(k))) continue;
+      const t = { ...base };
+      if (typedWeapon) { t.watk -= calc.watk; t.matk -= calc.matk; }
+      for (const [field, v] of Object.entries(removed)) t[field] += v;
+      for (const [k, v] of Object.entries(g.stats)) if (GEAR_FIELD[k]) t[GEAR_FIELD[k]] += v;
+      if (gearNeeds(g, t).length) continue;
+      const gain = avgHit(t) - baseAvg;
+      if (gain / baseAvg < 0.002) continue;
+      const price = prices.byName?.[g.name.toLowerCase()] ?? null;
+      out.push({ g, slot, gain, pct: (gain / baseAvg) * 100, price, perMillion: price ? (gain / price) * 1e6 : null });
+    }
+  }
+  const byValue = (a, b) => (b.perMillion ?? -1) - (a.perMillion ?? -1);
+  return out.sort(calc.upSort === "value" ? byValue : (a, b) => b.gain - a.gain).slice(0, limit);
+}
+function renderUpgrades() {
+  const box = $("#calcUpgrades");
+  if (!box) return;
+  const list = bestUpgrades(6);
+  box.innerHTML = `<div class="card-head"><h3>Best upgrades</h3>
+      <select id="upSort" aria-label="Sort upgrades"><option value="gain" ${calc.upSort !== "value" ? "selected" : ""}>Most damage</option><option value="value" ${calc.upSort === "value" ? "selected" : ""}>Best for the price</option></select></div>` +
+    (list.length ? `<div class="cx-upgrades">${list.map((u) => `<div class="cx-upgrade"><span class="cx-ico">${itemIcon(u.g.gid)}</span>
+        <span class="cx-guide-main"><b>${esc(u.g.name)}</b><small>${UPGRADE_SLOTS[u.slot]} · ${esc(gearStatText(u.g))}</small>
+          <small class="cx-mine">+${u.pct.toFixed(1)}% damage${u.price != null ? ` · about ${shortNum(u.price)} mesos` : " · no recent price"}</small></span>
+        <button type="button" class="cx-auto" data-wear="${u.g.gid}" data-wear-slot="${u.slot}">Wear it</button></div>`).join("")}</div>
+      <p class="sub small">Gear you can wear right now, compared on your current skill. Prices are recent sales from Club FM, and rolls and scrolls can change them.</p>`
+      : `<p class="sub empty">Nothing you can wear right now beats your current gear.</p>`);
+  $("#upSort").addEventListener("change", (e) => { calc.upSort = e.target.value; saveCalc(); renderUpgrades(); });
+  box.querySelectorAll("[data-wear]").forEach((b) => b.addEventListener("click", () => {
+    setGear(b.dataset.wearSlot, Number(b.dataset.wear));
+    picker.slot = null;
+    renderPicker();
+  }));
+}
+
+// ---------- scroll simulator ----------
+const SCROLL_FOR_SLOT = { hat: "Helmet", top: "Topwear", bottom: "Bottomwear", overall: "Overall", shoes: "Shoes", gloves: "Gloves", cape: "Cape", earrings: "Earrings", shield: "Shield" };
+const scrollTrial = { gid: null, scrollId: null, left: 0, used: 0, hits: 0, gained: {}, spent: 0, destroyed: false, log: [] };
+function scrollsFor(it) {
+  const cat = it.slot === "weapon" ? SCROLL_CATEGORY[calc.weapon] || calc.weapon : SCROLL_FOR_SLOT[it.slot];
+  const order = { ATT: 0, MATT: 1, INT: 2, STR: 3, DEX: 4, LUK: 5 };
+  return (db.scrolls || []).filter((s) => s.category === cat)
+    .sort((a, b) => (order[Object.keys(a.stats)[0]] ?? 9) - (order[Object.keys(b.stats)[0]] ?? 9) || b.success - a.success);
+}
+function resetTrial(it, left) {
+  Object.assign(scrollTrial, { gid: it.gid, left: left ?? it.stats.SLOTS ?? 0, used: 0, hits: 0, gained: {}, spent: 0, destroyed: false, log: [] });
+}
+function scrollText(s) { return gearStatText({ slot: "scroll", stats: s.stats }); }
+function useScroll(s) {
+  if (scrollTrial.destroyed || scrollTrial.left <= 0) return;
+  scrollTrial.left--; scrollTrial.used++;
+  scrollTrial.spent += prices.byName?.[s.name.toLowerCase()] || 0;
+  if (Math.random() * 100 < s.success) {
+    scrollTrial.hits++;
+    for (const [k, v] of Object.entries(s.stats)) scrollTrial.gained[k] = (scrollTrial.gained[k] || 0) + v;
+    scrollTrial.log.unshift("Worked");
+  } else if (s.destroy && Math.random() * 100 < s.destroy) {
+    scrollTrial.destroyed = true;
+    scrollTrial.log.unshift("Failed, and the item was destroyed");
+  } else scrollTrial.log.unshift("Failed");
+}
+function scrollPanel(it) {
+  const list = scrollsFor(it);
+  if (!list.length) return "";
+  if (scrollTrial.gid !== it.gid) resetTrial(it);
+  const chosen = list.find((s) => s.gid === scrollTrial.scrollId) || list[0];
+  scrollTrial.scrollId = chosen.gid;
+  const left = scrollTrial.left, n = Math.max(0, left), p = chosen.success / 100;
+  const price = prices.byName?.[chosen.name.toLowerCase()];
+  const gainedText = Object.keys(scrollTrial.gained).length ? gearStatText({ slot: "scroll", stats: scrollTrial.gained }) : "nothing yet";
+  const allWork = n ? (p ** n) * 100 : 0;
+  const survive = chosen.destroy ? (1 - (1 - p) * (chosen.destroy / 100)) ** n * 100 : null;
+  return `<details class="cx-scrolls" ${scrollTrial.used ? "open" : ""}><summary>Try scrolling this item</summary>
+    <label class="cx-bonus-field cx-scroll-pick"><span>Scroll</span><select id="scPick">${list.map((s) => `<option value="${s.gid}" ${s.gid === chosen.gid ? "selected" : ""}>${esc(s.name.replace(/ Scroll:/, ":"))} (${s.success}%, ${esc(scrollText(s))})</option>`).join("")}</select></label>
+    <label class="cx-bonus-field cx-scroll-slots"><span>Slots left</span><input type="number" id="scLeft" min="0" max="20" value="${left}" inputmode="numeric"></label>
+    <p class="cf-note">${chosen.success}% to work${price ? ` · about ${shortNum(price)} mesos each` : ""}${chosen.destroy ? ` · a failure has a ${chosen.destroy}% chance to destroy the item` : ""}. Using all ${n}: ${allWork >= 0.1 ? allWork.toFixed(1) : "under 0.1"}% that they all work, ${(n * p).toFixed(1)} work on average${survive != null ? `, ${survive.toFixed(0)}% the item survives` : ""}.</p>
+    <div class="cx-bonus-actions"><button type="button" class="cx-auto" id="scOne" ${scrollTrial.destroyed || left <= 0 ? "disabled" : ""}>Use 1</button>
+      <button type="button" class="cx-auto" id="scAll" ${scrollTrial.destroyed || left <= 0 ? "disabled" : ""}>Use all slots</button>
+      <button type="button" class="cx-auto" id="scReset">Start over</button>
+      <button type="button" class="cx-auto" id="scApply" ${scrollTrial.hits && !scrollTrial.destroyed ? "" : "disabled"}>Add result to bonus</button></div>
+    <p class="cx-scroll-result"><b>${scrollTrial.destroyed ? "Item destroyed" : `${scrollTrial.hits} of ${scrollTrial.used} worked`}</b> · gained ${esc(gainedText)}${scrollTrial.spent ? ` · spent about ${shortNum(scrollTrial.spent)} mesos` : ""}${scrollTrial.log[0] ? ` · last: ${esc(scrollTrial.log[0])}` : ""}</p>
+    <p class="cf-note">A practice run only. Nothing counts toward your damage unless you add it.</p></details>`;
+}
+function bindScrollPanel(it) {
+  const refresh = () => renderPicker();
+  $("#scPick")?.addEventListener("change", (e) => { scrollTrial.scrollId = Number(e.target.value); refresh(); });
+  $("#scLeft")?.addEventListener("change", (e) => { resetTrial(it, Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0))); refresh(); });
+  const chosen = () => (db.scrolls || []).find((s) => s.gid === scrollTrial.scrollId);
+  $("#scOne")?.addEventListener("click", () => { useScroll(chosen()); refresh(); });
+  $("#scAll")?.addEventListener("click", () => { while (scrollTrial.left > 0 && !scrollTrial.destroyed) useScroll(chosen()); refresh(); });
+  $("#scReset")?.addEventListener("click", () => { resetTrial(it); refresh(); });
+  $("#scApply")?.addEventListener("click", () => {
+    const stats = { ...calc.gearBonus[it.slot] };
+    for (const [k, v] of Object.entries(scrollTrial.gained)) stats[k] = (stats[k] || 0) + v;
+    calc.gearBonus = { ...calc.gearBonus, [it.slot]: stats };
+    resetTrial(it, scrollTrial.left);
+    saveCalc();
+    refresh();
+    renderCalcOut();
+  });
+}
+
+// ---------- grind tracker ----------
+const TRACK_KEY = "msclassicdb.trackerStart";
+let trackerTick = null;
+function trackerStart() { try { return Number(localStorage.getItem(TRACK_KEY)) || 0; } catch { return 0; } }
+function clockText(ms) {
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`;
+}
+function renderTracker() {
+  const box = $("#calcTracker");
+  if (!box) return;
+  clearInterval(trackerTick);
+  const started = trackerStart();
+  const char = activeChar();
+  const past = char.sessions || [];
+  const target = calc.target && getEntity("monster", calc.target);
+  box.innerHTML = `<div class="card-head"><h3>Grind tracker</h3><span class="cx-clock" id="trkClock">${started ? clockText(Date.now() - started) : ""}</span></div>
+    ${started ? `<p class="sub small">Timing a session${target ? ` on ${esc(target.name)}` : ""}. When you stop, enter what you gained. It keeps running if you close this page.</p>
+      <div class="cx-bonus-grid cx-track-grid">
+        <label class="cx-bonus-field"><span>EXP gained</span><input type="number" id="trkExp" min="0" inputmode="numeric"></label>
+        <label class="cx-bonus-field"><span>Mesos gained</span><input type="number" id="trkMeso" min="0" inputmode="numeric"></label>
+        <label class="cx-bonus-field"><span>Kills</span><input type="number" id="trkKills" min="0" inputmode="numeric"></label>
+      </div>
+      <div class="cx-bonus-actions"><button type="button" class="btn" id="trkStop">Save session</button><button type="button" class="btn ghost" id="trkCancel">Cancel</button></div>`
+    : `<p class="sub small">Time a real session to see your actual numbers next to the estimates. ${target ? `Timing ${esc(target.name)}.` : "Pick a monster above to compare it with the estimate."}</p>
+      <button type="button" class="btn" id="trkStart">Start timer</button>`}
+    ${past.length ? `<div class="calc-tablewrap cx-track-table"><table><thead><tr><th>Monster</th><th class="num">Time</th><th class="num">EXP/hr</th><th class="num">Mesos/hr</th><th class="num">Kills/hr</th></tr></thead><tbody>${past.slice(0, 8).map((s) => {
+      const per = 3600000 / Math.max(1, s.ms);
+      return `<tr><td>${esc(s.mobName || "Any")}<small class="cx-track-est">${s.estExp ? ` est. ${shortNum(s.estExp)} EXP/hr` : ""}</small></td><td class="num">${clockText(s.ms)}</td><td class="num">${shortNum(s.exp * per)}</td><td class="num">${shortNum(s.meso * per)}</td><td class="num">${s.kills ? shortNum(s.kills * per) : "—"}</td></tr>`;
+    }).join("")}</tbody></table></div>
+    ${(() => { const last = past.find((s) => s.estKills && s.kills); if (!last) return ""; const ratio = (last.kills * 3600000) / Math.max(1, last.ms) / last.estKills; return `<p class="sub small">Your last session ran at ${Math.round(ratio * 100)}% of the estimated kills per hour. Set "Time spent attacking" above to match if it's far off.</p>`; })()}
+    <button type="button" class="cx-auto" id="trkClear">Clear history</button>` : ""}`;
+  $("#trkStart")?.addEventListener("click", () => {
+    try { localStorage.setItem(TRACK_KEY, String(Date.now())); } catch { /* storage unavailable */ }
+    renderTracker();
+  });
+  $("#trkCancel")?.addEventListener("click", () => { try { localStorage.removeItem(TRACK_KEY); } catch { /* storage unavailable */ } renderTracker(); });
+  $("#trkClear")?.addEventListener("click", () => { char.sessions = []; saveChars(); renderTracker(); });
+  $("#trkStop")?.addEventListener("click", () => {
+    const num = (id) => parseInt($(id).value, 10) || 0;
+    const c = withGear(calc);
+    const rate = target ? hourly(target, matchup(rawRange(c), c, target), c) : null;
+    char.sessions = [{ mobName: target?.name || "", ms: Date.now() - trackerStart(), exp: num("#trkExp"), meso: num("#trkMeso"), kills: num("#trkKills"), estExp: rate?.exp || 0, estKills: rate?.kills || 0, date: Date.now() }, ...(char.sessions || [])].slice(0, 30);
+    try { localStorage.removeItem(TRACK_KEY); } catch { /* storage unavailable */ }
+    saveChars();
+    renderTracker();
+  });
+  if (started) trackerTick = setInterval(() => {
+    const el = $("#trkClock");
+    if (!el) { clearInterval(trackerTick); return; }
+    el.textContent = clockText(Date.now() - started);
+  }, 1000);
+}
+
 function dropLine(d) {
   const chance = d.rate != null ? `${rateText(d.rate)}${d.kills && d.kills < 100 ? ` (only ${d.kills} kills counted)` : ""}` : "chance not counted yet";
   return `<li>${d.item ? link("item", d.id, d.name) : esc(d.name)}${d.mine ? ' <span class="badge">For you</span>' : ""}<span class="right">${d.price != null ? `${shortNum(d.price)} · ` : ""}${chance}</span></li>`;
@@ -865,6 +1062,8 @@ function renderCalc() {
           <div id="calcMatch"></div>
         </section>
         <section class="calc-card" id="calcBest"></section>
+        <section class="calc-card" id="calcUpgrades"></section>
+        <section class="calc-card" id="calcTracker"></section>
         <section class="calc-card" id="calcMatchCard">
           <div class="card-head"><h3>Every monster</h3>
             <select id="c_mobSort" aria-label="Sort monsters">
@@ -951,6 +1150,7 @@ function renderCalc() {
   for (const id of ["level", "hits"]) $(`#c_${id}`)?.addEventListener("blur", (e) => { if (!Number(e.target.value)) e.target.value = calc[id]; });
   renderPicker();
   renderCalcOut();
+  renderTracker();
   if (!prices.byName && !prices.failed && !prices.loading) { prices.loading = true; loadPrices(); }
 }
 
@@ -979,6 +1179,10 @@ function buffRows() {
 
 function verdictBadge(v) { return `<span class="verdict ${v[0]}">${v[1]}</span>`; }
 
+function guideEntries(c, r) {
+  const all = calcMonsters().map((m) => { const mm = matchup(r, c, m); return { m, mm, rate: hourly(m, mm, c), danger: mobDanger(m, c) }; });
+  return { all, usable: all.filter((x) => !x.m.boss && x.m.exp > 0 && x.rate.best && x.mm.p >= 0.5 && x.mm.withMiss !== Infinity && x.m.level <= c.level + 15) };
+}
 function activeBuffNames() {
   return [...statSkills().filter((r) => r.timed && calc.buffs[r.skill.name]).map((r) => r.skill.name), ...activePotions().map((p) => p.name)];
 }
@@ -1042,6 +1246,7 @@ function renderCalcOut() {
     const mm = matchup(r, c, target);
     const where = (idx.spawnsOf[target.id] || []).slice(0, 2);
     const rate = hourly(target, mm, c);
+    const danger = mobDanger(target, c);
     $("#calcMatch").innerHTML = `
       <div class="match">
         <div class="match-mob">${sprite(target, 90)}<div><b>${link("monster", target.id)}</b><span>Lv ${target.level} · ${fmt(target.hp)} HP</span>${verdictBadge(mm.verdict)}</div></div>
@@ -1052,11 +1257,15 @@ function renderCalcOut() {
           <div><span>Accuracy for 100%</span><b>${mm.need100 ?? "—"}<small> (you: ${acc})</small></b></div>
           <div><span>${r.magic ? "Magic" : "Weapon"} defense</span><b>${fmt(mm.def)}</b></div>
           <div><span>EXP each</span><b>${fmt(target.exp)}</b></div>
+          <div><span>It hits you for</span><b>${fmt(danger.low)}–${fmt(danger.high)}</b></div>
+          <div><span>Chance it hits you</span><b>${Math.round(danger.chance * 100)}%</b></div>
+          <div><span>Hits to kill you</span><b class="${danger.hitsToDie <= 2 ? "bad" : danger.hitsToDie <= 4 ? "warn" : "ok"}">${danger.hitsToDie}</b></div>
           ${rate.isBoss ? "" : `<div><span>Kills / hour</span><b>${shortNum(rate.kills)}</b></div>
           <div><span>EXP / hour</span><b>${shortNum(rate.exp)}</b></div>
           <div><span>Mesos / hour</span><b>${shortNum(rate.meso)}${rate.mesoGuess ? "<small> est.</small>" : ""}</b></div>
           <div><span>Drop value / hour</span><b>${rate.hasCounts ? shortNum(rate.value) : "—"}${rate.hasCounts ? "" : "<small> not counted</small>"}</b></div>`}
         </div>
+        ${rate.best ? `<p class="cx-route-link"><button type="button" class="btn ghost" data-route-to="${esc(rate.best.map)}">Route to ${esc(getEntity("map", rate.best.map)?.name || "this map")}</button></p>` : ""}
         ${rate.top.length ? `<h4 class="cx-drops-title">Most valuable drops</h4><ul class="cx-drops">${rate.top.slice(0, 5).map(dropLine).join("")}</ul>` : ""}
         <p class="match-note">${esc(mm.verdict[2])}${mm.el > 1 ? " It's weak to your element (+25%)." : mm.el < 1 ? " It resists your element (−25%)." : ""}${target.level > c.level ? ` It's ${target.level - c.level} levels above you, which lowers your damage${target.level - c.level >= 1 ? " and accuracy" : ""}.` : ""}${mm.p < 1 && mm.withMiss !== Infinity ? ` Counting misses, expect about ${mm.withMiss} ${c.hits > 1 ? "uses" : "attacks"}.` : ""}${where.length ? ` Found in ${where.map((x) => link("map", x.map)).join(", ")}.` : ""}</p>
       </div>`;
@@ -1065,9 +1274,8 @@ function renderCalcOut() {
   }
 
   // what to fight
-  const all = calcMonsters().map((m) => { const mm = matchup(r, c, m); return { m, mm, rate: hourly(m, mm, c) }; });
+  const { all, usable } = guideEntries(c, r);
   const toLevel = expToNext(c.level);
-  const usable = all.filter((x) => !x.m.boss && x.m.exp > 0 && x.rate.best && x.mm.p >= 0.5 && x.mm.withMiss !== Infinity && x.m.level <= c.level + 15);
   const mode = ["exp", "meso", "drops"].includes(c.guide) ? c.guide : "exp";
   const byMode = {
     exp: (a, b) => b.rate.exp - a.rate.exp,
@@ -1088,11 +1296,12 @@ function renderCalcOut() {
   const uptimeNow = Number(c.uptime) || 50;
   const countedCount = usable.filter((x) => x.rate.hasCounts).length;
   $("#calcBest").innerHTML = `<div class="card-head"><h3>What to fight</h3>
-      <label class="cx-uptime"><span>Time spent attacking</span><select id="guideUptime">${[[30, "30% (relaxed)"], [50, "50% (normal)"], [70, "70% (focused)"]].map(([v, t]) => `<option value="${v}" ${uptimeNow === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+      <div class="cx-guide-opts"><label class="cx-uptime"><span>Attacking</span><select id="guideUptime" aria-label="Time spent attacking">${[[30, "30% of the time"], [50, "50% of the time"], [70, "70% of the time"]].map(([v, t]) => `<option value="${v}" ${uptimeNow === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+      <label class="cx-uptime"><span>Party</span><select id="guideParty" aria-label="Party size">${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${(Number(c.party) || 1) === n ? "selected" : ""}>${n === 1 ? "Solo" : `${n} players`}</option>`).join("")}</select></label></div></div>
     <div class="cx-modes" role="radiogroup" aria-label="What to fight for">
       ${[["exp", "Fastest levels"], ["meso", "Most mesos"], ["drops", "Best drops"]].map(([v, t]) => `<button type="button" class="cx-mode ${mode === v ? "on" : ""}" data-guide="${v}" role="radio" aria-checked="${mode === v}">${t}</button>`).join("")}
     </div>` + (picks.length
-    ? `<div class="cx-guide">${picks.map(({ m, mm, rate }, i) => {
+    ? `<div class="cx-guide">${picks.map(({ m, mm, rate, danger }, i) => {
         const hoursLeft = rate.exp > 0 ? toLevel / rate.exp : null;
         return `<button type="button" class="cx-guide-row" data-pick="${m.id}">
           <span class="cx-guide-rank">${i + 1}</span><span class="cx-guide-spr">${sprite(m, 44)}</span>
@@ -1100,6 +1309,7 @@ function renderCalcOut() {
             <small>Lv ${m.level} · ${hitWord(mm.uses)} · ${Math.round(mm.p * 100)}% hit · ${esc(getEntity("map", rate.best.map)?.name || "")}</small>
             <span class="cx-guide-nums"><i class="${mode === "exp" ? "on" : ""}"><b>${shortNum(rate.exp)}</b> EXP/hr</i><i class="${mode === "meso" ? "on" : ""}"><b>${shortNum(rate.meso)}</b> mesos/hr</i><i class="${mode === "drops" ? "on" : ""}"><b>${rate.hasCounts ? shortNum(rate.value) : "?"}</b> drop value/hr</i></span>
             <small>${shortNum(rate.kills)} kills/hr${hoursLeft != null ? ` · about ${hoursLeft < 1 ? `${Math.max(1, Math.round(hoursLeft * 60))} min` : `${hoursLeft.toFixed(hoursLeft < 10 ? 1 : 0)} hours`} to level ${c.level + 1}` : ""}${rate.cappedBySpawns ? " · limited by spawns" : ""}</small>
+            ${danger.hitsToDie <= 3 ? `<small class="cx-danger">Careful: ${danger.hitsToDie} ${danger.hitsToDie === 1 ? "hit" : "hits"} can kill you</small>` : ""}
             ${rate.hasCounts && rate.killsCounted < 100 ? `<small>Drop value is from only ${rate.killsCounted} counted kills, so it could be off</small>` : ""}
             ${topDrops(rate)}
           </span></button>`;
@@ -1108,17 +1318,19 @@ function renderCalcOut() {
     (unknowns.length ? `<h4 class="cx-drops-title">Valuable drops, but no rates counted yet</h4><div class="cx-guide">${unknowns.map(({ m, mm, rate }) => `<button type="button" class="cx-guide-row" data-pick="${m.id}">
         <span class="cx-guide-spr">${sprite(m, 44)}</span>
         <span class="cx-guide-main"><b>${esc(m.name)}</b><small>Lv ${m.level} · ${hitWord(mm.uses)} · ${shortNum(rate.exp)} EXP/hr · ${shortNum(rate.meso)} mesos/hr</small>${topDrops(rate)}</span></button>`).join("")}</div>` : "") +
-    `<p class="sub small">Rough estimates for one person hunting alone, counting your attack speed, hit chance, up to 2 monsters per attack for skills that hit several, and monster spawns. Real numbers depend on the map, other players and how fast you loot.</p>
+    `<p class="sub small">Rough estimates${(Number(c.party) || 1) > 1 ? ` per player, for a party of same-level members doing similar damage and all hitting monsters, with the party bonus. Kills are the whole party's` : " for one person hunting alone"}, counting your attack speed, hit chance, up to 2 monsters per attack for skills that hit several, and monster spawns. Real numbers depend on the map, other players and how fast you loot.</p>
     <p class="sub small">Drop value is rate × recent price, from <a href="https://maplefm.gg" target="_blank" rel="noopener">Club FM</a>${prices.at ? ` (${new Date(prices.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })})` : ""}. ${prices.failed ? "Prices couldn't be loaded right now. " : !prices.byName ? "Prices are loading. " : ""}Only ${countedCount} of these ${usable.length} monsters have counted drop rates so far, so drop value is only a guide. Rates from only a few kills are counted cautiously. "?" means no rate has been counted yet. Meso estimates use a formula by azzybish and ohmi, shared on NiaDB.</p>`;
   $("#calcBest").querySelectorAll("[data-guide]").forEach((b) => b.addEventListener("click", () => {
     calc.guide = b.dataset.guide; saveCalc(); renderCalcOut();
     $(`[data-guide="${calc.guide}"]`)?.focus({ preventScroll: true });
   }));
   $("#guideUptime").addEventListener("change", (e) => { calc.uptime = Number(e.target.value); saveCalc(); renderCalcOut(); });
+  $("#guideParty").addEventListener("change", (e) => { calc.party = Number(e.target.value); saveCalc(); renderCalcOut(); });
   $("#calcBest").querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
     calc.target = b.dataset.pick; saveCalc();
     $("#c_target").value = calc.target;
     renderCalcOut();
+    renderTracker();
     $("#calcMatch").scrollIntoView({ behavior: "smooth", block: "center" });
   }));
 
@@ -1142,7 +1354,8 @@ function renderCalcOut() {
   $("#calcTable").innerHTML = `<div class="calc-tablewrap"><table><thead><tr><th>Monster</th><th class="num">Lv</th><th class="num wide-only">Damage</th><th class="num">${c.hits > 1 ? "Uses" : "Hits"}</th><th class="num">Hit %</th><th class="num">EXP/hr</th><th class="num wide-only">Mesos/hr</th><th class="num wide-only">Drops/hr</th><th class="num wide-only">Verdict</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="9" class="sub">No monsters in range.</td></tr>`}</tbody></table></div>
     <p class="sub small">Tap a row to see the full matchup above. Hits = average needed, with crits. Damage is after the monster's defense${r.magic ? ", element" : ""} and the level-gap penalty.</p>
-    <p class="sub small">Formulas: NiaDB (<a href="https://meowdb.com/msclassic/formulas/damage" target="_blank" rel="noopener">damage</a>, <a href="https://meowdb.com/msclassic/formulas" target="_blank" rel="noopener">stats and accuracy</a>, <a href="https://meowdb.com/msclassic/formulas/leveling" target="_blank" rel="noopener">HP, AP, EXP and mesos</a>, <a href="https://meowdb.com/msclassic/formulas/attack-speed" target="_blank" rel="noopener">attack speed</a>, <a href="https://meowdb.com/msclassic/formulas/spawns" target="_blank" rel="noopener">spawns</a>), <a href="https://fullboosts.com/blog/maplestory-classic/articles/maplestory-classic-damage-formula-guide" target="_blank" rel="noopener">FullBoosts</a>, <a href="https://ms-classic.com/guides/accuracy-and-hit-rate-explained" target="_blank" rel="noopener">MS-Classic</a>. Skill values: NiaDB skill pages (linked). Monster stats, items and requirements: Classic game files.</p>`;
+    <p class="sub small">Formulas: NiaDB (<a href="https://meowdb.com/msclassic/formulas/damage" target="_blank" rel="noopener">damage</a>, <a href="https://meowdb.com/msclassic/formulas" target="_blank" rel="noopener">stats and accuracy</a>, <a href="https://meowdb.com/msclassic/formulas/leveling" target="_blank" rel="noopener">HP, AP, EXP and mesos</a>, <a href="https://meowdb.com/msclassic/formulas/attack-speed" target="_blank" rel="noopener">attack speed</a>, <a href="https://meowdb.com/msclassic/formulas/spawns" target="_blank" rel="noopener">spawns</a>, <a href="https://meowdb.com/msclassic/formulas/damage-taken" target="_blank" rel="noopener">damage taken</a>), <a href="https://fullboosts.com/blog/maplestory-classic/articles/maplestory-classic-damage-formula-guide" target="_blank" rel="noopener">FullBoosts</a>, <a href="https://ms-classic.com/guides/accuracy-and-hit-rate-explained" target="_blank" rel="noopener">MS-Classic</a>. Skill values: NiaDB skill pages (linked). Monster stats, items and requirements: Classic game files.</p>`;
+  renderUpgrades();
   $("#calcTable").querySelectorAll("tr[data-pick]").forEach((tr) => tr.addEventListener("click", (e) => {
     calc.target = tr.dataset.pick; saveCalc();
     $("#c_target").value = calc.target;

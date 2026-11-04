@@ -66,6 +66,10 @@ jobs:
         continue-on-error: true
         run: python3 tools/fetch_potions.py "$RUNNER_TEMP/fm/data/itemdb.json"
 
+      - name: Get what scrolls do
+        continue-on-error: true
+        run: python3 tools/fetch_scrolls.py "$RUNNER_TEMP/fm/data/itemdb.json"
+
       - name: Get icons and requirements for new gear
         continue-on-error: true
         run: python3 tools/fetch_gear_info.py

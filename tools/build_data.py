@@ -89,7 +89,8 @@ WEAPON_KINDS = {
 }
 ARMOR_KINDS = {"Hat": "hat", "Top": "top", "Bottom": "bottom", "Overall": "overall", "Shoes": "shoes",
                "Glove": "gloves", "Cape": "cape", "Earrings": "earrings", "Shield": "shield"}
-GEAR_STATS = ("ATT", "MATT", "STR", "DEX", "INT", "LUK", "ACC", "CRIT", "CRITDMG", "HP", "MP", "WDEF", "MDEF", "AVOID", "SPEED", "JUMP", "ASPD")
+USE_KINDS = {"Use:Potion", "Use:Food and Drink", "Use:Consumable", "Use:Teleport Item", "Use:Thrown", "Use:Arrow", "Use:Crossbow Bolt"}
+GEAR_STATS = ("ATT", "MATT", "STR", "DEX", "INT", "LUK", "ACC", "CRIT", "CRITDMG", "HP", "MP", "WDEF", "MDEF", "AVOID", "SPEED", "JUMP", "ASPD", "SLOTS")
 
 
 def job_text(ids):
@@ -110,6 +111,8 @@ def build_gear(itemdb):
     gear = []
     for r in itemdb["items"]:
         if len(r) < 8 or not r[7] or r[4] or r[5] >= len(itemdb["kinds"]) or r[0].startswith("Wizet"):  # Wizet = GM-only items
+            continue
+        if any(v >= 500 for k, v in r[7].items() if k != "SLOTS"):  # GM-only too, like the 999-stat hats
             continue
         group, _, kind = itemdb["kinds"][r[5]].partition(":")
         slot = "weapon" if kind in WEAPON_KINDS else ARMOR_KINDS.get(kind)
@@ -279,10 +282,24 @@ def main():
     for q in quests:
         q["pre"] = [x for x in q["pre"] if x in qids]
 
-    # ---------- items (Classic drops + quest items) ----------
+    # ---------- items: drops, quest items, anything a shop sells or can be crafted, and all gear ----------
+    for name, info in guide["items"].items():
+        if info.get("s") or info.get("c"):
+            use_item(name)
+            for recipe in info.get("c") or []:
+                for material, _count in recipe[2]:
+                    use_item(material)
+    for row in build_gear(itemdb):
+        used_items.setdefault(row["name"], row["gid"])
+    # potions, stars, arrows and scrolls too, even ones with no known source yet
+    for r in itemdb["items"]:
+        kind = kinds[r[5]] if r[5] < len(kinds) else ""
+        if kind in USE_KINDS or (kind.startswith("Use:") and "Scroll" in r[0]):
+            used_items.setdefault(r[0], r[1])
     items = []
     for name, gid in sorted(used_items.items()):
         row = item_rows.get(gid) if gid else None
+        info = guide["items"].get(name) or {}
         kind = kinds[row[5]] if row and row[5] < len(kinds) else None
         pot = world["pots"].get(name)
         effect = None
@@ -304,6 +321,8 @@ def main():
             "shop_price": pot.get("npc") if pot else None,
             "effect": effect,
             "stats": row[7] if row and len(row) > 7 else None,
+            "shops": [{"npc": slug(s[0]), "name": s[0], "town": s[1], "price": s[2]} for s in info.get("s") or []] or None,
+            "crafts": [{"skill": r[0], "level": r[1], "materials": [{"item": slug(m), "count": c} for m, c in r[2]]} for r in info.get("c") or []] or None,
         })
 
     # ---------- maps ----------
@@ -389,6 +408,7 @@ def main():
     meta = {
         "built_from": f"Club FM public data, built {world.get('built')}",
         "classic_version": "MapleStory Classic World (game version 0.9.0 drop logs)",
+        "boats": [{"from": slug(x[0]), "to": slug(x[1]), "price": x[2], "npc": x[3], "note": x[4] or None} for x in world.get("boats") or []],
     }
     for fname, data in [("monsters", monsters), ("items", items), ("maps", maps), ("npcs", npcs), ("quests", quests), ("gear", gear)]:
         (OUT / f"{fname}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))

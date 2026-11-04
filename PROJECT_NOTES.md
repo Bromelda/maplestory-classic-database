@@ -15,7 +15,7 @@ Never use old 2006-era, GMS v83 or MSEA tables.
 
 ## Tabs
 
-World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patches, Log.
+Home, World Map, Monsters, Items, Maps, Routes, Quests, NPCs, Calculator, Skills, Jobs, Patches, Log.
 
 - **World Map**: the game's own world maps and nodes (`tools/fetch_worldmap.py` → `data/worldmap.json`, `assets/worldmap`), with a switcher per island. Each map's `node` is worked out in `buildWorldNodes` in `app.js`, and nodes are colored by training level. On phones there are tappable area buttons.
 - **Maps**: full map art from the game files (`tools/fetch_map_art.py` → `assets/map-art`), with sharpened minimaps (`tools/upscale_minimaps.py` → `assets/minimap-hd`) as the fallback. The auto-update does new maps. Monster sprites stand at their spawn points, with portals, NPC markers, and "How to get here" (neighbouring maps zoomed in on the portal, circled).
@@ -27,6 +27,9 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patche
 - **Skills**: an SP planner for every 1st and 2nd job skill at every level. It saves to the character, and the calculator uses it.
 - **Saved characters**: multiple characters in localStorage, each with its own calc setup, skill plan and quest progress.
   Share build creates a `?build=` link.
+- **Routes**: `findRoute` in `app.js` runs over the map portals plus `meta.boats`. Some maps have no route because the data has no portal in (NPC trips, subway tickets).
+- **Search** in the header covers everything (`buildSearch` in `app.js`). Items now include shop, crafting and gear items, with `shops` and `crafts`.
+- **Home**: `renderHome` in `app.js`. Jobs has no tab of its own now but still opens from Home and search. Patches and Log share the News tab.
 - **Patches**: Nexon's Classic World posts. **Log**: daily changes (new drops, stat changes, quests).
 
 ## Data sources and rules
@@ -55,6 +58,9 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patche
   to the user's phone. It does not touch the site.
 
 ## To do / ideas
+
+Agreed next, after comparing with other Classic sites (Nov 2026): page addresses search engines can list.
+Decided against: a bosses tab and party quest guides (not useful without people tracking them), market tools, accounts and minigames.
 
 1. **World map art**: the game's world map images are only about 636 px wide, so they're soft on big screens. Any redraw has to keep the layout exactly, because the nodes sit on the roads.
 2. **Drop tracker desktop app** (Windows): like Minerva (github.com/itechify/minerva, MIT), it would read the Pickup Log by screen capture,

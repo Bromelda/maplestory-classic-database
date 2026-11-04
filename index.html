@@ -6,30 +6,34 @@
   <meta name="color-scheme" content="dark">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MapleStory Classic DB</title>
-  <meta name="description" content="MapleStory Classic World database: interactive world map, monster drops, spawn counts, hidden portals, quest guides, NPC locations and a damage calculator.">
+  <meta name="description" content="MapleStory Classic World database: interactive world map, monster drops, spawn counts, hidden portals, routes between maps, quest guides, NPC locations and a damage calculator.">
   <meta property="og:title" content="MapleStory Classic DB">
   <meta property="og:description" content="Classic World monsters, drops, maps, quests, NPCs and a damage calculator.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍁</text></svg>">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <header>
     <div class="brand-row">
       <h1>🍁 MapleStory Classic DB</h1>
+      <div class="gs" role="search">
+        <input id="gsInput" type="search" placeholder="Search everything…" autocomplete="off" aria-label="Search monsters, items, maps, quests and NPCs" aria-controls="gsResults" aria-expanded="false">
+        <div id="gsResults" class="gs-results" hidden></div>
+      </div>
       <button type="button" id="charChip" class="char-chip" title="Your character (open the calculator)"></button>
     </div>
     <nav id="tabs">
-      <button data-tab="world" class="active">World Map</button>
+      <button data-tab="home" class="active">Home</button>
+      <button data-tab="world">World Map</button>
       <button data-tab="monsters">Monsters</button>
       <button data-tab="items">Items</button>
       <button data-tab="maps">Maps</button>
+      <button data-tab="route">Routes</button>
       <button data-tab="quests">Quests</button>
       <button data-tab="npcs">NPCs</button>
       <button data-tab="calc">Calculator</button>
       <button data-tab="skills">Skills</button>
-      <button data-tab="jobs">Jobs</button>
-      <button data-tab="patches">Patches</button>
-      <button data-tab="log">Log</button>
+      <button data-tab="patches">News</button>
     </nav>
   </header>
 
@@ -47,10 +51,12 @@
 
     <div id="layout">
       <div id="mainView">
-        <div id="worldView"></div>
+        <div id="homeView"></div>
+        <div id="worldView" hidden></div>
         <div id="feedView" hidden></div>
         <div id="calcView" hidden></div>
         <div id="skillsView" hidden></div>
+        <div id="routeView" hidden></div>
         <div id="tableWrap" hidden><table id="table"></table></div>
       </div>
       <aside id="detail" hidden></aside>
@@ -65,8 +71,8 @@
     Map, spawn and drop data adapted from the <a href="https://mapleclassic.wiki">MapleClassic Wiki</a> (CC BY-NC-SA 4.0) via <a href="https://maplefm.gg">Club FM</a>.
     Game images © NEXON (MapleStory Classic World), used non-commercially. Unofficial fan project, not affiliated with Nexon.
   </footer>
-  <script src="app.js?v=5"></script>
-  <script src="skills.js?v=5"></script>
-  <script src="calc.js?v=5"></script>
+  <script src="app.js?v=7"></script>
+  <script src="skills.js?v=7"></script>
+  <script src="calc.js?v=7"></script>
 </body>
 </html>

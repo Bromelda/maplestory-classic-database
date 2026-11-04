@@ -2,12 +2,13 @@
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
 const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta", "worldmap"];
-const OPTIONAL = ["log", "patches", "skills", "gear", "ammo", "gear_info", "potions"]; // fine if missing
+const OPTIONAL = ["log", "patches", "skills", "gear", "ammo", "gear_info", "potions", "scrolls"]; // fine if missing
 const db = {};
 const byId = {};
-const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
+const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {}, usedIn: {} };
 
 const $ = (s, el = document) => el.querySelector(s);
+const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => (n == null ? "—" : typeof n === "number" ? n.toLocaleString() : n);
 
@@ -39,6 +40,7 @@ const COLUMNS = {
     { key: "type", label: "Type" },
     { key: "category", label: "Category", wide: true },
     { key: "level", label: "Req Lv", num: true },
+    { key: "_get", label: "Get it from", wide: true, get: (i) => itemSources(i).join(", ") },
     { key: "_by", label: "Dropped by", num: true, get: (i) => (idx.droppedBy[i.id] || []).length },
   ],
   maps: [
@@ -72,7 +74,7 @@ const COLUMNS = {
 const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job", quests: "quest", npcs: "npc" };
 const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world", quest: "quests", npc: "npcs" };
 
-const state = { world: 0, tab: "world", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
+const state = { world: 0, tab: "home", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
 
 // ---------- load + index ----------
 async function load() {
@@ -106,13 +108,15 @@ async function load() {
   for (const list of Object.values(idx.spawnsOf)) list.sort((a, b) => b.count - a.count);
   if (db.meta?.built_from) $("#builtFrom").textContent = `Data: ${db.meta.built_from}.`;
 
+  for (const it of db.items) for (const r of it.crafts || []) for (const mat of r.materials) (idx.usedIn[mat.item] ||= []).includes(it.id) || idx.usedIn[mat.item].push(it.id);
   if (typeof buildSkills === "function") buildSkills();
+  buildSearch();
   bind();
   renderWorld();
   renderCharChip();
   $("#charChip").addEventListener("click", () => switchTab("calc"));
   if (typeof readSharedBuild === "function" && readSharedBuild()) switchTab("calc");
-  else fromHash() || switchTab("world");
+  else fromHash() || switchTab("home");
 }
 
 // ---------- quest tracker (saved in this browser only) ----------
@@ -172,11 +176,14 @@ function bind() {
   const areas = [...new Set(db.quests.map((q) => q.area))].sort();
   $("#qarea").innerHTML = `<option value="">All areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
   document.addEventListener("click", onLinkClick);
+  bindSearch();
   document.addEventListener("mouseover", onHover);
   document.addEventListener("mouseout", (e) => { if (e.target.closest?.("[data-tip]")) hideTip(); });
 }
 
 function onLinkClick(e) {
+  const routeBtn = e.target.closest?.("[data-route-to]");
+  if (routeBtn) { routeTo(routeBtn.dataset.routeTo); return; }
   const box = e.target.closest?.(".qdone");
   if (box) {
     e.stopPropagation();
@@ -198,19 +205,26 @@ function switchTab(tab) {
   if (isPhone() && currentEntry()) { state.listScroll = 0; closeDetail(); }
   state.tab = tab;
   document.querySelectorAll("#tabs button").forEach((b) => {
-    b.classList.toggle("active", b.dataset.tab === tab);
-    if (b.dataset.tab === tab) b.scrollIntoView({ block: "nearest", inline: "center" });
+    const on = b.dataset.tab === (tab === "log" ? "patches" : tab);
+    b.classList.toggle("active", on);
+    if (on) b.scrollIntoView({ block: "nearest", inline: "center" });
   });
   const isWorld = tab === "world";
   const isFeed = FEED_TABS.includes(tab);
   const isCalc = tab === "calc";
   const isSkills = tab === "skills";
+  const isRoute = tab === "route";
+  const isHome = tab === "home";
+  $("#homeView").hidden = !isHome;
+  $("#routeView").hidden = !isRoute;
   $("#skillsView").hidden = !isSkills;
   $("#worldView").hidden = !isWorld;
-  $("#tableWrap").hidden = isWorld || isFeed || isCalc || isSkills;
+  $("#tableWrap").hidden = isWorld || isFeed || isCalc || isSkills || isRoute || isHome;
   $("#feedView").hidden = !isFeed;
   $("#calcView").hidden = !isCalc;
-  $("#controls").hidden = isWorld || isCalc || isSkills;
+  $("#controls").hidden = isWorld || isCalc || isSkills || isRoute || isHome;
+  if (isHome) { renderHome(); return; }
+  if (isRoute) { renderRoute(); return; }
   if (isCalc) { renderCalc(); return; }
   if (isSkills) { renderSkillsTab(); return; }
   if (isFeed) {
@@ -409,7 +423,7 @@ function filtered() {
 
 function renderTable() {
   const tab = state.tab;
-  if (tab === "world" || tab === "calc" || tab === "skills") return;
+  if (["home", "world", "calc", "skills", "route"].includes(tab)) return;
   if (FEED_TABS.includes(tab)) return renderFeed();
   const cols = COLUMNS[tab];
   const rows = filtered();
@@ -597,6 +611,7 @@ function mapDetail(m) {
   }
   html += mapLayout(m, colorOf);
   const isHidden = m.region === "Hidden Street";
+  html += `<p><button type="button" class="btn ghost" data-route-to="${esc(m.id)}">Find a route here</button></p>`;
   if (isHidden) html += howToGetHere(m);
 
   if (m.spawns.length) {
@@ -771,17 +786,44 @@ function monsterDetail(mob) {
   return html;
 }
 
+function itemSources(it) {
+  return [it.shops && "Shop", idx.droppedBy[it.id] && "Drop", it.crafts && "Crafting", idx.qRewardItem[it.id] && "Quest"].filter(Boolean);
+}
+function hasItemIcon(it) { return !!it.gid && (db.gear_info?.[it.gid] !== undefined || (db.potions || []).some((p) => p.gid === it.gid)); }
+function sellAdvice(it) {
+  if (it.id === "meso") return "";
+  const need = idx.qNeedItem[it.id] || [];
+  const open = need.filter((id) => !isDone(id));
+  const used = idx.usedIn[it.id] || [];
+  const crafted = used.slice(0, 3).map((id) => link("item", id)).join(", ") + (used.length > 3 ? ` and ${used.length - 3} more` : "");
+  const craftLine = used.length ? ` It's used to craft ${crafted}.` : "";
+  const who = esc(activeChar().name);
+  const [cls, label, text] = open.length
+    ? ["keep", "Keep it", `${open.length} ${open.length === 1 ? "quest" : "quests"} ${who} hasn't finished ${open.length === 1 ? "needs" : "need"} this.${craftLine}`]
+    : used.length ? ["maybe", "Keep it if you craft", `No unfinished quest needs this.${craftLine}`]
+    : ["safe", "Safe to sell", need.length ? `${who} has finished every quest that needs this, and no recipe uses it.` : "No quest or crafting recipe listed here needs this."];
+  return `<div class="sell-advice ${cls}"><b>${label}</b><span>${text}</span></div>`;
+}
 function itemDetail(it) {
-  let html = `<h2>${esc(it.name)}</h2><p class="sub">${esc([it.type, it.category].filter(Boolean).join(" · ") || "Item")}</p>`;
+  const icon = hasItemIcon(it) ? `<span class="cx-ico item-ico"><img src="assets/item/${it.gid}.png" alt="" onerror="this.parentElement.remove()"></span>` : "";
+  let html = `<div class="item-head">${icon}<div><h2>${esc(it.name)}</h2><p class="sub">${esc([it.type, it.category].filter(Boolean).join(" · ") || "Item")}</p></div></div>`;
   const stats = it.stats ? Object.entries(it.stats).map(([k, v]) => `${esc(k)} ${v > 0 ? "+" : ""}${v}`).join(", ") : null;
-  html += dl([["Req. level", it.level], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
+  const req = db.gear_info?.[it.gid];
+  const reqText = req && Object.keys(req).length ? ["STR", "DEX", "INT", "LUK"].filter((k) => req[k]).map((k) => `${req[k]} ${k}`).join(", ") : null;
+  html += dl([["Req. level", it.level], ["Req. stats", reqText], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", !it.shops && it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
+  html += sellAdvice(it);
+  if (it.shops) {
+    const shops = [...it.shops].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+    html += `<h3>Sold by (${shops.length})</h3><ul>${shops.map((s) => `<li>${link("npc", s.npc, s.name)}${s.town ? ` <span class="sub">${esc(s.town)}</span>` : ""}<span class="right">${s.price != null ? `${fmt(s.price)} mesos` : ""}</span></li>`).join("")}</ul>`;
+  }
+  if (it.crafts) {
+    html += `<h3>Crafting</h3><ul>${it.crafts.map((r) => `<li><span>${esc(r.skill)} ${r.level}: ${r.materials.map((x) => `${x.count > 1 ? `${x.count}× ` : ""}${link("item", x.item)}`).join(", ")}</span></li>`).join("")}</ul>`;
+  }
   html += questList("Needed for quests", idx.qNeedItem[it.id]);
   html += questList("Quest reward from", idx.qRewardItem[it.id]);
   const by = idx.droppedBy[it.id] || [];
-  html += `<h3>Dropped by (${by.length})</h3>`;
-  html += by.length
-    ? `<ul>${by.map((d) => `<li><span class="spr-cell">${sprite(getEntity("monster", d.monster), 26)}</span>${link("monster", d.monster)}<span class="right">Lv ${getEntity("monster", d.monster)?.level} · ${rateText(d.rate)}</span></li>`).join("")}</ul>`
-    : `<p class="sub">No Classic drop reported.</p>`;
+  if (by.length) html += `<h3>Dropped by (${by.length})</h3><ul>${by.map((d) => `<li><span class="spr-cell">${sprite(getEntity("monster", d.monster), 26)}</span>${link("monster", d.monster)}<span class="right">Lv ${getEntity("monster", d.monster)?.level} · ${rateText(d.rate)}</span></li>`).join("")}</ul>`;
+  else if (!it.shops && !it.crafts && !idx.qRewardItem[it.id]) html += `<p class="sub">No way to get this has been reported in Classic yet.</p>`;
   return html;
 }
 
@@ -818,24 +860,27 @@ function logText(e) {
 function renderFeed() {
   const q = $("#search").value.trim().toLowerCase();
   const view = $("#feedView");
+  const chooser = `<div class="cx-modes feed-switch" role="radiogroup" aria-label="News">${[["patches", "Patches and events"], ["log", "New discoveries"]].map(([t, label]) => `<button type="button" class="cx-mode ${state.tab === t ? "on" : ""}" data-feed="${t}" role="radio" aria-checked="${state.tab === t}">${label}</button>`).join("")}</div>`;
   if (state.tab === "patches") {
     const posts = (db.patches || []).filter((p) => !q || `${p.name} ${p.summary}`.toLowerCase().includes(q));
-    view.innerHTML = `<div class="info-bar"><div><strong>Classic World patches & news</strong><br><span class="sub">Patch notes, maintenance, events and Cash Shop updates from Nexon, checked every morning. Click a post to read it in full on nexon.com.</span></div></div>` +
+    view.innerHTML = chooser + `<div class="info-bar"><div><strong>Classic World patches & news</strong><br><span class="sub">Patch notes, maintenance, events and Cash Shop updates from Nexon, checked every morning. Click a post to read it in full on nexon.com.</span></div></div>` +
       (posts.length ? posts.map((p) => `<a class="post" href="${esc(p.url)}" target="_blank" rel="noopener">
         <span class="post-meta"><span class="badge ${p.category === "maintenance" ? "patch" : ""}">${esc(CAT_LABEL[p.category] || p.category)}</span> ${esc(niceDate(p.date))}</span>
         <strong>${esc(p.name)}</strong>${p.summary ? `<span class="sub">${esc(p.summary)}</span>` : ""}<span class="more">Read on nexon.com ↗</span></a>`).join("")
         : `<p class="sub">No posts yet.</p>`);
     $("#count").textContent = `${posts.length} post${posts.length === 1 ? "" : "s"}`;
+    view.querySelectorAll("[data-feed]").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.feed)));
     return;
   }
   const entries = (db.log || []).filter((e) => !q || (e.text || "").toLowerCase().includes(q));
   const byDay = {};
   for (const e of entries) (byDay[e.date] ||= []).push(e);
   const days = Object.keys(byDay).sort().reverse();
-  view.innerHTML = `<div class="info-bar"><div><strong>Discovery log</strong><br><span class="sub">Updated every morning. New drops players find in Classic, new monsters, stat changes, new or ended quests and events. Everything here is already reflected on the monster, item and quest pages.</span></div></div>` +
+  view.innerHTML = chooser + `<div class="info-bar"><div><strong>Discovery log</strong><br><span class="sub">Updated every morning. New drops players find in Classic, new monsters, stat changes, new or ended quests and events. Everything here is already reflected on the monster, item and quest pages.</span></div></div>` +
     (days.length ? days.map((d) => `<h3 class="feed-date">${esc(niceDate(d))}</h3><ul class="feed">${byDay[d].map((e) => `<li><span class="feed-ico">${LOG_ICONS[e.type] || "•"}</span><span>${logText(e)}</span></li>`).join("")}</ul>`).join("")
       : `<p class="sub">Nothing logged yet.</p>`);
   $("#count").textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`;
+  view.querySelectorAll("[data-feed]").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.feed)));
 }
 
 // ---------- NPCs ----------
@@ -931,6 +976,257 @@ function questDetail(q) {
   if (q.unconfirmed?.length) html += `<div class="note">Some details (${esc(q.unconfirmed.join(", "))}) aren't confirmed in Classic yet.</div>`;
   html += questList("Unlocks next", idx.qNext[q.id]);
   return html;
+}
+
+// ---------- start page ----------
+function nextQuests(lv, cls, limit) {
+  return db.quests.filter((q) => !isDone(q.id) && !q.event && q.level <= lv && (!q.max_level || q.max_level >= lv)
+      && (!q.jobs || lv < 10 || cls === "Beginner" || q.jobs.includes(cls)) && q.pre.every(isDone))
+    .sort((a, b) => b.level - a.level || (b.exp || 0) - (a.exp || 0)).slice(0, limit);
+}
+function nextJob(cls, lv) {
+  const branch = cls === "Beginner" ? null : cls;
+  if (!branch) return db.jobs.filter((j) => j.advancement === 1).sort((a, b) => a.level - b.level);
+  const own = db.jobs.filter((j) => j.branch === branch);
+  const step = own.filter((j) => j.level >= lv).sort((a, b) => a.level - b.level);
+  return step.length ? step.filter((j) => j.level === step[0].level) : [];
+}
+function renderHome() {
+  const view = $("#homeView");
+  const cls = calc.cls, lv = calc.level;
+  const c = withGear(calc), r = rawRange(c);
+  const picks = [...guideEntries(c, r).usable].sort((a, b) => b.rate.exp - a.rate.exp).slice(0, 3);
+  const upgrades = bestUpgrades(3);
+  const quests = nextQuests(lv, cls, 5);
+  const jobs = nextJob(cls, lv);
+  const latest = (db.patches || [])[0];
+  const card = (title, body, foot = "") => `<section class="calc-card home-card"><h3>${title}</h3>${body}${foot}</section>`;
+  view.innerHTML = `
+    <section class="cx-intro"><div><h2>Where to next?</h2><p>Pick your class and level for your next steps.</p></div>
+      <div class="cx-jobs" role="radiogroup" aria-label="Class">
+        ${Object.keys(WEAPONS).map((k) => `<button type="button" class="cx-job ${cls === k ? "on" : ""}" data-home-cls="${k}" role="radio" aria-checked="${cls === k}"><span>${CLASS_ICON[k]}</span>${k}</button>`).join("")}
+      </div></section>
+    <section class="calc-card home-level"><div class="cx-level">
+      <input type="range" id="homeLevelR" min="1" max="120" value="${Math.min(lv, 120)}" aria-label="Level slider">
+      <label class="cf"><span>Level</span><input type="number" id="homeLevel" min="1" max="200" value="${lv}" inputmode="numeric"></label>
+    </div></section>
+    <div class="home-grid">
+      ${card("Train here", picks.length ? `<ul class="home-list">${picks.map(({ m, rate, danger }) => `<li><span class="spr-cell">${sprite(m, 30)}</span><span class="home-text">${link("monster", m.id)} <small>Lv ${m.level} · ${link("map", rate.best.map)}${danger.hitsToDie <= 3 ? " · dangerous" : ""}</small></span><span class="right">${shortNum(rate.exp)} EXP/hr</span></li>`).join("")}</ul>` : `<p class="sub">Add your gear in the calculator to get picks.</p>`,
+        `<p class="sub small">Using your calculator setup. <button type="button" class="link-btn" data-go="calc">Update it</button></p>`)}
+      ${card("Quests you can do", quests.length ? `<ul class="home-list">${quests.map((q) => `<li><span class="home-text">${link("quest", q.id)} <small>${esc(q.giver_name || q.area)}</small></span><span class="right">Lv ${q.level}</span></li>`).join("")}</ul>` : `<p class="sub">No open quests for this level and class.</p>`,
+        `<p class="sub small"><button type="button" class="link-btn" data-go="quests">See every quest</button></p>`)}
+      ${card("Gear to look for", upgrades.length ? `<ul class="home-list">${upgrades.map((u) => `<li><span class="cx-ico">${itemIcon(u.g.gid)}</span><span class="home-text"><b>${esc(u.g.name)}</b> <small>${UPGRADE_SLOTS[u.slot]} · +${u.pct.toFixed(1)}% damage</small></span><span class="right">${u.price != null ? shortNum(u.price) : ""}</span></li>`).join("")}</ul>` : `<p class="sub">Nothing better you can wear yet.</p>`,
+        `<p class="sub small"><button type="button" class="link-btn" data-go="calc">Open the calculator</button></p>`)}
+      ${card("Next job step", jobs.length ? `<ul class="home-list">${jobs.map((j) => `<li><span class="home-text">${link("job", j.id)} <small>${esc(j.location || j.instructor || "")}</small></span><span class="right">Lv ${j.level}</span></li>`).join("")}</ul>` : `<p class="sub">You've reached the last job open in Classic so far.</p>`,
+        `<p class="sub small"><button type="button" class="link-btn" data-go="jobs">See the job tree</button> · <button type="button" class="link-btn" data-go="skills">Plan your skills</button></p>`)}
+      ${latest ? card("Latest news", `<p><a href="${esc(latest.url)}" target="_blank" rel="noopener">${esc(latest.name)}</a><br><span class="sub">${esc(niceDate(latest.date))}</span></p>`, `<p class="sub small"><button type="button" class="link-btn" data-go="patches">All news</button></p>`) : ""}
+    </div>`;
+  view.querySelectorAll("[data-home-cls]").forEach((b) => b.addEventListener("click", () => {
+    calc.cls = b.dataset.homeCls;
+    calc.weapon = Object.keys(WEAPONS[calc.cls])[0];
+    calc.skillId = defaultSkill();
+    applySkill();
+    calc.gear = Object.fromEntries(Object.entries(calc.gear).filter(([slot, gid]) => gearFor(calc, slot).some((g) => g.gid === gid)));
+    saveCalc();
+    renderHome();
+  }));
+  const setLevel = (v) => { const n = parseInt(v, 10); if (n >= 1) { calc.level = Math.min(n, 200); saveCalc(); renderHome(); } };
+  $("#homeLevelR").addEventListener("change", (e) => setLevel(e.target.value));
+  $("#homeLevelR").addEventListener("input", (e) => { $("#homeLevel").value = e.target.value; });
+  $("#homeLevel").addEventListener("change", (e) => setLevel(e.target.value));
+  view.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.go)));
+  if (!prices.byName && !prices.failed && !prices.loading) { prices.loading = true; loadPrices(); }
+}
+
+// ---------- site-wide search ----------
+const searchEntries = [];
+const SEARCH_TYPES = { zone: "Area", monster: "Monster", item: "Item", map: "Map", npc: "NPC", quest: "Quest", job: "Job" };
+function buildSearch() {
+  const add = (type, list, sub) => { for (const e of list) searchEntries.push({ type, id: e.id, name: e.name, lc: e.name.toLowerCase(), sub: sub(e), mob: type === "monster" ? e : null }); };
+  add("zone", Object.values(nodes).map((n) => ({ id: n.name, name: n.name })), (n) => { const c = idx.zones[n.id]?.length || 0; return `${c} ${c === 1 ? "map" : "maps"}`; });
+  add("map", db.maps, (m) => (m.levels ? `Lv ${levelText(m.levels)}` : m.node || ""));
+  add("monster", db.monsters, (m) => `Lv ${m.level}${m.variant ? ` · ${m.variant}` : ""}`);
+  add("item", db.items, (i) => [i.category || i.type, i.level ? `Lv ${i.level}` : ""].filter(Boolean).join(" · "));
+  add("npc", db.npcs, (n) => n.role || "");
+  add("quest", db.quests, (q) => `Lv ${q.level} · ${q.area}`);
+  add("job", db.jobs, (j) => j.branch || "");
+}
+function searchFind(text) {
+  const words = text.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const order = Object.keys(SEARCH_TYPES);
+  const score = (e) => {
+    if (e.lc === words.join(" ")) return 0;
+    if (e.lc.startsWith(words[0])) return 1;
+    return new RegExp(`(^|[^a-z0-9])${words[0].replace(/[^a-z0-9]/g, "\\$&")}`).test(e.lc) ? 2 : 3;
+  };
+  return searchEntries.filter((e) => words.every((w) => e.lc.includes(w))).map((e) => ({ e, s: score(e) }))
+    .sort((a, b) => a.s - b.s || order.indexOf(a.e.type) - order.indexOf(b.e.type) || a.e.name.length - b.e.name.length || a.e.name.localeCompare(b.e.name))
+    .slice(0, 12).map((x) => x.e);
+}
+function bindSearch() {
+  const input = $("#gsInput"), box = $("#gsResults");
+  let found = [], active = -1;
+  const close = () => { box.hidden = true; input.setAttribute("aria-expanded", "false"); active = -1; };
+  const paint = () => {
+    box.querySelectorAll("[data-gs]").forEach((b, i) => {
+      b.classList.toggle("on", i === active);
+      if (i === active) b.scrollIntoView({ block: "nearest" });
+    });
+  };
+  const show = () => {
+    const text = input.value.trim();
+    if (!text) { close(); return; }
+    found = searchFind(text);
+    active = found.length ? 0 : -1;
+    box.innerHTML = found.length
+      ? found.map((e, i) => `<button type="button" class="gs-row" data-gs="${i}" tabindex="-1"><span class="gs-pic">${e.mob ? sprite(e.mob, 28) : ""}</span><span class="gs-text"><b>${esc(e.name)}</b>${e.sub ? `<small>${esc(e.sub)}</small>` : ""}</span><span class="gs-type">${SEARCH_TYPES[e.type]}</span></button>`).join("")
+      : `<p class="gs-none">Nothing found for "${esc(text)}".</p>`;
+    box.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    paint();
+  };
+  const choose = (e) => {
+    input.value = "";
+    close();
+    input.blur();
+    open(e.type, e.id);
+  };
+  input.addEventListener("input", show);
+  input.addEventListener("focus", show);
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { input.value = ""; close(); return; }
+    if (box.hidden || !found.length) return;
+    if (ev.key === "ArrowDown") { ev.preventDefault(); active = (active + 1) % found.length; paint(); }
+    if (ev.key === "ArrowUp") { ev.preventDefault(); active = (active - 1 + found.length) % found.length; paint(); }
+    if (ev.key === "Enter") { ev.preventDefault(); choose(found[Math.max(0, active)]); }
+  });
+  box.addEventListener("click", (ev) => {
+    const row = ev.target.closest("[data-gs]");
+    if (row) choose(found[Number(row.dataset.gs)]);
+  });
+  document.addEventListener("click", (ev) => { if (!ev.target.closest(".gs")) close(); });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) { ev.preventDefault(); input.focus(); }
+  });
+}
+
+// ---------- route planner ----------
+const ROUTE_KEY = "msclassicdb.route";
+const route = (() => {
+  const base = { from: "henesys", to: "", hidden: true };
+  try { return { ...base, ...JSON.parse(localStorage.getItem(ROUTE_KEY) || "{}") }; } catch { return base; }
+})();
+function saveRoute() { try { localStorage.setItem(ROUTE_KEY, JSON.stringify(route)); } catch { /* storage unavailable */ } }
+function routeEdges(m, useHidden) {
+  const edges = m.portals.filter((p) => p.to !== m.id && byId.maps[p.to] && (useHidden || p.kind !== "hidden"))
+    .map((p) => ({ to: p.to, portal: p, cost: p.kind === "hidden" ? 1.2 : 1 }));
+  for (const boat of db.meta.boats || []) {
+    if (boat.from !== m.id || !byId.maps[boat.to]) continue;
+    const same = edges.find((e) => e.to === boat.to);
+    if (same) same.boat = boat; else edges.push({ to: boat.to, boat, cost: 1 });
+  }
+  return edges;
+}
+// fewest maps, and a normal portal wins over a hidden one when they're about the same
+function findRoute(from, to, useHidden) {
+  if (from === to) return [];
+  const dist = { [from]: 0 }, prev = {}, done = new Set();
+  for (;;) {
+    let cur = null;
+    for (const id of Object.keys(dist)) if (!done.has(id) && (cur == null || dist[id] < dist[cur])) cur = id;
+    if (cur == null) return null;
+    if (cur === to) break;
+    done.add(cur);
+    for (const edge of routeEdges(byId.maps[cur], useHidden)) {
+      const d = dist[cur] + edge.cost;
+      if (dist[edge.to] == null || d < dist[edge.to]) { dist[edge.to] = d; prev[edge.to] = { from: cur, ...edge }; }
+    }
+  }
+  const steps = [];
+  for (let at = to; at !== from; at = prev[at].from) steps.unshift(prev[at]);
+  return steps;
+}
+function mapByName(text) {
+  const lc = text.trim().toLowerCase();
+  return db.maps.find((m) => m.name.toLowerCase() === lc) || null;
+}
+function routeStepText(s) {
+  if (s.boat) return `Take the boat with ${esc(s.boat.npc)}${s.boat.price != null ? ` (${fmt(s.boat.price)} mesos)` : ""}${s.boat.note ? ` <span class="sub">(${esc(s.boat.note)})</span>` : ""}`;
+  if (s.portal?.kind === "hidden") return `Take the hidden portal`;
+  if (s.portal?.kind === "door") return `Go through the door`;
+  return `Take the portal`;
+}
+function renderRouteResult() {
+  const box = $("#routeResult");
+  const from = byId.maps[route.from], to = byId.maps[route.to];
+  if (!from || !to) { box.innerHTML = `<p class="sub empty">Pick where you are and where you're going.</p>`; return; }
+  if (from.id === to.id) { box.innerHTML = `<p class="sub empty">You're already there.</p>`; return; }
+  const steps = findRoute(from.id, to.id, route.hidden);
+  if (!steps) {
+    const withHidden = !route.hidden && findRoute(from.id, to.id, true);
+    box.innerHTML = `<div class="note">${withHidden ? "There's no way there without hidden portals. Turn them on above." : `No route found using portals and boats. ${link("map", to.id)} may need an NPC, a ticket or a quest to enter, or there may be no way back from ${link("map", from.id)}. Check its map page.`}</div>`;
+    return;
+  }
+  const hiddenCount = steps.filter((s) => s.portal?.kind === "hidden").length;
+  const fare = steps.reduce((a, s) => a + (s.boat?.price || 0), 0);
+  const facts = [`${steps.length} ${steps.length === 1 ? "step" : "steps"}`, hiddenCount && `${hiddenCount} hidden ${hiddenCount === 1 ? "portal" : "portals"}`, fare && `${fmt(fare)} mesos`].filter(Boolean).join(" · ");
+  box.innerHTML = `<p class="route-facts">${facts}</p><ol class="route-steps">${steps.map((s, i) => `<li><details data-step="${i}" ${i === 0 ? "open" : ""}><summary>
+      <span class="route-num">${i + 1}</span><span class="route-text"><span>${routeStepText(s)} in ${link("map", s.from)}</span><span class="sub">to ${link("map", s.to)}</span></span>${s.portal?.kind === "hidden" ? '<span class="badge hidden">Hidden</span>' : ""}</summary>
+      <div class="route-map"></div></details></li>`).join("")}</ol>
+    <p class="sub small">Uses the portals and boats in the game data. Only walking routes are shown, so return scrolls and NPC trips could be faster. Tap a step to see its portal on the map.</p>`;
+  const fill = (d) => {
+    const body = d.querySelector(".route-map");
+    if (body.dataset.done) return;
+    body.dataset.done = "1";
+    const s = steps[Number(d.dataset.step)];
+    const src = byId.maps[s.from];
+    const usable = s.portal && (s.portal.x || s.portal.y);
+    const pic = usable ? mapLayout(src, {}, { highlight: s.to, showMobs: false, showNpcs: false, caption: false }) : "";
+    body.innerHTML = pic || `<p class="sub">No picture for this step.</p>`;
+  };
+  box.querySelectorAll("details").forEach((d) => {
+    if (d.open) fill(d);
+    d.addEventListener("toggle", () => { if (d.open) fill(d); });
+  });
+}
+function renderRoute() {
+  const nameOf = (id) => byId.maps[id]?.name || "";
+  $("#routeView").innerHTML = `
+    <section class="cx-intro"><div><h2>Route planner</h2><p>Find the way between any two maps, step by step.</p></div></section>
+    <section class="calc-card route-form">
+      <label class="cf"><span>From</span><input id="routeFrom" type="search" list="routeMaps" value="${esc(nameOf(route.from))}" placeholder="Start typing a map…" autocomplete="off"></label>
+      <button type="button" class="route-swap" id="routeSwap" aria-label="Swap start and destination">⇅</button>
+      <label class="cf"><span>To</span><input id="routeTo" type="search" list="routeMaps" value="${esc(nameOf(route.to))}" placeholder="Start typing a map…" autocomplete="off"></label>
+      <label class="check route-hidden"><input id="routeHidden" type="checkbox" ${route.hidden ? "checked" : ""}> Use hidden portals</label>
+      <datalist id="routeMaps">${db.maps.map((m) => `<option value="${esc(m.name)}"></option>`).join("")}</datalist>
+    </section>
+    <section class="calc-card" id="routeResult"></section>`;
+  const update = (key, el) => {
+    const m = mapByName(el.value);
+    if (m) route[key] = m.id;
+    else if (!el.value.trim()) route[key] = "";
+    else return; // still typing
+    saveRoute();
+    renderRouteResult();
+  };
+  $("#routeFrom").addEventListener("input", (e) => update("from", e.target));
+  $("#routeTo").addEventListener("input", (e) => update("to", e.target));
+  $("#routeHidden").addEventListener("change", (e) => { route.hidden = e.target.checked; saveRoute(); renderRouteResult(); });
+  $("#routeSwap").addEventListener("click", () => {
+    [route.from, route.to] = [route.to, route.from];
+    saveRoute();
+    $("#routeFrom").value = nameOf(route.from);
+    $("#routeTo").value = nameOf(route.to);
+    renderRouteResult();
+  });
+  renderRouteResult();
+}
+function routeTo(id) {
+  route.to = id;
+  saveRoute();
+  switchTab("route");
+  if (isPhone()) window.scrollTo(0, 0);
 }
 
 // ---------- monster hover tooltip ----------

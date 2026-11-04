@@ -6,6 +6,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 
 ## Features
 
+- **Home**: pick a class and level for where to train, quests you can do, gear to look for and your next job step.
 - **Interactive world map**: the game's own world maps of Maple Island and Victoria Island, with the same nodes as in the game, along the roads between towns. Each node is colored by its typical training level. Click one to list all its maps and their monsters.
 - **Map pages** show:
   - the exact spawn count of each monster (for example 10 Shroom, 6 Red Snail, 5 Slime…)
@@ -14,7 +15,9 @@ It's a plain static website with no build step for the site itself. Open it loca
   - connected maps, **hidden portals**, one-way entrances, and how you get in when no portal leads there (job tests, party quests)
   - NPCs, plus boss respawn timers
 - **Monster pages**: the animated in-game sprite, full stats, the Classic drop table with drop rates, and every map the monster spawns on. Hover a monster anywhere to preview its drops.
-- **Item pages**: stats, requirements, and every monster that drops it, sorted by rate.
+- **Item pages**: every drop, shop, craftable item and all gear, with stats, requirements, who sells it, how to craft it, every monster that drops it, and whether it's safe to sell given your quests and known recipes.
+- **Site-wide search**: search monsters, items, maps, areas, quests, NPCs and jobs from any page.
+- **Route planner**: step-by-step directions between any two maps, using portals, hidden portals and boats, with each portal circled on the map.
 - **Quests**: all 325 current quests as step-by-step guides. Each one covers who to talk to (circled on the map), what to kill or collect and who drops it, where to turn it in, rewards, and what it unlocks next. Tick off finished quests to track your progress; it's saved in your browser. Ended events and Forgotten Hollow quests are left out.
 - **NPCs**: all 187 NPCs with every location circled on the map, plus the quests they give and accept. NPCs also show as pins on every map.
 - **Skills**: a skill-point planner for every Classic job (1st and 2nd), with every skill's numbers at every level straight from the game files. Spend points with + / − and see what each level does and what the next one adds. SP is counted at 3 per level from level 11. The plan saves to your character, and the calculator uses it: your skill level, mastery, Rage, Precise Strikes and Focus are all picked up automatically. Skills changed in the Oct 29 patch are marked.
@@ -25,6 +28,9 @@ It's a plain static website with no build step for the site itself. Open it loca
 - **Calculator**: pick your class, weapon and skill (attack skills preset at max level, with values from NiaDB's skill pages), then wear your gear from every weapon and armor piece with stats in the game files, wands and staffs included, plus your throwing stars or arrows, or type your stats in yourself. Each piece can also take bonus stats, for scrolls or a better or worse roll, and they count toward your damage. Turn on your buffs and potions, and spell elements are set from the skill. Auto-assign spreads your AP around your gear's requirements. You get:
   - your damage range, average and max crit
   - a character sheet with your HP, MP, defense, avoid and more
+  - how hard each monster hits you, how likely it is to hit, and how many hits you can take
+  - best upgrades: gear you can wear now, ranked by damage gained or by price
+  - a scroll simulator on each piece of gear, with real success rates, and a grind tracker to compare real sessions with the estimates
   - a guide to what to fight: estimated kills, EXP, mesos and drop value per hour for your build, ranked for fastest levels, most mesos or best drops, with the drops your class can use marked
   - your accuracy
   - a **"Fight a monster"** matchup: damage, hits to kill, hit chance, the accuracy you need for 100%, and a verdict (One-shot / Easy / Good / Slow / Too tough / Hard to hit)

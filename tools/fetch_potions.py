@@ -31,7 +31,7 @@ def fetch(row):
         info = json.loads(res.read()).get("metaInfo") or {}
     spec = info.get("consumeSpec") or {}
     stats = {FIELDS[k]: spec[k] for k in FIELDS if spec.get(k)}
-    if not stats or not spec.get("time"):
+    if not stats or not spec.get("time") or row[0].startswith("Inkwell"):  # Inkwell items are GM-only
         return row[1], None
     if info.get("iconRaw"):
         (ICONS / f"{row[1]}.png").write_bytes(base64.b64decode(info["iconRaw"]))
