@@ -6,9 +6,9 @@
   <meta name="color-scheme" content="dark">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MapleStory Classic DB</title>
-  <meta name="description" content="MapleStory Classic World database: interactive world map, monster drops, spawn counts, hidden portals, quest guides, NPC locations, a damage calculator and Free Market prices.">
+  <meta name="description" content="MapleStory Classic World database: interactive world map, monster drops, spawn counts, hidden portals, quest guides, NPC locations and a damage calculator.">
   <meta property="og:title" content="MapleStory Classic DB">
-  <meta property="og:description" content="Classic World monsters, drops, maps, quests, NPCs, damage calculator and market prices.">
+  <meta property="og:description" content="Classic World monsters, drops, maps, quests, NPCs and a damage calculator.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍁</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -27,7 +27,6 @@
       <button data-tab="npcs">NPCs</button>
       <button data-tab="calc">Calculator</button>
       <button data-tab="skills">Skills</button>
-      <button data-tab="market">Market</button>
       <button data-tab="jobs">Jobs</button>
       <button data-tab="patches">Patches</button>
       <button data-tab="log">Log</button>
@@ -42,17 +41,12 @@
       <label id="qareaWrap" hidden><select id="qarea"><option value="">All areas</option></select></label>
       <label id="hideDoneWrap" class="check" hidden><input id="hideDone" type="checkbox"> Hide done</label>
       <label id="myLevelWrap" class="check" hidden><input id="myLevel" type="checkbox"> Only quests for my character</label>
-      <label id="catWrap" hidden><select id="cat"><option value="">All categories</option></select></label>
       <label id="variantsWrap" class="check"><input id="variants" type="checkbox"> Show job-test, PQ &amp; event variants</label>
       <span id="count"></span>
     </section>
 
     <div id="layout">
       <div id="mainView">
-        <div id="marketBar" class="market-bar" hidden>
-          <div><strong>Free Market prices</strong><br><span class="sub">Typical sold prices from the last week, updated daily from <a href="https://maplefm.gg" target="_blank" rel="noopener">Club FM</a>. Click an item for its price history, stat rolls and the shops selling it.</span></div>
-          <div class="market-links"><a class="btn" href="https://cozy.markets/market" target="_blank" rel="noopener">Live shops on Cozy Market ↗</a> <a class="btn ghost" href="https://henefm.com" target="_blank" rel="noopener">HeneFM ↗</a></div>
-        </div>
         <div id="worldView"></div>
         <div id="feedView" hidden></div>
         <div id="calcView" hidden></div>

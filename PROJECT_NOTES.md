@@ -15,19 +15,18 @@ Never use old 2006-era, GMS v83 or MSEA tables.
 
 ## Tabs
 
-World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Market, Jobs, Patches, Log.
+World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Jobs, Patches, Log.
 
 - **World Map**: the game's own world maps and nodes (`tools/fetch_worldmap.py` → `data/worldmap.json`, `assets/worldmap`), with a switcher per island. Each map's `node` is worked out in `buildWorldNodes` in `app.js`, and nodes are colored by training level. On phones there are tappable area buttons.
 - **Maps**: full map art from the game files (`tools/fetch_map_art.py` → `assets/map-art`), with sharpened minimaps (`tools/upscale_minimaps.py` → `assets/minimap-hd`) as the fallback. The auto-update does new maps. Monster sprites stand at their spawn points, with portals, NPC markers, and "How to get here" (neighbouring maps zoomed in on the portal, circled).
   Maps with no walking way in explain how you get there (job tests, Kerning PQ).
-- **Monsters / Items**: stats, Classic drop tables with rates and kill counts, sprites, approximate Free Market values.
+- **Monsters / Items**: stats, Classic drop tables with rates and kill counts, sprites.
 - **Quests**: 325 quests as step-by-step guides, a tracker per character, and an "Only quests for my character" filter.
 - **NPCs**: 187 NPCs, each location circled on the minimap.
 - **Calculator**: Classic damage and accuracy formulas, a skill and skill-level picker, a "Fight a monster" verdict, and a hits-to-kill table.
 - **Skills**: an SP planner for every 1st and 2nd job skill at every level. It saves to the character, and the calculator uses it.
 - **Saved characters**: multiple characters in localStorage, each with its own calc setup, skill plan and quest progress.
   Share build creates a `?build=` link.
-- **Market**: Club FM's public price summary, loaded live in the browser, with seller names, plus links to Cozy Market and HeneFM for live shops. HeneFM is links only (`/items/<game id>`, or `/?q=<name>` when we don't have the id); no data is pulled from it.
 - **Patches**: Nexon's Classic World posts. **Log**: daily changes (new drops, stat changes, quests).
 
 ## Data sources and rules

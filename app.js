@@ -5,25 +5,7 @@ const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta",
 const OPTIONAL = ["log", "patches", "skills"]; // fine if missing
 const db = {};
 const byId = {};
-const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
-
-// Free Market prices: Club FM's public daily summary, loaded live from GitHub.
-const MARKET_URL = "https://raw.githubusercontent.com/maplefm/maplefm.github.io/live/data/summary-public.json";
-const COZY_URL = "https://cozy.markets/market";
-const CLUBFM_URL = "https://maplefm.gg";
-const HENEFM_URL = "https://henefm.com";
-// our game id for these isn't the one HeneFM lists (mostly variants sharing a name), so they use its search instead
-const HENEFM_NO_PAGE = new Set([1002994, 1007239, 1007248, 1040013, 1041015, 1087027, 1302019, 1702020, 2000007, 2000008, 2010008, 2020023, 2030011, 2040513, 4031027]);
-const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-function meso(n) {
-  if (n == null) return "—";
-  if (n > 0 && n < 1) return "<1";
-  if (n >= 1e9) return (n / 1e9).toFixed(2).replace(/\.?0+$/, "") + "B";
-  if (n >= 1e6) return (n / 1e6).toFixed(n < 1e7 ? 2 : 1).replace(/\.?0+$/, "") + "M";
-  if (n >= 1e3) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, "") + "k";
-  return Math.round(n).toLocaleString();
-}
-function pct(x) { return x == null ? "—" : `${x > 0 ? "▲" : x < 0 ? "▼" : ""} ${Math.abs(x * 100).toFixed(0)}%`; }
+const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -65,14 +47,6 @@ const COLUMNS = {
     { key: "level", label: "Lv", num: true, get: (m) => (m.levels ? m.levels[0] : null), show: (m) => levelText(m.levels) },
     { key: "_mobs", label: "Mobs", num: true, get: (m) => m.spawns.reduce((a, s) => a + s.count, 0) },
   ],
-  market: [
-    { key: "name", label: "Item" },
-    { key: "cat", label: "Category", wide: true },
-    { key: "typ", label: "Price", num: true, show: (p) => meso(p.typ) },
-    { key: "_range", label: "Range", num: true, wide: true, get: (p) => p.lo, show: (p) => `${meso(p.lo)}–${meso(p.hi)}` },
-    { key: "change", label: "7-day", num: true, show: (p) => pct(p.change) },
-    { key: "sales", label: "Sales", num: true, wide: true },
-  ],
   quests: [
     { key: "_done", label: "✓", get: (q) => (isDone(q.id) ? 1 : 0), show: (q) => `<input type="checkbox" class="qdone" data-q="${q.id}" ${isDone(q.id) ? "checked" : ""} aria-label="Mark done">`, html: true },
     { key: "name", label: "Quest" },
@@ -94,8 +68,8 @@ const COLUMNS = {
     { key: "level", label: "Req Lv", num: true },
   ],
 };
-const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job", market: "price", quests: "quest", npcs: "npc" };
-const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world", price: "market", quest: "quests", npc: "npcs" };
+const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job", quests: "quest", npcs: "npc" };
+const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world", quest: "quests", npc: "npcs" };
 
 const state = { world: 0, tab: "world", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
 
@@ -138,36 +112,8 @@ async function load() {
   $("#charChip").addEventListener("click", () => switchTab("calc"));
   if (typeof readSharedBuild === "function" && readSharedBuild()) switchTab("calc");
   else fromHash() || switchTab("world");
-  loadMarket();
 }
 
-async function loadMarket() {
-  try {
-    const res = await fetch(MARKET_URL, { cache: "no-cache" });
-    if (!res.ok) throw new Error(res.status);
-    const raw = await res.json();
-    db.market = raw.rows.map((r) => {
-      const daily = (r.daily || []).filter((d) => d[1] != null);
-      const change = daily.length > 1 ? daily[daily.length - 1][1] / daily[0][1] - 1 : null;
-      return {
-        id: slugify(r.item), name: r.item, cat: r.cat, typ: r.typ, lo: r.lo, hi: r.hi,
-        sales: r.salesN ?? 0, listings: r.n ?? 0, basis: r.kind, conf: r.conf, daily, change,
-        ladder: r.lad || null, sellers: r.typWho || [],
-      };
-    });
-    db.marketAt = raw.at;
-    byId.market = Object.fromEntries(db.market.map((p) => [p.id, p]));
-    for (const p of db.market) idx.priceByName[p.name.toLowerCase()] = p;
-    const cats = [...new Set(db.market.map((p) => p.cat))].sort();
-    $("#cat").innerHTML = `<option value="">All categories</option>` + cats.map((c) => `<option>${esc(c)}</option>`).join("");
-  } catch (err) {
-    db.market = [];
-    db.marketError = String(err.message || err);
-  }
-  if (state.tab === "market") renderTable();
-  if (location.hash.startsWith("#price/")) fromHash();
-  else if (currentEntry()) renderDetail();
-}
 // ---------- quest tracker (saved in this browser only) ----------
 // ---------- saved characters (stats + quest progress, kept in this browser) ----------
 const CHAR_KEY = "msclassicdb.characters";
@@ -219,11 +165,9 @@ function npcWhere(n) {
   return `${m?.zone && m.zone !== m.name ? m.zone + ": " : ""}${m?.name || n.locations[0].map}${extra}`;
 }
 
-function priceOf(name) { return idx.priceByName[String(name).toLowerCase()]; }
-
 function bind() {
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
-  ["#search", "#minLv", "#maxLv", "#variants", "#cat", "#qarea", "#hideDone", "#myLevel"].forEach((s) => $(s).addEventListener("input", renderTable));
+  ["#search", "#minLv", "#maxLv", "#variants", "#qarea", "#hideDone", "#myLevel"].forEach((s) => $(s).addEventListener("input", renderTable));
   const areas = [...new Set(db.quests.map((q) => q.area))].sort();
   $("#qarea").innerHTML = `<option value="">All areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
   document.addEventListener("click", onLinkClick);
@@ -267,23 +211,20 @@ function switchTab(tab) {
   if (isCalc) { renderCalc(); return; }
   if (isSkills) { renderSkillsTab(); return; }
   if (isFeed) {
-    ["#variantsWrap", "#catWrap", "#marketBar", "#qareaWrap", "#hideDoneWrap"].forEach((x) => { $(x).hidden = true; });
+    ["#variantsWrap", "#qareaWrap", "#hideDoneWrap"].forEach((x) => { $(x).hidden = true; });
     document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = true; });
     $("#search").value = "";
     renderFeed();
     return;
   }
   $("#variantsWrap").hidden = tab !== "monsters";
-  const isMarket = tab === "market";
-  $("#catWrap").hidden = !isMarket;
-  $("#marketBar").hidden = !isMarket;
-  document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = isMarket || tab === "npcs"; });
+  document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = tab === "npcs"; });
   $("#qareaWrap").hidden = tab !== "quests";
   $("#hideDoneWrap").hidden = tab !== "quests";
   $("#myLevelWrap").hidden = tab !== "quests";
   if (!isWorld) {
-    state.sortKey = isMarket ? "sales" : COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
-    state.asc = !isMarket;
+    state.sortKey = COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
+    state.asc = true;
     $("#search").value = "";
     renderTable();
   }
@@ -431,10 +372,8 @@ function filtered() {
   const max = parseInt($("#maxLv").value, 10);
   const showVariants = $("#variants").checked;
   const lvOf = (e) => (tab === "maps" ? e.levels?.[0] : e.level);
-  const cat = $("#cat").value;
   const rows = (db[tab] || []).filter((e) => {
     if (q && !e.name.toLowerCase().includes(q)) return false;
-    if (tab === "market") return !cat || e.cat === cat;
     if (tab === "npcs") return true;
     if (tab === "quests") {
       if ($("#qarea").value && e.area !== $("#qarea").value) return false;
@@ -468,13 +407,6 @@ function renderTable() {
   const tab = state.tab;
   if (tab === "world" || tab === "calc" || tab === "skills") return;
   if (FEED_TABS.includes(tab)) return renderFeed();
-  if (tab === "market" && (!db.market || db.marketError)) {
-    $("#table").innerHTML = `<tbody><tr><td style="padding:20px;white-space:normal">${db.marketError
-      ? `Couldn't load Free Market prices right now (${esc(db.marketError)}). You can still check <a href="${COZY_URL}" target="_blank" rel="noopener">Cozy Market</a> or <a href="${HENEFM_URL}" target="_blank" rel="noopener">HeneFM</a>.`
-      : "Loading Free Market prices…"}</td></tr></tbody>`;
-    $("#count").textContent = "";
-    return;
-  }
   const cols = COLUMNS[tab];
   const rows = filtered();
   const type = TYPE_OF_TAB[tab];
@@ -554,7 +486,7 @@ function fromHash() {
 
 function getEntity(type, id) {
   if (type === "zone") return idx.zones[id] ? { id, name: id } : null;
-  const ds = { monster: "monsters", item: "items", map: "maps", job: "jobs", price: "market", quest: "quests", npc: "npcs" }[type];
+  const ds = { monster: "monsters", item: "items", map: "maps", job: "jobs", quest: "quests", npc: "npcs" }[type];
   return ds ? byId[ds]?.[id] : null;
 }
 
@@ -595,7 +527,7 @@ function renderDetail() {
       <button id="back" ${state.pos > 0 ? "" : "disabled"}>← Back</button>
       <span class="panel-title">${esc(getEntity(cur.type, cur.id)?.name || "")}</span>
       <button id="close" title="Close" aria-label="Close">✕</button></div>`;
-  const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail, price: priceDetail, quest: questDetail, npc: npcDetail }[cur.type](getEntity(cur.type, cur.id));
+  const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail, quest: questDetail, npc: npcDetail }[cur.type](getEntity(cur.type, cur.id));
   panel.innerHTML = nav + body;
   panel.scrollTop = 0;
   if (phoneOpen) window.scrollTo(0, 0);
@@ -813,8 +745,7 @@ function monsterDetail(mob) {
     const kills = mob.drops.find((d) => d.kills)?.kills;
     html += `<table class="drops"><tbody>${mob.drops.map((d) => {
       const it = getEntity("item", d.item);
-      const pr = it && priceOf(it.name);
-      return `<tr><td>${link("item", d.item)}${it?.type ? ` <span class="sub">${esc(it.type)}</span>` : ""}</td><td class="num price-cell">${pr ? `≈${meso(pr.typ)}` : ""}</td><td class="num">${rateText(d.rate)}</td></tr>`;
+      return `<tr><td>${link("item", d.item)}${it?.type ? ` <span class="sub">${esc(it.type)}</span>` : ""}</td><td class="num">${rateText(d.rate)}</td></tr>`;
     }).join("")}</tbody></table>`;
     html += `<p class="sub" style="margin-top:6px">${kills ? `Rates counted in Classic World over ${kills.toLocaleString()} kills.` : "Drops reported by Classic players; no rate counted yet."}</p>`;
   } else {
@@ -834,12 +765,6 @@ function itemDetail(it) {
   let html = `<h2>${esc(it.name)}</h2><p class="sub">${esc([it.type, it.category].filter(Boolean).join(" · ") || "Item")}</p>`;
   const stats = it.stats ? Object.entries(it.stats).map(([k, v]) => `${esc(k)} ${v > 0 ? "+" : ""}${v}`).join(", ") : null;
   html += dl([["Req. level", it.level], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
-  const pr = priceOf(it.name);
-  if (pr) {
-    html += `<h3>Free Market price</h3>${priceSummary(pr)}<p>${link("price", pr.id, "Full price details, stat rolls & sellers →")}</p><p>${heneButton(it.name)}</p>`;
-  } else if (db.market && !db.marketError) {
-    html += `<h3>Free Market price</h3><p class="sub">No recent sales tracked. ${cozyButton()} ${heneButton(it.name)}</p>`;
-  }
   html += questList("Needed for quests", idx.qNeedItem[it.id]);
   html += questList("Quest reward from", idx.qRewardItem[it.id]);
   const by = idx.droppedBy[it.id] || [];
@@ -885,7 +810,7 @@ function renderFeed() {
   const view = $("#feedView");
   if (state.tab === "patches") {
     const posts = (db.patches || []).filter((p) => !q || `${p.name} ${p.summary}`.toLowerCase().includes(q));
-    view.innerHTML = `<div class="market-bar"><div><strong>Classic World patches & news</strong><br><span class="sub">Patch notes, maintenance, events and Cash Shop updates from Nexon, checked every morning. Click a post to read it in full on nexon.com.</span></div></div>` +
+    view.innerHTML = `<div class="info-bar"><div><strong>Classic World patches & news</strong><br><span class="sub">Patch notes, maintenance, events and Cash Shop updates from Nexon, checked every morning. Click a post to read it in full on nexon.com.</span></div></div>` +
       (posts.length ? posts.map((p) => `<a class="post" href="${esc(p.url)}" target="_blank" rel="noopener">
         <span class="post-meta"><span class="badge ${p.category === "maintenance" ? "patch" : ""}">${esc(CAT_LABEL[p.category] || p.category)}</span> ${esc(niceDate(p.date))}</span>
         <strong>${esc(p.name)}</strong>${p.summary ? `<span class="sub">${esc(p.summary)}</span>` : ""}<span class="more">Read on nexon.com ↗</span></a>`).join("")
@@ -897,7 +822,7 @@ function renderFeed() {
   const byDay = {};
   for (const e of entries) (byDay[e.date] ||= []).push(e);
   const days = Object.keys(byDay).sort().reverse();
-  view.innerHTML = `<div class="market-bar"><div><strong>Discovery log</strong><br><span class="sub">Updated every morning. New drops players find in Classic, new monsters, stat changes, new or ended quests and events. Everything here is already reflected on the monster, item and quest pages.</span></div></div>` +
+  view.innerHTML = `<div class="info-bar"><div><strong>Discovery log</strong><br><span class="sub">Updated every morning. New drops players find in Classic, new monsters, stat changes, new or ended quests and events. Everything here is already reflected on the monster, item and quest pages.</span></div></div>` +
     (days.length ? days.map((d) => `<h3 class="feed-date">${esc(niceDate(d))}</h3><ul class="feed">${byDay[d].map((e) => `<li><span class="feed-ico">${LOG_ICONS[e.type] || "•"}</span><span>${logText(e)}</span></li>`).join("")}</ul>`).join("")
       : `<p class="sub">Nothing logged yet.</p>`);
   $("#count").textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`;
@@ -995,63 +920,6 @@ function questDetail(q) {
   if (rw.length) html += `<h3>Rewards</h3><ul class="tasks">${rw.join("")}</ul>`;
   if (q.unconfirmed?.length) html += `<div class="note">Some details (${esc(q.unconfirmed.join(", "))}) aren't confirmed in Classic yet.</div>`;
   html += questList("Unlocks next", idx.qNext[q.id]);
-  return html;
-}
-
-// ---------- Free Market prices ----------
-function cozyButton(label = "Find live shops on Cozy Market ↗") {
-  return `<a class="btn" href="${COZY_URL}" target="_blank" rel="noopener">${label}</a>`;
-}
-
-// straight to the item's page when it's traded and we know its game id, otherwise HeneFM's search
-// (untraded items like quest items have no page there)
-function heneButton(name, cls = "btn ghost") {
-  const it = priceOf(name) && byId.items[slugify(name)];
-  const url = it?.gid && !HENEFM_NO_PAGE.has(it.gid) ? `${HENEFM_URL}/items/${it.gid}` : `${HENEFM_URL}/?q=${encodeURIComponent(name)}`;
-  return `<a class="${cls}" href="${url}" target="_blank" rel="noopener">HeneFM ↗</a>`;
-}
-
-function sparkline(daily) {
-  if (daily.length < 2) return "";
-  const W = 320, H = 70, P = 6;
-  const ys = daily.map((d) => d[1]);
-  const min = Math.min(...ys), max = Math.max(...ys);
-  const x = (i) => P + (i * (W - 2 * P)) / (daily.length - 1);
-  const y = (v) => (max === min ? H / 2 : H - P - ((v - min) * (H - 2 * P)) / (max - min));
-  const pts = daily.map((d, i) => `${x(i).toFixed(1)},${y(d[1]).toFixed(1)}`).join(" ");
-  const day = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Price over the last ${daily.length} days">
-      <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"></polyline>
-      ${daily.map((d, i) => `<circle cx="${x(i)}" cy="${y(d[1])}" r="3" fill="var(--accent)"><title>${day(d[0])}: ${meso(d[1])}</title></circle>`).join("")}
-    </svg><div class="spark-axis"><span>${day(daily[0][0])}</span><span>low ${meso(min)} · high ${meso(max)}</span><span>${day(daily[daily.length - 1][0])}</span></div>`;
-}
-
-function priceSummary(p) {
-  const basis = p.basis === "sale" ? "typical sold price" : "typical asking price (few sales yet)";
-  return `<div class="price-big">${meso(p.typ)} <span>mesos</span></div>
-    <p class="sub">${basis} · usual range ${meso(p.lo)}–${meso(p.hi)} · ${p.sales.toLocaleString()} sales tracked</p>`;
-}
-
-function priceDetail(p) {
-  const conf = { verified: "Verified by repeated sales", lead: "Based on a few sales or listings", watched: "Being watched (prices moving)" }[p.conf] || p.conf;
-  const ourItem = byId.items[p.id];
-  let html = `<h2>${esc(p.name)}</h2><p class="sub">${esc(p.cat)} · Free Market</p>${priceSummary(p)}`;
-  html += `<p>${cozyButton()} ${heneButton(p.name)} <a class="btn ghost" href="${CLUBFM_URL}" target="_blank" rel="noopener">Club FM ↗</a></p>`;
-  if (p.daily.length > 1) html += `<h3>Last ${p.daily.length} days ${p.change != null ? `<span class="${p.change >= 0 ? "up" : "down"}">${pct(p.change)}</span>` : ""}</h3>${sparkline(p.daily)}`;
-  html += dl([["Confidence", esc(conf)], ["Listings seen", p.listings.toLocaleString()]]);
-  if (p.ladder?.length) {
-    for (const [stat, rows] of p.ladder) {
-      html += `<h3>Price by ${esc(stat)} roll</h3><table class="drops ladder"><tbody>${rows.map(([label, status, lo, hi, typ, sold, listed]) => `
-        <tr><td>${esc(label)}</td><td class="num">${typ ? meso(typ) : lo === hi ? meso(lo) : `${meso(lo)}–${meso(hi)}`}</td>
-        <td class="num sub">${status === "sold" ? `${sold} sold` : status === "asking" ? "asking" : "few sales"}</td></tr>`).join("")}</tbody></table>`;
-    }
-  }
-  if (p.sellers.length) {
-    html += `<h3>Shops selling near this price</h3>
-      <p class="sellers">${p.sellers.map((n) => `<span class="seller">${esc(n)}</span>`).join("")}</p>
-      <p class="sub">Character names whose shops sold or listed this item close to the typical price. Look for them in the Free Market, or check ${cozyButton("Cozy Market ↗").replace('class="btn"', 'class="inline"')} or ${heneButton(p.name, "inline")} for their current channel and room.</p>`;
-  }
-  if (ourItem) html += `<h3>In the database</h3><p>${link("item", ourItem.id, `${ourItem.name}: stats and who drops it →`)}</p>`;
   return html;
 }
 

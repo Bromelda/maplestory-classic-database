@@ -157,24 +157,15 @@ footer { text-align: center; color: var(--muted); font-size: .82em; padding: 24p
 .howto p { margin: 0 0 6px; font-size: .92em; }
 td .spr-cell { width: 34px; }
 
-/* ---------- market ---------- */
-#cat, #qarea { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
-.market-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+/* ---------- filters, info bars, buttons ---------- */
+#qarea { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.info-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
-.market-bar .sub { color: var(--muted); font-size: .88em; }
+.info-bar .sub { color: var(--muted); font-size: .88em; }
 .btn { display: inline-block; background: var(--accent); color: #fff !important; border-radius: 999px; padding: 7px 14px;
   font-weight: 600; font-size: .9em; text-decoration: none !important; white-space: nowrap; }
 .btn:hover { filter: brightness(1.08); }
 .btn.ghost { background: transparent; color: var(--accent) !important; border: 1px solid var(--accent); }
-.price-big { font-size: 1.8rem; font-weight: 800; margin: 6px 0 0; font-variant-numeric: tabular-nums; }
-.price-big span { font-size: .9rem; font-weight: 500; color: var(--muted); }
-.spark { width: 100%; height: auto; background: var(--accent-soft); border-radius: 8px; }
-.spark-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: .78em; margin-top: 4px; }
-.up { color: #2e9e5b; } .down { color: #d9434c; }
-h3 .up, h3 .down { text-transform: none; margin-left: 6px; }
-.sellers { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
-.seller { background: var(--accent-soft); border-radius: 6px; padding: 2px 8px; font-weight: 600; font-size: .9em; }
-.price-cell { color: var(--muted); font-size: .9em; }
 
 @media (max-width: 600px) {
   .wide-only { display: none; }
@@ -335,7 +326,7 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
   #tabs button { flex: none; padding: 8px 14px; }
   main { padding: 12px; }
   #controls input[type=search] { font-size: 16px; } /* stops iOS zooming in */
-  .cf input, .cf select, .card-head select, #cat, #qarea { font-size: 16px; }
+  .cf input, .cf select, .card-head select, #qarea { font-size: 16px; }
   .legend { font-size: .78em; }
   .calc-hero { padding: 16px; border-radius: 14px; }
   .calc-hero h2 { font-size: 1.2rem; }
@@ -353,7 +344,7 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
   .cb-mob .verdict { flex: none; }
   .cb-hint { margin-left: auto; color: var(--accent); font-weight: 600; font-size: .85em; }
   .footer, footer { padding-bottom: 32px; }
-  .market-bar { padding: 10px 12px; }
+  .info-bar { padding: 10px 12px; }
   .post { padding: 10px 12px; }
 }
 
