@@ -9,9 +9,6 @@
     --accent: #ff9440;
     --accent-soft: #3a2414;
     --sea: #0f2029;
-    --sea-line: #1e3946;
-    --land: #3a3222;
-    --land-line: #5a4e33;
     --hidden: #b98cf5;
     --npc: #f5d04a;
   }
@@ -61,17 +58,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* ---------- world map ---------- */
 #worldView { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 #worldView svg { display: block; width: 100%; height: auto; }
-.sea { fill: var(--sea); }
-.island { fill: var(--land); stroke: var(--land-line); stroke-width: 3; }
-.island-label { fill: var(--muted); font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.boat { stroke: var(--sea-line); stroke-width: 3; stroke-dasharray: 8 7; fill: none; }
+.island-label { fill: #fff; font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; paint-order: stroke; stroke: rgba(0, 0, 0, .7); stroke-width: 4px; }
+.boat { stroke: #fff; stroke-width: 3; stroke-dasharray: 8 7; fill: none; opacity: .85; }
 .zone { cursor: pointer; outline: none; }
 .zone:focus-visible circle { stroke: var(--text); stroke-width: 4; }
 .zone circle { stroke: #fff; stroke-width: 3; transition: transform .15s; transform-box: fill-box; transform-origin: center; }
 .zone:hover circle, .zone.active circle { transform: scale(1.12); }
 .zone.active circle { stroke: var(--accent); stroke-width: 4; }
-.zone-name { font-size: 15px; font-weight: 700; fill: var(--text); paint-order: stroke; stroke: var(--land); stroke-width: 4px; }
-.zone-sub { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--land); stroke-width: 3px; }
+.zone-name { font-size: 15px; font-weight: 700; fill: #fff; paint-order: stroke; stroke: rgba(0, 0, 0, .8); stroke-width: 4px; }
+.zone-sub { font-size: 12px; fill: #fff; paint-order: stroke; stroke: rgba(0, 0, 0, .8); stroke-width: 3px; }
 .zone-count { font-size: 12px; font-weight: 700; fill: #fff; pointer-events: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: .85em; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }

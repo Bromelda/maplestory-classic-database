@@ -6,10 +6,10 @@ It's a plain static website with no build step for the site itself. Open it loca
 
 ## Features
 
-- **Interactive world map**: Maple Island and Victoria Island, with every area colored by its typical training level. Click an area to list all its maps and their monsters.
+- **Interactive world map**: an illustrated map of Maple Island and Victoria Island (AI-made fan art, not an official map), with every area colored by its typical training level. Click an area to list all its maps and their monsters.
 - **Map pages** show:
   - the exact spawn count of each monster (for example 10 Shroom, 6 Red Snail, 5 Slime…)
-  - the real in-game minimap, with spawn points and portals on top, so you can click a portal to jump there
+  - the real in-game minimap, sharpened to 4x, with spawn points and portals on top, so you can click a portal to jump there
   - **How to get here**: the neighbouring maps' minimaps, zoomed in, with the portal that leads here circled. This is especially handy for hidden streets.
   - connected maps, **hidden portals**, one-way entrances, and how you get in when no portal leads there (job tests, party quests)
   - NPCs, plus boss respawn timers
@@ -48,7 +48,8 @@ It's a plain static website with no build step for the site itself. Open it loca
 | Monster stats, map layouts, spawn points | Classic World game files, via [Club FM](https://maplefm.gg) / maplestory.io |
 | Stat cross-check | [NiaDB](https://meowdb.com/msclassic), [MapleStoryClassic.org](https://maplestoryclassic.org/monsters/) |
 | Maps, portals, spawns, drops | [MapleClassic Wiki](https://mapleclassic.wiki) (CC BY-NC-SA 4.0) |
-| Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg) |
+| Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg). `tools/upscale_minimaps.py` makes the sharper copies in `assets/minimap-hd`, without AI, so markers still line up |
+| World map art | Generated with ChatGPT from a text description: original fan art, not an official map (`assets/world-map.webp`) |
 | Quests and NPC positions | Classic World game data (maplestory.io) + MapleClassic Wiki, via [Club FM](https://maplefm.gg) |
 | Skills (every level) | Classic World game files via maplestory.io (launch v1.0.0), with Oct 29 patch changes applied or flagged |
 | Free Market prices | [Club FM](https://maplefm.gg) public price summary, loaded live in the browser and refreshed daily by Club FM |
@@ -91,13 +92,12 @@ GitHub Pages needs a public repo, or a paid plan for a private one. Turn it on u
 
 ## Roadmap
 
-- The real in-game Victoria Island world map in place of the schematic
 - Forgotten Hollow, Orbis and El Nath once they open in Classic
 
 ## License and disclaimer
 
 The map, spawn and drop data is adapted from the MapleClassic Wiki under **CC BY-NC-SA 4.0**, so this project's data is shared under the same license, for non-commercial use with attribution.
 
-Game images (minimaps and monster sprites) are © NEXON, from MapleStory Classic World. They're used non-commercially under [Nexon's guide for fan content](https://m.nexon.com/terms/1037), so this site must stay free, with no paid access or selling.
+Game images (minimaps and monster sprites) are © NEXON, from MapleStory Classic World. The world map is AI-illustrated fan art based on the game's locations. They're used non-commercially under [Nexon's guide for fan content](https://m.nexon.com/terms/1037), so this site must stay free, with no paid access or selling.
 
 This is an unofficial fan project, not affiliated with or endorsed by Nexon. MapleStory is a trademark of Nexon.

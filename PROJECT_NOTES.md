@@ -17,8 +17,8 @@ Never use old 2006-era, GMS v83 or MSEA tables.
 
 World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Market, Jobs, Patches, Log.
 
-- **World Map**: drawn schematic (not the real art yet), areas colored by training level. On phones there are tappable area buttons.
-- **Maps**: real in-game minimaps with spawn points, portals, NPC markers, and "How to get here" (neighbouring maps zoomed in on the portal, circled).
+- **World Map**: AI-illustrated fan art (`assets/world-map.webp`, made in ChatGPT from a text prompt) with areas placed by `ZONES` in `app.js`, colored by training level. On phones there are tappable area buttons.
+- **Maps**: real in-game minimaps, sharpened 4x by `tools/upscale_minimaps.py` into `assets/minimap-hd` (the auto-update does new ones), with spawn points, portals, NPC markers, and "How to get here" (neighbouring maps zoomed in on the portal, circled).
   Maps with no walking way in explain how you get there (job tests, Kerning PQ).
 - **Monsters / Items**: stats, Classic drop tables with rates and kill counts, sprites, approximate Free Market values.
 - **Quests**: 325 quests as step-by-step guides, a tracker per character, and an "Only quests for my character" filter.
@@ -56,7 +56,7 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Market, Jobs
 
 ## To do / ideas
 
-1. **Real Victoria Island world map**: the user will make screenshots (in-game world map, W key). Swap out the drawn schematic and place clickable areas.
+1. **World map layout check**: the art is not based on the in-game map (W key). A screenshot could be used to make the geography more accurate.
 2. **Drop tracker desktop app** (Windows): like Minerva (github.com/itechify/minerva, MIT), it would read the Pickup Log by screen capture,
    but credit drops to monsters. Match "You received EXP (+N)" against the current map's spawn list
    (from the minimap title), then attribute the pickups that follow. Watch out for monsters with the same EXP, mixed looting and EXP events.
@@ -69,6 +69,7 @@ World Map, Monsters, Items, Maps, Quests, NPCs, Calculator, Skills, Market, Jobs
 
 ## Gotchas learned
 
+- Don't redraw minimaps with AI: markers use exact coordinates on the image, so the art has to keep the same layout. Any upscale must be an exact multiple of the original size.
 - iPhone Safari wouldn't scroll a `position: fixed` full-screen sheet, so on phones detail pages render in the normal page flow (`body.sheet-open`).
 - iOS zooms into inputs under 16px, so keep inputs at 16px on mobile.
 - maplestory.io's MCW skill data keeps Poison Breath's and Arrow Bomb's real numbers in unnamed entries (ids 2101005 and 3101005). `skills.js` merges them.

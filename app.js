@@ -26,21 +26,21 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => (n == null ? "—" : typeof n === "number" ? n.toLocaleString() : n);
 
-// ---------- world map layout (schematic, not to scale) ----------
+// ---------- world map layout (positions on assets/world-map.webp, not to scale) ----------
 const ZONES = {
-  "Mushroom Town": { x: 125, y: 140 },
-  "Amherst": { x: 228, y: 98 },
-  "Southperry": { x: 292, y: 178 },
-  "Ellinia": { x: 450, y: 300 },
-  "Perion": { x: 800, y: 285 },
-  "Sleepywood": { x: 625, y: 395 },
-  "Henesys": { x: 480, y: 450 },
-  "Kerning City": { x: 815, y: 455 },
-  "Lith Harbor": { x: 392, y: 545 },
-  "Free Market": { x: 640, y: 525 },
-  "Kerning City PQ": { x: 900, y: 560 },
-  "Florina Beach": { x: 182, y: 560 },
-  "Other": { x: 930, y: 90 },
+  "Mushroom Town": { x: 75, y: 105 },
+  "Amherst": { x: 195, y: 55 },
+  "Southperry": { x: 225, y: 160 },
+  "Ellinia": { x: 470, y: 110 },
+  "Perion": { x: 815, y: 135 },
+  "Sleepywood": { x: 665, y: 270 },
+  "Henesys": { x: 270, y: 335 },
+  "Kerning City": { x: 850, y: 365 },
+  "Lith Harbor": { x: 340, y: 480 },
+  "Free Market": { x: 590, y: 480 },
+  "Kerning City PQ": { x: 860, y: 495 },
+  "Florina Beach": { x: 85, y: 520 },
+  "Other": { x: 925, y: 590 },
 };
 const BOATS = [["Southperry", "Lith Harbor"], ["Lith Harbor", "Florina Beach"]];
 const LEVEL_BANDS = [
@@ -332,15 +332,12 @@ function renderWorld() {
     return `<path class="boat" d="M${p.x},${p.y} Q${mx},${my} ${q.x},${q.y}"></path>`;
   }).join("");
   const legend = LEVEL_BANDS.map(([, c, label]) => `<span><i class="dot" style="background:${c}"></i>Lv ${label}</span>`).join("") +
-    `<span><i class="dot" style="background:${TOWN_COLOR}"></i>Town / no monsters</span><span>Color = typical training level · number = maps in area · dashed line = boat</span>`;
+    `<span><i class="dot" style="background:${TOWN_COLOR}"></i>Town / no monsters</span><span>Color = typical training level · number = maps in area · dashed line = boat</span><span>AI-illustrated fan art (ChatGPT), not an official map and not to scale</span>`;
   $("#worldView").innerHTML = `
-    <svg viewBox="0 0 1000 640" role="img" aria-label="World map of Maple Island and Victoria Island">
-      <rect class="sea" width="1000" height="640"></rect>
-      <path class="island" d="M80,130 C60,60 190,30 270,70 C350,110 370,215 300,238 C225,262 105,225 80,130 Z"></path>
-      <path class="island" d="M350,330 C335,250 450,212 565,238 C660,200 790,198 885,250 C965,292 975,425 935,505 C900,585 785,612 655,592 C560,612 430,612 360,572 C305,532 318,420 350,330 Z"></path>
-      <path class="island" d="M128,560 C128,522 214,516 238,548 C254,586 182,604 150,593 C134,587 128,576 128,560 Z"></path>
-      <text class="island-label" x="70" y="35">Maple Island</text>
-      <text class="island-label" x="560" y="225">Victoria Island</text>
+    <svg viewBox="0 0 1000 667" role="img" aria-label="World map of Maple Island and Victoria Island">
+      <image href="assets/world-map.webp" width="1000" height="667"></image>
+      <text class="island-label" x="14" y="26">Maple Island</text>
+      <text class="island-label" x="420" y="640">Victoria Island</text>
       ${boats}${nodes}
     </svg>
     <div class="legend">${legend}</div>
@@ -633,7 +630,7 @@ function mapLayout(m, colorOf, { highlight = null, point = null, showMobs = true
   }
   const r = Math.max(18, Math.min(w, h) / 45);
   const bg = m.minimap
-    ? `<image href="assets/minimap/${m.gid}.png" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none"></image>`
+    ? `<image href="assets/minimap-hd/${m.gid}.webp" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none"></image>`
     : "";
   const mobs = showMobs ? m.mobpos.map(([id, x, y]) => {
     const name = getEntity("monster", id)?.name || id;
@@ -678,7 +675,7 @@ function mapLayout(m, colorOf, { highlight = null, point = null, showMobs = true
       <circle class="ring target" cx="${point.x + ox}" cy="${point.y + oy - d}" r="${R}" style="stroke-width:${sw}px"></circle>`;
   }
   const cap = caption
-    ? `<p class="sub" style="margin-top:6px">${m.minimap ? "In-game minimap" : "Layout from the game data"}. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (circled) · <span style="color:var(--npc)">◆</span> NPC · click any marker${showMobs ? " · dots = spawn points" : ""}</p>`
+    ? `<p class="sub" style="margin-top:6px">${m.minimap ? "In-game minimap, sharpened" : "Layout from the game data"}. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (circled) · <span style="color:var(--npc)">◆</span> NPC · click any marker${showMobs ? " · dots = spawn points" : ""}</p>`
     : "";
   return `<svg class="layout-svg ${m.minimap ? "has-img" : ""}" viewBox="${vb}" role="img" aria-label="${esc(m.name)} map">${bg}${mobs}${rings}${portals}${npcs}</svg>${cap}`;
 }

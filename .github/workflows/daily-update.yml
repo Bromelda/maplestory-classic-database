@@ -41,6 +41,11 @@ jobs:
           cp -n "$RUNNER_TEMP"/fm/data/minimap/*.png assets/minimap/ || true
           cp -n "$RUNNER_TEMP"/fm/data/sprite/*.gif assets/mob/ || true
 
+      - name: Sharpen new minimaps
+        run: |
+          pip install pillow numpy
+          python3 tools/upscale_minimaps.py
+
       - name: Rebuild data and log what changed
         run: |
           mkdir -p "$RUNNER_TEMP/old"
