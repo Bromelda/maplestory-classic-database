@@ -1,10 +1,10 @@
 // MapleStory Classic DB: interactive world map, searchable tables and a
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
-const DATASETS = ["monsters", "items", "maps", "jobs", "meta"];
+const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta"];
 const db = {};
 const byId = {};
-const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName: {} };
+const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
 
 // Free Market prices: Club FM's public daily summary, loaded live from GitHub.
 const MARKET_URL = "https://raw.githubusercontent.com/maplefm/maplefm.github.io/live/data/summary-public.json";
@@ -86,6 +86,20 @@ const COLUMNS = {
     { key: "change", label: "7-day", num: true, show: (p) => pct(p.change) },
     { key: "sales", label: "Sales", num: true, wide: true },
   ],
+  quests: [
+    { key: "_done", label: "✓", get: (q) => (isDone(q.id) ? 1 : 0), show: (q) => `<input type="checkbox" class="qdone" data-q="${q.id}" ${isDone(q.id) ? "checked" : ""} aria-label="Mark done">`, html: true },
+    { key: "name", label: "Quest" },
+    { key: "level", label: "Lv", num: true },
+    { key: "area", label: "Area", wide: true },
+    { key: "giver_name", label: "Start with", wide: true },
+    { key: "exp", label: "EXP", num: true },
+  ],
+  npcs: [
+    { key: "name", label: "NPC" },
+    { key: "role", label: "Role", wide: true },
+    { key: "_where", label: "Where", get: (n) => npcWhere(n) },
+    { key: "_q", label: "Quests", num: true, get: (n) => (idx.qGiver[n.id] || []).length },
+  ],
   jobs: [
     { key: "name", label: "Name" },
     { key: "branch", label: "Branch" },
@@ -93,8 +107,8 @@ const COLUMNS = {
     { key: "level", label: "Req Lv", num: true },
   ],
 };
-const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job", market: "price" };
-const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world", price: "market" };
+const TYPE_OF_TAB = { monsters: "monster", items: "item", maps: "map", jobs: "job", market: "price", quests: "quest", npcs: "npc" };
+const TAB_OF_TYPE = { monster: "monsters", item: "items", map: "maps", job: "jobs", zone: "world", price: "market", quest: "quests", npc: "npcs" };
 
 const state = { tab: "world", sortKey: "level", asc: true, history: [], pos: -1, zone: null };
 
@@ -110,6 +124,15 @@ async function load() {
     (idx.zones[m.zone] ||= []).push(m);
     for (const s of m.spawns) (idx.spawnsOf[s.monster] ||= []).push({ map: m.id, count: s.count });
     for (const p of m.portals) (idx.incoming[p.to] ||= new Set()).add(m.id);
+  }
+  const push = (o, k, v) => (o[k] ||= []).includes(v) || o[k].push(v);
+  for (const q of db.quests) {
+    if (q.giver) push(idx.qGiver, q.giver, q.id);
+    if (q.ender && q.ender !== q.giver) push(idx.qEnder, q.ender, q.id);
+    for (const pre of q.pre) push(idx.qNext, pre, q.id);
+    for (const x of q.need) push(idx.qNeedItem, x.item, q.id);
+    for (const x of [...q.rewards, ...q.choice]) push(idx.qRewardItem, x.item, q.id);
+    for (const k of q.kill) push(idx.qKill, k.monster, q.id);
   }
   for (const mob of db.monsters)
     for (const d of mob.drops) (idx.droppedBy[d.item] ||= []).push({ monster: mob.id, rate: d.rate, kills: d.kills });
@@ -150,11 +173,29 @@ async function loadMarket() {
   if (location.hash.startsWith("#price/")) fromHash();
   else if (currentEntry()) renderDetail();
 }
+// ---------- quest tracker (saved in this browser only) ----------
+const DONE_KEY = "msclassicdb.questsDone";
+let doneSet = new Set();
+try { doneSet = new Set(JSON.parse(localStorage.getItem(DONE_KEY) || "[]")); } catch { /* storage unavailable */ }
+function isDone(id) { return doneSet.has(id); }
+function setDone(id, on) {
+  on ? doneSet.add(id) : doneSet.delete(id);
+  try { localStorage.setItem(DONE_KEY, JSON.stringify([...doneSet])); } catch { /* storage unavailable */ }
+}
+function npcWhere(n) {
+  if (!n.locations.length) return "—";
+  const m = getEntity("map", n.locations[0].map);
+  const extra = n.locations.length > 1 ? ` +${n.locations.length - 1}` : "";
+  return `${m?.zone && m.zone !== m.name ? m.zone + ": " : ""}${m?.name || n.locations[0].map}${extra}`;
+}
+
 function priceOf(name) { return idx.priceByName[String(name).toLowerCase()]; }
 
 function bind() {
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
-  ["#search", "#minLv", "#maxLv", "#variants", "#cat"].forEach((s) => $(s).addEventListener("input", renderTable));
+  ["#search", "#minLv", "#maxLv", "#variants", "#cat", "#qarea", "#hideDone"].forEach((s) => $(s).addEventListener("input", renderTable));
+  const areas = [...new Set(db.quests.map((q) => q.area))].sort();
+  $("#qarea").innerHTML = `<option value="">All areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
   window.addEventListener("hashchange", fromHash);
   document.addEventListener("click", onLinkClick);
   document.addEventListener("mouseover", onHover);
@@ -162,6 +203,14 @@ function bind() {
 }
 
 function onLinkClick(e) {
+  const box = e.target.closest?.(".qdone");
+  if (box) {
+    e.stopPropagation();
+    setDone(box.dataset.q, box.checked);
+    if (state.tab === "quests") renderTable();
+    if (currentEntry()?.type === "quest") renderDetail();
+    return;
+  }
   const a = e.target.closest("[data-type][data-id]");
   if (!a) return;
   e.preventDefault();
@@ -180,7 +229,9 @@ function switchTab(tab) {
   const isMarket = tab === "market";
   $("#catWrap").hidden = !isMarket;
   $("#marketBar").hidden = !isMarket;
-  document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = isMarket; });
+  document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = isMarket || tab === "npcs"; });
+  $("#qareaWrap").hidden = tab !== "quests";
+  $("#hideDoneWrap").hidden = tab !== "quests";
   if (!isWorld) {
     state.sortKey = isMarket ? "sales" : COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
     state.asc = !isMarket;
@@ -254,6 +305,11 @@ function filtered() {
   const rows = (db[tab] || []).filter((e) => {
     if (q && !e.name.toLowerCase().includes(q)) return false;
     if (tab === "market") return !cat || e.cat === cat;
+    if (tab === "npcs") return true;
+    if (tab === "quests") {
+      if ($("#qarea").value && e.area !== $("#qarea").value) return false;
+      if ($("#hideDone").checked && isDone(e.id)) return false;
+    }
     if (tab === "monsters" && !showVariants && (e.variant || e.level >= 200 || e.name.startsWith("Tutorial") || (!idx.spawnsOf[e.id] && !e.drops.length))) return false;
     const lv = lvOf(e);
     if (!isNaN(min) && (lv == null || lv < min)) return false;
@@ -299,11 +355,12 @@ function renderTable() {
       if (i === 0 && e.variant) extra = ` <span class="badge">${esc(e.variant)}</span>`;
       if (i === 0 && e.disputed) extra += '<span class="unv" title="Sources disagree; see details">?</span>';
       if (i === 0 && e.region === "Hidden Street") extra = ' <span class="badge hidden">Hidden</span>';
-      const cell = i === 0 && tab === "monsters" ? `<span class="spr-cell">${sprite(e, 28)}</span>${esc(e.name)}` : esc(fmt(v));
+      const cell = c.html ? v : i === 0 && tab === "monsters" ? `<span class="spr-cell">${sprite(e, 28)}</span>${esc(e.name)}` : esc(fmt(v));
       return `<td class="${c.num ? "num" : ""} ${c.wide ? "wide-only" : ""}">${cell}${extra}</td>`;
     }).join("") + "</tr>").join("");
   $("#table").innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
-  $("#count").textContent = `${rows.length.toLocaleString()} result${rows.length === 1 ? "" : "s"}`;
+  $("#count").textContent = `${rows.length.toLocaleString()} result${rows.length === 1 ? "" : "s"}` +
+    (tab === "quests" ? ` · ${db.quests.filter((q) => isDone(q.id)).length} of ${db.quests.length} done` : "");
   $("#table").querySelectorAll("th").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.key;
     state.asc = state.sortKey === k ? !state.asc : true;
@@ -341,7 +398,7 @@ function fromHash() {
 
 function getEntity(type, id) {
   if (type === "zone") return idx.zones[id] ? { id, name: id } : null;
-  const ds = { monster: "monsters", item: "items", map: "maps", job: "jobs", price: "market" }[type];
+  const ds = { monster: "monsters", item: "items", map: "maps", job: "jobs", price: "market", quest: "quests", npc: "npcs" }[type];
   return ds ? byId[ds]?.[id] : null;
 }
 
@@ -373,7 +430,7 @@ function renderDetail() {
   const nav = `<div class="panel-nav">
       <button id="back" ${state.pos > 0 ? "" : "disabled"}>← Back</button>
       <button id="close" title="Close">✕</button></div>`;
-  const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail, price: priceDetail }[cur.type](getEntity(cur.type, cur.id));
+  const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail, price: priceDetail, quest: questDetail, npc: npcDetail }[cur.type](getEntity(cur.type, cur.id));
   panel.innerHTML = nav + body;
   panel.scrollTop = 0;
   $("#back").onclick = () => { if (state.pos > 0) { state.pos--; syncHash(); renderDetail(); } };
@@ -440,15 +497,19 @@ function mapDetail(m) {
   if (walk.length) html += `<h3>Connected maps</h3><ul>${walk.map(portalLi).join("")}</ul>`;
   if (hidden.length) html += `<h3>Hidden portals</h3><ul>${hidden.map(portalLi).join("")}</ul>`;
   if (into.length) html += `<h3>One-way in from</h3><ul>${into.map((id) => `<li>${link("map", id)}</li>`).join("")}</ul>`;
-  if (m.npcs.length) html += `<h3>NPCs</h3><p>${m.npcs.map(esc).join(", ")}</p>`;
+  if (m.npcs.length) html += `<h3>NPCs</h3><ul>${m.npcs.map((n) => {
+    const e = getEntity("npc", n.npc);
+    const qn = (idx.qGiver[n.npc] || []).length;
+    return `<li><i class="npc-dot"></i>${link("npc", n.npc)}<span class="right">${esc(e?.role || "")}${qn ? `${e?.role ? " · " : ""}${qn} quest${qn > 1 ? "s" : ""}` : ""}</span></li>`;
+  }).join("")}</ul>`;
   if (!isHidden) html += howToGetHere(m);
   return html;
 }
 
 // Draws a map: the real in-game minimap when we have it, with spawn points and
 // portals on top. `highlight` = id of a destination map whose portal(s) get circled.
-function mapLayout(m, colorOf, { highlight = null, showMobs = true, caption = true } = {}) {
-  const pts = [...m.mobpos.map(([, x, y]) => [x, y]), ...m.portals.map((p) => [p.x, p.y])];
+function mapLayout(m, colorOf, { highlight = null, point = null, showMobs = true, showNpcs = true, caption = true } = {}) {
+  const pts = [...m.mobpos.map(([, x, y]) => [x, y]), ...m.portals.map((p) => [p.x, p.y]), ...m.npcs.map((n) => [n.x, n.y])];
   if (!m.minimap && !m.mobpos.length) return ""; // nothing worth drawing (e.g. small interiors)
   let ox, oy, w, h;
   if (m.origin) { [ox, oy] = m.origin; [w, h] = m.size; }
@@ -468,7 +529,7 @@ function mapLayout(m, colorOf, { highlight = null, showMobs = true, caption = tr
   }).join("") : "";
   // zoom in on the circled portal so it's easy to spot on wide maps (e.g. towns)
   let vb = `0 0 ${w} ${h}`, zoomW = w;
-  const target = highlight && m.portals.find((p) => p.to === highlight);
+  const target = point || (highlight && m.portals.find((p) => p.to === highlight));
   if (target) {
     const cw = Math.min(w, 1800);
     const ch = Math.min(h, cw * 0.62);
@@ -484,7 +545,7 @@ function mapLayout(m, colorOf, { highlight = null, showMobs = true, caption = tr
     const t = getEntity("map", p.to);
     const s = r * 1.3, cx = p.x + ox, cy = p.y + oy;
     const hidden = p.kind === "hidden";
-    if (p.to === highlight || (!highlight && hidden)) {
+    if (p.to === highlight || (!highlight && !point && hidden)) {
       const isT = p.to === highlight;
       const R = isT ? zoomW * 0.09 : Math.max(r * 4.5, Math.min(w, h) / 9);
       const sw = isT ? zoomW * 0.016 : Math.max(8, w * 0.004);
@@ -493,10 +554,21 @@ function mapLayout(m, colorOf, { highlight = null, showMobs = true, caption = tr
     }
     return `<rect class="portal ${hidden ? "hidden-p" : ""}" x="${cx - s}" y="${cy - s * 1.6}" width="${s * 2}" height="${s * 2.4}" rx="${s}" data-type="map" data-id="${esc(p.to)}"><title>${hidden ? "Hidden portal" : "Portal"} → ${esc(t?.name || p.to)}</title></rect>`;
   }).join("");
+  const d = r * 1.1;
+  const npcs = showNpcs || point ? m.npcs.map((n) => {
+    const e = getEntity("npc", n.npc);
+    const cx = n.x + ox, cy = n.y + oy - d;
+    return `<path class="npc-mark" d="M${cx},${cy - d} L${cx + d},${cy} L${cx},${cy + d} L${cx - d},${cy} Z" data-type="npc" data-id="${esc(n.npc)}"><title>${esc(e?.name || n.npc)}</title></path>`;
+  }).join("") : "";
+  if (point) {
+    const R = zoomW * 0.09, sw = zoomW * 0.016;
+    rings += `<circle class="ring halo" cx="${point.x + ox}" cy="${point.y + oy - d}" r="${R}" style="stroke-width:${sw * 1.9}px"></circle>
+      <circle class="ring target" cx="${point.x + ox}" cy="${point.y + oy - d}" r="${R}" style="stroke-width:${sw}px"></circle>`;
+  }
   const cap = caption
-    ? `<p class="sub" style="margin-top:6px">${m.minimap ? "In-game minimap" : "Layout from the game data"}. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (circled) · click a portal to go there${showMobs ? " · dots = spawn points" : ""}</p>`
+    ? `<p class="sub" style="margin-top:6px">${m.minimap ? "In-game minimap" : "Layout from the game data"}. <span style="color:var(--accent)">■</span> portal · <span style="color:var(--hidden)">■</span> hidden portal (circled) · <span style="color:var(--npc)">◆</span> NPC · click any marker${showMobs ? " · dots = spawn points" : ""}</p>`
     : "";
-  return `<svg class="layout-svg ${m.minimap ? "has-img" : ""}" viewBox="${vb}" role="img" aria-label="${esc(m.name)} map">${bg}${mobs}${rings}${portals}</svg>${cap}`;
+  return `<svg class="layout-svg ${m.minimap ? "has-img" : ""}" viewBox="${vb}" role="img" aria-label="${esc(m.name)} map">${bg}${mobs}${rings}${portals}${npcs}</svg>${cap}`;
 }
 
 // "How to get here": the neighbouring maps, with the portal that leads here circled.
@@ -514,7 +586,7 @@ function howToGetHere(m) {
     const p = src.portals.find((x) => x.to === m.id);
     const how = p?.kind === "hidden" ? "the hidden portal" : "the portal";
     return `<div class="howto"><p>From ${link("map", src.id)}, take ${how} circled below${src.zone !== m.zone ? ` (${esc(src.zone)})` : ""}.</p>
-      ${mapLayout(src, {}, { highlight: m.id, showMobs: false, caption: false })}</div>`;
+      ${mapLayout(src, {}, { highlight: m.id, showMobs: false, showNpcs: false, caption: false })}</div>`;
   }).join("");
   const more = from.length > shown.length ? `<p class="sub">Also reachable from ${from.slice(shown.length).map((x) => link("map", x.id)).join(", ")}.</p>` : "";
   return `<h3>How to get here</h3>${cards}${more}`;
@@ -545,6 +617,7 @@ function monsterDetail(mob) {
   } else {
     html += `<p class="sub">No Classic drops reported yet.</p>`;
   }
+  html += questList("Quests that hunt it", idx.qKill[mob.id]);
   const where = idx.spawnsOf[mob.id] || [];
   html += `<h3>Found in (${where.length})</h3>`;
   html += where.length
@@ -564,6 +637,8 @@ function itemDetail(it) {
   } else if (db.market && !db.marketError) {
     html += `<h3>Free Market price</h3><p class="sub">No recent sales tracked. ${cozyButton()}</p>`;
   }
+  html += questList("Needed for quests", idx.qNeedItem[it.id]);
+  html += questList("Quest reward from", idx.qRewardItem[it.id]);
   const by = idx.droppedBy[it.id] || [];
   html += `<h3>Dropped by (${by.length})</h3>`;
   html += by.length
@@ -579,6 +654,101 @@ function jobDetail(j) {
   const next = db.jobs.filter((x) => x.from === j.id);
   if (next.length) html += `<h3>Advances to</h3><ul>${next.map((x) => `<li>${link("job", x.id)}<span class="right">Lv ${x.level}</span></li>`).join("")}</ul>`;
   if (j.notes) html += `<div class="note">${esc(j.notes)}</div>`;
+  return html;
+}
+
+// ---------- NPCs ----------
+function npcDetail(n) {
+  let html = `<h2>${esc(n.name)}</h2><p class="sub">NPC${n.role ? ` · ${esc(n.role)}` : ""}${n.shop ? ' · <span class="badge">Shop</span>' : ""}</p>`;
+  if (!n.locations.length) html += `<p class="sub">Location not in the game data yet.</p>`;
+  html += n.locations.map((loc, i) => {
+    const m = getEntity("map", loc.map);
+    if (!m) return "";
+    const pic = i < 4 ? mapLayout(m, {}, { point: loc, showMobs: false, caption: false }) : "";
+    return `<h3>${n.locations.length > 1 ? `Location ${i + 1}` : "Where to find"}</h3>
+      <p>${link("map", m.id)}${m.zone && m.zone !== m.name ? ` <span class="sub">· ${esc(m.zone)}</span>` : ""}</p>${pic}
+      ${pic ? `<p class="sub" style="margin-top:4px">Circled on the in-game minimap.</p>` : ""}`;
+  }).join("");
+  html += questList("Quests they give", idx.qGiver[n.id], true);
+  html += questList("Quests you turn in here", idx.qEnder[n.id], true);
+  return html;
+}
+
+// ---------- quests ----------
+function questList(title, ids, showDone = false) {
+  if (!ids?.length) return "";
+  const qs = ids.map((id) => getEntity("quest", id)).filter(Boolean).sort((a, b) => a.level - b.level);
+  return `<h3>${title} (${qs.length})</h3><ul>${qs.map((q) => `<li>${showDone ? `<input type="checkbox" class="qdone" data-q="${q.id}" ${isDone(q.id) ? "checked" : ""} aria-label="Done">` : ""}${link("quest", q.id)}<span class="right">Lv ${q.level}</span></li>`).join("")}</ul>`;
+}
+
+function itemSource(itemId) {
+  const by = idx.droppedBy[itemId] || [];
+  if (by.length) {
+    const top = by.slice(0, 2).map((d) => `${link("monster", d.monster)} (${rateText(d.rate)})`).join(", ");
+    return `dropped by ${top}${by.length > 2 ? ` +${by.length - 2} more` : ""}`;
+  }
+  const fromQ = idx.qRewardItem[itemId];
+  if (fromQ?.length) return `from quest ${link("quest", fromQ[0])}`;
+  return "";
+}
+
+function npcSpot(npcId) {
+  const n = getEntity("npc", npcId);
+  const loc = n?.locations[0];
+  const m = loc && getEntity("map", loc.map);
+  return { n, loc, m };
+}
+
+function questDetail(q) {
+  const done = isDone(q.id);
+  let html = `<h2>${esc(q.name)}</h2>
+    <p class="sub">Quest · ${esc(q.area)}${q.repeatable ? ' · <span class="badge">Repeatable</span>' : ""}${q.event ? ' · <span class="badge">Event</span>' : ""}</p>
+    <label class="track ${done ? "on" : ""}"><input type="checkbox" class="qdone" data-q="${q.id}" ${done ? "checked" : ""}> ${done ? "Done!" : "Mark as done"}</label>`;
+
+  // requirements
+  const req = [["Level", q.max_level ? `${q.level}–${q.max_level}` : `${q.level}+`], ["Job", esc(q.jobs || "Any")]];
+  if (q.skill) req.push(["Profession", esc(q.skill.join(", "))]);
+  if (q.prof) req.push(["Profession level", esc(q.prof.map(([k, v]) => `${k} ${v}`).join(", "))]);
+  html += dl(req);
+  if (q.pre.length) html += `<h3>Finish first</h3><ul>${q.pre.map((id) => `<li>${isDone(id) ? "✅" : "⬜"} ${link("quest", id)}</li>`).join("")}</ul>`;
+
+  // step 1: start
+  const st = npcSpot(q.giver);
+  html += `<h3>1 · Start the quest</h3><p>Talk to ${q.giver ? link("npc", q.giver, q.giver_name) : esc(q.giver_name)}${st.m ? ` in ${link("map", st.m.id)}` : q.where ? ` (${esc(q.where)})` : ""}.</p>`;
+  if (st.m) html += mapLayout(st.m, {}, { point: st.loc, showMobs: false, caption: false });
+  if (q.start_items.length) html += `<p class="sub">You'll be given: ${q.start_items.map((x) => `${x.count > 1 ? x.count + "× " : ""}${link("item", x.item)}`).join(", ")}</p>`;
+
+  // step 2: tasks
+  const tasks = [];
+  for (const k of q.kill) {
+    const where = (idx.spawnsOf[k.monster] || [])[0];
+    tasks.push(`<li><span class="spr-cell">${sprite(getEntity("monster", k.monster), 28)}</span><span>Defeat <b>${k.count}×</b> ${link("monster", k.monster)}${where ? ` <span class="sub">· most common in ${link("map", where.map)}</span>` : ""}</span></li>`);
+  }
+  for (const x of q.need) {
+    const src = itemSource(x.item);
+    tasks.push(`<li><span class="spr-cell">📦</span><span>Collect <b>${x.count}×</b> ${link("item", x.item)}${src ? ` <span class="sub">· ${src}</span>` : ""}</span></li>`);
+  }
+  if (q.cost) tasks.push(`<li><span class="spr-cell">💰</span><span>Pay <b>${fmt(q.cost)}</b> mesos</span></li>`);
+  if (!tasks.length && q.steps?.length) tasks.push(...q.steps.map((t) => `<li><span class="spr-cell">•</span><span>${esc(t)}</span></li>`));
+  if (tasks.length) html += `<h3>2 · What to do</h3><ul class="tasks">${tasks.join("")}</ul>`;
+
+  // step 3: finish
+  const en = npcSpot(q.ender || q.giver);
+  const endName = q.ender_name || q.giver_name;
+  const same = !q.ender || q.ender === q.giver;
+  html += `<h3>${tasks.length ? "3" : "2"} · Turn it in</h3><p>${same ? "Go back to" : "Bring it to"} ${q.ender || q.giver ? link("npc", q.ender || q.giver, endName) : esc(endName)}${en.m ? ` in ${link("map", en.m.id)}` : ""}.</p>`;
+  if (!same && en.m) html += mapLayout(en.m, {}, { point: en.loc, showMobs: false, caption: false });
+
+  // rewards
+  const rw = [];
+  if (q.exp) rw.push(`<li><span class="spr-cell">⭐</span><span>${fmt(q.exp)} EXP</span></li>`);
+  if (q.meso) rw.push(`<li><span class="spr-cell">💰</span><span>${fmt(q.meso)} mesos</span></li>`);
+  if (q.fame) rw.push(`<li><span class="spr-cell">👍</span><span>${q.fame} fame</span></li>`);
+  for (const x of q.rewards) rw.push(`<li><span class="spr-cell">🎁</span><span>${x.count > 1 ? x.count + "× " : ""}${link("item", x.item)}</span></li>`);
+  if (q.choice.length) rw.push(`<li><span class="spr-cell">🎲</span><span>One of: ${q.choice.map((x) => `${link("item", x.item)}${x.note && !/random/.test(x.note) ? ` <span class="sub">(${esc(x.note)})</span>` : ""}`).join(", ")}${q.choice.some((x) => /random/.test(x.note || "")) ? ' <span class="sub">(random)</span>' : ""}</span></li>`);
+  if (rw.length) html += `<h3>Rewards</h3><ul class="tasks">${rw.join("")}</ul>`;
+  if (q.unconfirmed?.length) html += `<div class="note">Some details (${esc(q.unconfirmed.join(", "))}) aren't confirmed in Classic yet.</div>`;
+  html += questList("Unlocks next", idx.qNext[q.id]);
   return html;
 }
 

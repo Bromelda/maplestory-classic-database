@@ -63,6 +63,22 @@ ZONE_ALIAS = {
 }
 
 
+BUILD_DAY = __import__("datetime").date.today().isoformat()
+
+
+def job_text(ids):
+    """Game job ids -> readable requirement ('' = any job)."""
+    if not ids or len(ids) > 20:
+        return None
+    names = {0: "Beginner", 1: "Warrior", 2: "Magician", 3: "Bowman", 4: "Thief"}
+    out = []
+    for j in ids:
+        n = names.get(0 if j == 0 else j // 100)
+        if n and n not in out:
+            out.append(n)
+    return " / ".join(out) or None
+
+
 def zone_for(m):
     """Group a map into one clickable area of the world map."""
     name, area = m["name"], m["area"]
@@ -153,7 +169,75 @@ def main():
             "disputed": disputed,
         })
 
-    # ---------- items (everything that appears in a Classic drop) ----------
+    # ---------- quests ----------
+    name_to_gid = {}
+    for r in itemdb["items"]:
+        name_to_gid.setdefault(r[0], r[1])
+    map_npc_names = {n[0] for mp in maps_src.values() for n in mp["npcs"]}
+    gid_name = {}
+    for q in guide["quests"]:
+        gid_name.setdefault(q["gid"], q["g"])
+
+    def npc_ref(name):
+        if not name:
+            return None
+        if name in map_npc_names:
+            return slug(name)
+        base = re.sub(r"\s*\(.*\)$", "", name)
+        return slug(base) if base in map_npc_names else slug(name)
+
+    def use_item(name):
+        used_items.setdefault(name, guide_ids.get(name) or name_to_gid.get(name))
+        return slug(name)
+
+    quests = []
+    skipped = {"ended": 0, "unreleased": 0}
+    for q in guide["quests"]:
+        if q.get("ended") or (q.get("to") and q["to"] < BUILD_DAY):
+            skipped["ended"] += 1
+            continue
+        if q["a"] == "Forgotten Hollow" or (q.get("from") and q["from"] > BUILD_DAY):
+            skipped["unreleased"] += 1
+            continue
+        kills = []
+        for name, count, mob_gid in q["kill"]:
+            kills.append({"monster": slug(gid_to_mob.get(mob_gid, name)), "count": count})
+        choice = [{"item": use_item(n), "count": c, "note": note} for n, c, note in (q.get("get2") or [])]
+        end_name = gid_name.get(q["end"])
+        quests.append({
+            "id": f"q{q['id']}",
+            "name": q["n"],
+            "level": q["lv"],
+            "max_level": q.get("lv2"),
+            "area": q["a"],
+            "where": q.get("town"),
+            "giver": npc_ref(q["g"]),
+            "giver_name": q["g"],
+            "ender": npc_ref(end_name),
+            "ender_name": end_name,
+            "jobs": job_text(q["jobs"]),
+            "repeatable": bool(q["rep"]),
+            "pre": [f"q{x}" for x in q["pre"]],
+            "start_items": [{"item": use_item(n), "count": c} for n, c in (q.get("start") or [])],
+            "need": [{"item": use_item(n), "count": c} for n, c in q["need"]],
+            "kill": kills,
+            "cost": q.get("cost"),
+            "skill": q.get("skill"),
+            "prof": q.get("prof"),
+            "steps": q.get("steps"),
+            "exp": q["exp"],
+            "meso": q["meso"],
+            "fame": q["fame"],
+            "rewards": [{"item": use_item(n), "count": c} for n, c in q["get"]],
+            "choice": choice,
+            "event": q["a"] == "Event",
+            "unconfirmed": q.get("unconfirmed"),
+        })
+    qids = {q["id"] for q in quests}
+    for q in quests:
+        q["pre"] = [x for x in q["pre"] if x in qids]
+
+    # ---------- items (Classic drops + quest items) ----------
     items = []
     for name, gid in sorted(used_items.items()):
         row = item_rows.get(gid) if gid else None
@@ -201,7 +285,7 @@ def main():
             "spawns": spawns,
             "respawn": respawn or None,
             "portals": portals,
-            "npcs": [n[0] for n in mp["npcs"]],
+            "npcs": [{"npc": slug(n[0]), "x": n[1], "y": n[2]} for n in mp["npcs"]],
             "size": [mp["w"], mp["h"]],
             "origin": [mm[0], mm[1]] if mm else None,
             "minimap": bool(mm) and (OUT.parent / "assets" / "minimap" / f"{mp['id']}.png").exists(),
@@ -209,6 +293,21 @@ def main():
         })
     for m in maps:
         m["zone"] = zone_for(m)
+
+    # ---------- NPCs ----------
+    npcs = {}
+    for mp in maps_src.values():
+        for name, x, y, role in mp["npcs"]:
+            n = npcs.setdefault(slug(name), {"id": slug(name), "name": name, "role": None, "locations": []})
+            n["role"] = n["role"] or role or None
+            n["locations"].append({"map": slug(mp["name"]), "x": x, "y": y})
+            if name in (mp.get("shops") or []):
+                n["shop"] = True
+    for q in quests:
+        for key, nm in (("giver", "giver_name"), ("ender", "ender_name")):
+            if q[key] and q[key] not in npcs:
+                npcs[q[key]] = {"id": q[key], "name": re.sub(r"\s*\(.*\)$", "", q[nm]) or q[nm], "role": None, "locations": []}
+    npcs = sorted(npcs.values(), key=lambda n: n["name"])
     maps.sort(key=lambda m: (m["region"], m["area"] or "~", m["name"]))
 
     # sanity: every reference resolves
@@ -223,16 +322,24 @@ def main():
     for m in monsters:
         for d in m["drops"]:
             assert d["item"] in item_ids, (m["name"], d)
+    npc_ids = {n["id"] for n in npcs}
+    for q in quests:
+        for k in ("giver", "ender"):
+            assert q[k] is None or q[k] in npc_ids, (q["name"], k)
+        for lst in ("need", "rewards", "choice", "start_items"):
+            for x in q[lst]:
+                assert x["item"] in item_ids, (q["name"], x)
 
     meta = {
         "built_from": f"Club FM public data, built {world.get('built')}",
         "classic_version": "MapleStory Classic World (game version 0.9.0 drop logs)",
     }
-    for fname, data in [("monsters", monsters), ("items", items), ("maps", maps)]:
+    for fname, data in [("monsters", monsters), ("items", items), ("maps", maps), ("npcs", npcs), ("quests", quests)]:
         (OUT / f"{fname}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
     (OUT / "meta.json").write_text(json.dumps(meta, indent=2))
     print(f"monsters {len(monsters)}, items {len(items)}, maps {len(maps)}, "
-          f"drop rows {sum(len(m['drops']) for m in monsters)}")
+          f"drop rows {sum(len(m['drops']) for m in monsters)}, npcs {len(npcs)}, "
+          f"quests {len(quests)} (skipped {skipped})")
 
 
 if __name__ == "__main__":

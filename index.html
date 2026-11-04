@@ -15,6 +15,8 @@
       <button data-tab="monsters">Monsters</button>
       <button data-tab="items">Items</button>
       <button data-tab="maps">Maps</button>
+      <button data-tab="quests">Quests</button>
+      <button data-tab="npcs">NPCs</button>
       <button data-tab="market">Market</button>
       <button data-tab="jobs">Jobs</button>
     </nav>
@@ -25,6 +27,8 @@
       <input id="search" type="search" placeholder="Search by name…" autocomplete="off">
       <label class="lvctl">Lv <input id="minLv" type="number" min="0" max="200" placeholder="min"></label>
       <label class="lvctl">to <input id="maxLv" type="number" min="0" max="200" placeholder="max"></label>
+      <label id="qareaWrap" hidden><select id="qarea"><option value="">All areas</option></select></label>
+      <label id="hideDoneWrap" class="check" hidden><input id="hideDone" type="checkbox"> Hide done</label>
       <label id="catWrap" hidden><select id="cat"><option value="">All categories</option></select></label>
       <label id="variantsWrap" class="check"><input id="variants" type="checkbox"> Show job-test, PQ &amp; event variants</label>
       <span id="count"></span>
