@@ -79,7 +79,7 @@ async function load() {
     try { const r = await fetch(`data/${name}.json`, { cache: "no-cache" }); db[name] = r.ok ? await r.json() : []; } catch { db[name] = []; }
   }));
   await Promise.all(DATASETS.map(async (name) => {
-    const res = await fetch(`data/${name}.json`);
+    const res = await fetch(`data/${name}.json`, { cache: "no-cache" }); // check for new data on every visit
     if (!res.ok) throw new Error(`${name}.json: ${res.status}`);
     db[name] = await res.json();
     if (Array.isArray(db[name])) byId[name] = Object.fromEntries(db[name].map((e) => [e.id, e]));
