@@ -22,7 +22,6 @@ body {
   margin: 0;
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
   background: radial-gradient(1200px 600px at 50% -200px, #2a1a0e 0%, transparent 70%), var(--bg);
-  background-attachment: fixed;
   color: var(--text);
 }
 a { color: var(--accent); }
@@ -293,16 +292,16 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
 .calc-bar { display: none; }
 .panel-title { display: none; }
 @media (max-width: 959px) {
-  /* detail panel becomes a full-screen sheet */
-  #detail { position: fixed; inset: 0; z-index: 30; border: 0; border-radius: 0; max-height: none; overflow-y: auto;
-    padding: 0 16px calc(32px + env(safe-area-inset-bottom)); animation: sheet-in .18s ease-out; overscroll-behavior: contain; }
-  @keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .panel-nav { position: sticky; top: 0; z-index: 2; background: var(--panel); margin: 0 -16px 10px; padding: 10px 8px;
-    padding-top: calc(10px + env(safe-area-inset-top)); border-bottom: 1px solid var(--line); align-items: center; gap: 8px; }
+  /* detail pages become a normal full page (uses regular page scrolling, which iPhone Safari handles reliably) */
+  header { position: static; }
+  #detail { border: 0; border-radius: 0; background: transparent; max-height: none; padding: 0 0 32px; margin: -12px 0 0; animation: page-in .15s ease-out; }
+  @keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
+  body.sheet-open #controls, body.sheet-open #mainView, body.sheet-open footer, body.sheet-open .calc-bar { display: none !important; }
+  .panel-nav { position: sticky; top: 0; z-index: 6; background: var(--bg); margin: 0 -12px 10px; padding: 8px 4px;
+    padding-top: calc(8px + env(safe-area-inset-top)); border-bottom: 1px solid var(--line); align-items: center; gap: 8px; }
   .panel-nav button { font-size: 1rem; padding: 8px 12px; border-radius: 10px; min-width: 44px; min-height: 40px; }
   .panel-nav button:disabled { visibility: visible; opacity: 0; pointer-events: none; }
   .panel-title { display: block; flex: 1; text-align: center; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  body.sheet-open { overflow: hidden; }
   #detail li { padding: 6px 0; }
   .zone-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
   .zone-chip { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; align-items: center; text-align: left; font: inherit; color: var(--text);

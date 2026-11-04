@@ -469,8 +469,15 @@ function renderDetail() {
   const cur = currentEntry();
   $("#layout").classList.toggle("with-detail", !!cur);
   highlightZone(cur?.type === "zone" ? cur.id : null);
-  document.body.classList.toggle("sheet-open", !!cur && isPhone());
-  if (!cur) { panel.hidden = true; return; }
+  const wasOpen = document.body.classList.contains("sheet-open");
+  const phoneOpen = !!cur && isPhone();
+  if (phoneOpen && !wasOpen) state.listScroll = window.scrollY;   // remember where the list was
+  document.body.classList.toggle("sheet-open", phoneOpen);
+  if (!cur) {
+    panel.hidden = true;
+    if (wasOpen) requestAnimationFrame(() => window.scrollTo(0, state.listScroll || 0));
+    return;
+  }
   panel.hidden = false;
   const nav = `<div class="panel-nav">
       <button id="back" ${state.pos > 0 ? "" : "disabled"}>← Back</button>
@@ -479,6 +486,7 @@ function renderDetail() {
   const body = { zone: zoneDetail, map: mapDetail, monster: monsterDetail, item: itemDetail, job: jobDetail, price: priceDetail, quest: questDetail, npc: npcDetail }[cur.type](getEntity(cur.type, cur.id));
   panel.innerHTML = nav + body;
   panel.scrollTop = 0;
+  if (phoneOpen) window.scrollTo(0, 0);
   $("#back").onclick = () => { if (state.pos > 0) history.back(); };
   $("#close").onclick = closeDetail;
   renderTable();
