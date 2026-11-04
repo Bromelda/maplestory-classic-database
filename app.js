@@ -2,6 +2,7 @@
 // cross-linked detail panel. Data lives in data/*.json (built by tools/build_data.py).
 
 const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta"];
+const OPTIONAL = ["log", "patches"]; // fine if missing
 const db = {};
 const byId = {};
 const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, priceByName: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {} };
@@ -114,6 +115,9 @@ const state = { tab: "world", sortKey: "level", asc: true, history: [], pos: -1,
 
 // ---------- load + index ----------
 async function load() {
+  await Promise.all(OPTIONAL.map(async (name) => {
+    try { const r = await fetch(`data/${name}.json`, { cache: "no-cache" }); db[name] = r.ok ? await r.json() : []; } catch { db[name] = []; }
+  }));
   await Promise.all(DATASETS.map(async (name) => {
     const res = await fetch(`data/${name}.json`);
     if (!res.ok) throw new Error(`${name}.json: ${res.status}`);
@@ -218,13 +222,23 @@ function onLinkClick(e) {
 }
 
 // ---------- tabs ----------
+const FEED_TABS = ["patches", "log"];
 function switchTab(tab) {
   state.tab = tab;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   const isWorld = tab === "world";
+  const isFeed = FEED_TABS.includes(tab);
   $("#worldView").hidden = !isWorld;
-  $("#tableWrap").hidden = isWorld;
+  $("#tableWrap").hidden = isWorld || isFeed;
+  $("#feedView").hidden = !isFeed;
   $("#controls").hidden = isWorld;
+  if (isFeed) {
+    ["#variantsWrap", "#catWrap", "#marketBar", "#qareaWrap", "#hideDoneWrap"].forEach((x) => { $(x).hidden = true; });
+    document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = true; });
+    $("#search").value = "";
+    renderFeed();
+    return;
+  }
   $("#variantsWrap").hidden = tab !== "monsters";
   const isMarket = tab === "market";
   $("#catWrap").hidden = !isMarket;
@@ -331,6 +345,7 @@ function filtered() {
 function renderTable() {
   const tab = state.tab;
   if (tab === "world") return;
+  if (FEED_TABS.includes(tab)) return renderFeed();
   if (tab === "market" && (!db.market || db.marketError)) {
     $("#table").innerHTML = `<tbody><tr><td style="padding:20px;white-space:normal">${db.marketError
       ? `Couldn't load Free Market prices right now (${esc(db.marketError)}). You can still check <a href="${COZY_URL}" target="_blank" rel="noopener">Cozy Market</a>.`
@@ -353,7 +368,7 @@ function renderTable() {
       if (i === 0 && tab === "monsters") v = null;
       if (i === 0 && e.boss) extra = ' <span class="badge">Boss</span>';
       if (i === 0 && e.variant) extra = ` <span class="badge">${esc(e.variant)}</span>`;
-      if (i === 0 && e.disputed) extra += '<span class="unv" title="Sources disagree; see details">?</span>';
+      if (i === 0 && e.previous) extra += ' <span class="badge" title="Changed by a patch">Patched</span>';
       if (i === 0 && e.region === "Hidden Street") extra = ' <span class="badge hidden">Hidden</span>';
       const cell = c.html ? v : i === 0 && tab === "monsters" ? `<span class="spr-cell">${sprite(e, 28)}</span>${esc(e.name)}` : esc(fmt(v));
       return `<td class="${c.num ? "num" : ""} ${c.wide ? "wide-only" : ""}">${cell}${extra}</td>`;
@@ -596,14 +611,14 @@ function monsterDetail(mob) {
   let html = `${mob.sprite ? `<div class="hero">${sprite(mob, 120)}</div>` : ""}<h2>${esc(mob.name)} ${mob.boss ? '<span class="badge">Boss</span>' : ""}</h2>
     <p class="sub">Monster${mob.variant ? ` · ${esc(mob.variant)}` : ""}</p>`;
   html += dl([
-    ["Level", fmt(mob.level)], ["HP", fmt(mob.hp) + (mob.disputed?.hp ? '<span class="unv">?</span>' : "")], ["EXP", fmt(mob.exp)],
+    ["Level", fmt(mob.level)], ["HP", fmt(mob.hp)], ["EXP", fmt(mob.exp)],
     ["Attack", fmt(mob.atk)], ["Magic attack", mob.matk ? fmt(mob.matk) : null],
     ["Weapon / magic DEF", `${fmt(mob.wdef)} / ${fmt(mob.mdef)}`], ["Accuracy", fmt(mob.acc)], ["Avoid", fmt(mob.avoid)],
     ["Weak to", esc(mob.weak)], ["Resists", esc(mob.resist)], ["Undead", mob.undead ? "Yes" : null],
     ["Mesos", mob.meso ? `${fmt(mob.meso.min)}–${fmt(mob.meso.max)}${mob.meso.basis === "reported" ? " (player-reported)" : ""}` : null],
   ]);
-  if (mob.disputed?.hp) {
-    html += `<div class="note">HP is ${fmt(mob.hp)} per ${mob.sources.join(" and ")}. The ${esc(mob.disputed.hp.source)} show ${fmt(mob.disputed.hp.value)}, which may be from before a patch.</div>`;
+  if (mob.previous?.hp) {
+    html += `<div class="note">HP was lowered from ${fmt(mob.previous.hp)} to ${fmt(mob.hp)} in the ${esc(mob.previous.until)}. Some sites still show the old number.</div>`;
   }
   html += `<h3>Drop table (${mob.drops.length})</h3>`;
   if (mob.drops.length) {
@@ -655,6 +670,49 @@ function jobDetail(j) {
   if (next.length) html += `<h3>Advances to</h3><ul>${next.map((x) => `<li>${link("job", x.id)}<span class="right">Lv ${x.level}</span></li>`).join("")}</ul>`;
   if (j.notes) html += `<div class="note">${esc(j.notes)}</div>`;
   return html;
+}
+
+// ---------- Patches & Log ----------
+const LOG_ICONS = { drop_new: "🎁", drop_removed: "✖️", monster_new: "👾", monster_changed: "📊", map_new: "🗺️", quest_new: "📜", quest_removed: "⏹️", npc_new: "🧑", note: "📣" };
+const CAT_LABEL = { maintenance: "Maintenance / patch", sale: "Cash Shop", events: "Event", general: "News", update: "Update", community: "Community" };
+const niceDate = (d) => new Date(d + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+
+function logText(e) {
+  const mob = e.monster && getEntity("monster", e.monster);
+  const item = e.item && getEntity("item", e.item);
+  switch (e.type) {
+    case "drop_new": if (mob && item) return `${link("monster", e.monster)} now drops ${link("item", e.item)}${e.rate != null ? ` <span class="sub">(${rateText(e.rate)})</span>` : " <span class=\"sub\">(player-reported)</span>"}`; break;
+    case "drop_removed": if (mob) return `${link("monster", e.monster)} no longer listed as dropping ${item ? link("item", e.item) : esc(e.item)}`; break;
+    case "monster_changed": if (mob) return `${link("monster", e.monster)}: ${esc(String(e.field).toUpperCase())} ${fmt(e.old)} → <b>${fmt(e.new)}</b>${/patch/.test(e.text || "") ? ' <span class="sub">(patch)</span>' : ""}`; break;
+    case "monster_new": if (mob) return `New monster: ${link("monster", e.monster)} <span class="sub">Lv ${mob.level}</span>`; break;
+    case "map_new": if (e.map && getEntity("map", e.map)) return `New map: ${link("map", e.map)}`; break;
+    case "quest_new": if (e.quest && getEntity("quest", e.quest)) return `New quest: ${link("quest", e.quest)}`; break;
+    case "npc_new": if (e.npc && getEntity("npc", e.npc)) return `New NPC: ${link("npc", e.npc)}`; break;
+  }
+  return esc(e.text);
+}
+
+function renderFeed() {
+  const q = $("#search").value.trim().toLowerCase();
+  const view = $("#feedView");
+  if (state.tab === "patches") {
+    const posts = (db.patches || []).filter((p) => !q || `${p.name} ${p.summary}`.toLowerCase().includes(q));
+    view.innerHTML = `<div class="market-bar"><div><strong>Classic World patches & news</strong><br><span class="sub">Patch notes, maintenance, events and Cash Shop updates from Nexon, checked every morning. Click a post to read it in full on nexon.com.</span></div></div>` +
+      (posts.length ? posts.map((p) => `<a class="post" href="${esc(p.url)}" target="_blank" rel="noopener">
+        <span class="post-meta"><span class="badge ${p.category === "maintenance" ? "patch" : ""}">${esc(CAT_LABEL[p.category] || p.category)}</span> ${esc(niceDate(p.date))}</span>
+        <strong>${esc(p.name)}</strong>${p.summary ? `<span class="sub">${esc(p.summary)}</span>` : ""}<span class="more">Read on nexon.com ↗</span></a>`).join("")
+        : `<p class="sub">No posts yet.</p>`);
+    $("#count").textContent = `${posts.length} post${posts.length === 1 ? "" : "s"}`;
+    return;
+  }
+  const entries = (db.log || []).filter((e) => !q || (e.text || "").toLowerCase().includes(q));
+  const byDay = {};
+  for (const e of entries) (byDay[e.date] ||= []).push(e);
+  const days = Object.keys(byDay).sort().reverse();
+  view.innerHTML = `<div class="market-bar"><div><strong>Discovery log</strong><br><span class="sub">Updated every morning. New drops players find in Classic, new monsters, stat changes, new or ended quests and events. Everything here is already reflected on the monster, item and quest pages.</span></div></div>` +
+    (days.length ? days.map((d) => `<h3 class="feed-date">${esc(niceDate(d))}</h3><ul class="feed">${byDay[d].map((e) => `<li><span class="feed-ico">${LOG_ICONS[e.type] || "•"}</span><span>${logText(e)}</span></li>`).join("")}</ul>`).join("")
+      : `<p class="sub">Nothing logged yet.</p>`);
+  $("#count").textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`;
 }
 
 // ---------- NPCs ----------

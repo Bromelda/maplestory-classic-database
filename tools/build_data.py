@@ -14,7 +14,7 @@ Source rules (see README "Data sources"):
   * Monster stats come from the Classic World game files (via Club FM / maplestory.io)
     and are kept only when a second Classic source (NiaDB, MapleStoryClassic.org /
     MapleClassic Wiki) agrees. Disagreements are resolved in OVERRIDES below, with the
-    losing value kept in `disputed` so nothing is hidden.
+    old value kept in `previous` so nothing is hidden.
   * Drops are player-counted Classic World kills from the MapleClassic Wiki only.
     Old GMS/MSEA tables are never used.
   * Maps, portals and spawns: MapleClassic Wiki + Classic game files.
@@ -27,15 +27,16 @@ from pathlib import Path
 SRC = Path(sys.argv[1] if len(sys.argv) > 1 else "fm/data")
 OUT = Path(__file__).resolve().parent.parent / "data"
 
-# Monsters whose game-file value differs from two other Classic sources.
-# NiaDB + MapleStoryClassic.org agree on these HP values; Club FM's launch game-file
-# snapshot shows lower numbers (likely pre-patch).
-OVERRIDES = {
-    "Clang": {"hp": (2899, 2657)},
-    "Copper Drake": {"hp": (2595, 2379)},
-    "Drake": {"hp": (3218, 2950)},
-    "Tortie": {"hp": (2671, 2226)},
+# Monsters changed by a patch, where some sites still show the old number.
+# The game files hold the current value; Nexon's v1.1.0 patch notes (Oct 29, 2026)
+# confirm these four had their HP lowered. The old value is kept for reference.
+PATCHED = {
+    "Clang": {"hp": 2899},
+    "Copper Drake": {"hp": 2595},
+    "Drake": {"hp": 3218},
+    "Tortie": {"hp": 2671},
 }
+PATCH_NOTE = "v1.1.0 patch, Oct 29, 2026"
 
 # Second Classic source that matched each monster's level/HP/EXP.
 NIADB_MATCH = "NiaDB"
@@ -131,14 +132,12 @@ def main():
         if vm:
             variant = vm.group(1)
         hp = m["hp"]
-        disputed = None
-        if name in OVERRIDES:
-            hp, alt = OVERRIDES[name]["hp"]
-            disputed = {"hp": {"value": alt, "source": "Classic game files (launch snapshot)"}}
+        previous = None
         sources = ["Classic game files"]
         sources.append(ORG_MATCH if name in ORG_ONLY else NIADB_MATCH)
-        if name in OVERRIDES:
-            sources = [NIADB_MATCH, ORG_MATCH]
+        if name in PATCHED:
+            previous = {"hp": PATCHED[name]["hp"], "until": PATCH_NOTE}
+            sources = ["Classic game files", "Nexon patch notes (HP lowered)"]
         meso = None
         if m.get("meso") and m["meso"][0] is not None:
             meso = {"min": m["meso"][0], "max": m["meso"][1], "basis": m["meso"][3]}
@@ -166,7 +165,7 @@ def main():
             "meso": meso,
             "drops": d,
             "sources": sources,
-            "disputed": disputed,
+            "previous": previous,
         })
 
     # ---------- quests ----------

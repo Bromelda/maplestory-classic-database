@@ -1,0 +1,43 @@
+[
+ {
+  "date": "2026-11-03",
+  "type": "note",
+  "text": "Database launched: 83 monsters, 303 maps, 1,105 Classic drops, 325 quests and 187 NPCs. From now on, anything new players find shows up here every day."
+ },
+ {
+  "date": "2026-10-29",
+  "type": "monster_changed",
+  "monster": "clang",
+  "field": "hp",
+  "old": 2899,
+  "new": 2657,
+  "text": "Clang: HP 2899 → 2657 (v1.1.0 patch)"
+ },
+ {
+  "date": "2026-10-29",
+  "type": "monster_changed",
+  "monster": "copper_drake",
+  "field": "hp",
+  "old": 2595,
+  "new": 2379,
+  "text": "Copper Drake: HP 2595 → 2379 (v1.1.0 patch)"
+ },
+ {
+  "date": "2026-10-29",
+  "type": "monster_changed",
+  "monster": "drake",
+  "field": "hp",
+  "old": 3218,
+  "new": 2950,
+  "text": "Drake: HP 3218 → 2950 (v1.1.0 patch)"
+ },
+ {
+  "date": "2026-10-29",
+  "type": "monster_changed",
+  "monster": "tortie",
+  "field": "hp",
+  "old": 2671,
+  "new": 2226,
+  "text": "Tortie: HP 2671 → 2226 (v1.1.0 patch)"
+ }
+]

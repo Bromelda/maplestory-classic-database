@@ -1,0 +1,65 @@
+name: Daily data update
+
+# Every morning: pull the latest Classic World data, rebuild the site's data files,
+# log anything new (drops, monsters, quests, events…), fetch Nexon's Classic posts,
+# and commit the result. Can also be run by hand from the Actions tab.
+on:
+  schedule:
+    - cron: "17 13 * * *"   # 13:17 UTC ≈ 6:17 AM Pacific
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/daily-update.yml"
+      - "tools/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Get latest Classic data (Club FM public data)
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse --branch live https://github.com/maplefm/maplefm.github.io "$RUNNER_TEMP/fm"
+          git -C "$RUNNER_TEMP/fm" sparse-checkout set --no-cone '/data/*'
+
+      - name: Copy minimaps and monster sprites
+        run: |
+          mkdir -p assets/minimap assets/mob
+          cp -n "$RUNNER_TEMP"/fm/data/minimap/*.png assets/minimap/ || true
+          cp -n "$RUNNER_TEMP"/fm/data/sprite/*.gif assets/mob/ || true
+
+      - name: Rebuild data and log what changed
+        run: |
+          mkdir -p "$RUNNER_TEMP/old"
+          cp data/*.json "$RUNNER_TEMP/old/"
+          python3 tools/build_data.py "$RUNNER_TEMP/fm/data"
+          python3 tools/update_log.py "$RUNNER_TEMP/old" data data/log.json
+
+      - name: Fetch Nexon Classic World posts
+        continue-on-error: true
+        run: python3 tools/fetch_patches.py data/patches.json
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name "maple-db-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data assets
+          if git diff --cached --quiet; then
+            echo "No changes today."
+          else
+            git commit -m "Daily data update $(date -u +%Y-%m-%d)"
+            git push
+          fi
