@@ -193,6 +193,8 @@ function onLinkClick(e) {
 // ---------- tabs ----------
 const FEED_TABS = ["patches", "log"];
 function switchTab(tab) {
+  // on a phone an open page covers everything else, so a new tab has to close it first
+  if (isPhone() && currentEntry()) { state.listScroll = 0; closeDetail(); }
   state.tab = tab;
   document.querySelectorAll("#tabs button").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === tab);
