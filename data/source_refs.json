@@ -46,5 +46,16 @@
     ],
     "checked": "2026-11-03",
     "license": "CC BY-NC-SA"
+  },
+  {
+    "entity_type": "monster",
+    "entity_id": "fire_boar",
+    "source": "NiaDB",
+    "url": "https://meowdb.com/msclassic/monsters/30",
+    "facts": [
+      "meso_range"
+    ],
+    "checked": "2026-11-03",
+    "note": "Classic community report: 63-77 mesos per kill from 1 player report."
   }
 ]
