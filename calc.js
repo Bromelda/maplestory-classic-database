@@ -5,7 +5,6 @@
 // Skill presets: max-level values, each read from its own NiaDB skill page (linked).
 // Loaded after app.js; uses its helpers (db, idx, $, esc, fmt, link, sprite, getEntity).
 
-const CALC_KEY = "msclassicdb.calc";
 const NIADB = "https://meowdb.com/msclassic/skills/";
 
 // Weapon multipliers (Classic): [swing, stab]; ranged weapons shoot at 2.5.
@@ -68,9 +67,125 @@ const DEFAULTS = {
   element: "None", accExtra: 0, rage: false, precise: false, formula: "majority", near: true, target: "",
 };
 
-let calc = { ...DEFAULTS };
-try { Object.assign(calc, JSON.parse(localStorage.getItem(CALC_KEY) || "{}")); } catch { /* storage unavailable */ }
-function saveCalc() { try { localStorage.setItem(CALC_KEY, JSON.stringify(calc)); } catch { /* ignore */ } }
+// The calculator edits the active saved character (see app.js). A shared build link
+// is shown without touching your characters until you choose to save it.
+let calc = { ...DEFAULTS, ...(activeChar().calc || {}) };
+let shared = null; // { from: name } while viewing someone's shared build
+function saveCalc() {
+  if (shared) return;
+  activeChar().calc = { ...calc };
+  saveChars();
+}
+function loadCalcFromChar() {
+  calc = { ...DEFAULTS, ...(activeChar().calc || {}) };
+  if (state.tab === "calc") renderCalc();
+  else if (state.tab === "quests") renderTable();
+}
+
+// ---------- shareable builds ----------
+const BUILD_KEYS = Object.keys(DEFAULTS).filter((k) => !["near", "target"].includes(k));
+function encodeBuild(name) {
+  const o = { n: name };
+  for (const k of BUILD_KEYS) if (calc[k] !== DEFAULTS[k]) o[k] = calc[k];
+  const bytes = new TextEncoder().encode(JSON.stringify(o));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function decodeBuild(str) {
+  const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64 + "===".slice((b64.length + 3) % 4));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0))));
+}
+function readSharedBuild() {
+  const s = new URLSearchParams(location.search).get("build");
+  if (!s) return false;
+  try {
+    const o = decodeBuild(s);
+    const clean = {};
+    for (const k of BUILD_KEYS) if (k in o && typeof o[k] === typeof DEFAULTS[k]) clean[k] = o[k];
+    if (!WEAPONS[clean.cls || DEFAULTS.cls]) return false;
+    calc = { ...DEFAULTS, ...clean };
+    shared = { from: String(o.n || "A shared build").slice(0, 40) };
+    return true;
+  } catch { return false; }
+}
+function leaveShared(save) {
+  if (save) {
+    const id = "c" + Date.now();
+    chars.list.push({ id, name: shared.from, calc: { ...calc }, done: [] });
+    chars.active = id;
+    doneSet = new Set();
+    shared = null;
+    saveChars(); saveCalc();
+  } else {
+    shared = null;
+    calc = { ...DEFAULTS, ...(activeChar().calc || {}) };
+  }
+  history.replaceState(null, "", location.pathname + location.hash);
+  renderCalc();
+}
+async function shareBuild() {
+  const name = activeChar().name;
+  const url = `${location.origin}${location.pathname}?build=${encodeBuild(name)}`;
+  const status = $("#shareStatus");
+  try {
+    if (navigator.share) { await navigator.share({ title: `${name}'s build · MapleStory Classic DB`, url }); status.textContent = "Shared."; return; }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(url); status.textContent = "Link copied. Paste it anywhere to share."; }
+  catch {
+    status.innerHTML = `<input class="share-url" id="shareUrl" readonly value="${esc(url)}">`;
+    const box = $("#shareUrl"); box.focus(); box.select();
+  }
+}
+
+function charBar() {
+  if (shared) {
+    return `<section class="char-bar shared-bar">
+      <div><b>Viewing ${esc(shared.from)}'s build</b><span>Changes here aren't saved to your characters.</span></div>
+      <div class="char-actions"><button type="button" class="btn" id="sharedSave">Save as my character</button>
+      <button type="button" class="btn ghost" id="sharedLeave">Back to mine</button></div></section>`;
+  }
+  const c = activeChar();
+  return `<section class="char-bar">
+    <label class="cf"><span>Character</span><select id="charSel">${chars.list.map((x) => `<option value="${x.id}" ${x.id === c.id ? "selected" : ""}>${esc(x.name)}${charSummary(x) ? ` · ${esc(charSummary(x))}` : ""}</option>`).join("")}</select></label>
+    <label class="cf"><span>Name</span><input id="charName" value="${esc(c.name)}" maxlength="24" autocomplete="off"></label>
+    <div class="char-actions">
+      <button type="button" class="btn ghost" id="charNew">+ New</button>
+      ${chars.list.length > 1 ? `<button type="button" class="btn ghost danger" id="charDel">Delete</button>` : ""}
+      <button type="button" class="btn" id="shareBtn">Share build</button>
+    </div>
+    <p class="sub small" id="shareStatus" aria-live="polite">Saved in this browser. Each character keeps its own stats and quest progress.</p>
+  </section>`;
+}
+function bindCharBar() {
+  if (shared) {
+    $("#sharedSave").onclick = () => leaveShared(true);
+    $("#sharedLeave").onclick = () => leaveShared(false);
+    return;
+  }
+  $("#charSel").onchange = (e) => switchCharacter(e.target.value);
+  $("#charName").oninput = (e) => {
+    activeChar().name = e.target.value.trim() || "My character";
+    saveChars();
+    const opt = $("#charSel").selectedOptions[0];
+    if (opt) opt.textContent = activeChar().name + (charSummary(activeChar()) ? ` · ${charSummary(activeChar())}` : "");
+  };
+  $("#charNew").onclick = () => {
+    const id = "c" + Date.now();
+    chars.list.push({ id, name: `Character ${chars.list.length + 1}`, calc: { ...DEFAULTS }, done: [] });
+    switchCharacter(id);
+    $("#charName")?.select();
+  };
+  const del = $("#charDel");
+  if (del) {
+    let armed = false;
+    del.onclick = () => {
+      if (!armed) { armed = true; del.textContent = "Tap again to delete"; setTimeout(() => { armed = false; if (del.isConnected) del.textContent = "Delete"; }, 3000); return; }
+      chars.list = chars.list.filter((x) => x.id !== chars.active);
+      switchCharacter(chars.list[0].id);
+    };
+  }
+  $("#shareBtn").onclick = shareBuild;
+}
 
 function currentSkill() {
   return (SKILLS[calc.cls] || []).find((s) => s.id === calc.skillId) || null;
@@ -226,6 +341,7 @@ function renderCalc() {
         ${Object.keys(WEAPONS).map((k) => `<button type="button" class="class-btn ${calc.cls === k ? "on" : ""}" data-cls="${k}" role="radio" aria-checked="${calc.cls === k}"><span>${CLASS_ICON[k]}</span>${k}</button>`).join("")}
       </div>
     </section>
+    ${charBar()}
     <div class="calc-grid">
       <form class="calc-form" onsubmit="return false">
         <fieldset><legend>Character</legend>
@@ -276,6 +392,7 @@ function renderCalc() {
     </div>
     <button type="button" id="calcBar" class="calc-bar" aria-label="Jump to results"></button>`;
 
+  bindCharBar();
   view.querySelectorAll(".class-btn").forEach((b) => b.addEventListener("click", () => {
     calc.cls = b.dataset.cls;
     calc.weapon = Object.keys(WEAPONS[calc.cls])[0];

@@ -340,3 +340,29 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
   .market-bar { padding: 10px 12px; }
   .post { padding: 10px 12px; }
 }
+
+/* ---------- characters & sharing ---------- */
+.brand-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.brand-row h1 { margin: 0; }
+.char-chip { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .85em; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; max-width: 55vw; white-space: nowrap; overflow: hidden; }
+.char-chip b { overflow: hidden; text-overflow: ellipsis; }
+.char-chip span:last-child { color: var(--muted); }
+.char-chip:hover { border-color: var(--accent); }
+.char-bar { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 10px 12px; align-items: end;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; }
+.char-bar .small { grid-column: 1 / -1; margin: 0; }
+.char-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.char-actions .btn { border: 0; cursor: pointer; font: inherit; font-weight: 600; font-size: .88em; }
+.char-actions .btn.ghost { border: 1px solid var(--accent); }
+.btn.danger { color: #ff8b91 !important; border-color: #6b2a2e !important; }
+.shared-bar { grid-template-columns: minmax(0, 1fr) auto; border-color: var(--accent); background: var(--accent-soft); }
+.shared-bar > div:first-child { display: flex; flex-direction: column; gap: 2px; }
+.shared-bar span { color: var(--muted); font-size: .85em; }
+.share-url { width: 100%; font: inherit; font-size: 16px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); margin-top: 4px; }
+@media (max-width: 700px) {
+  .brand-row { margin: 0 14px 8px; }
+  .brand-row h1 { margin: 0; font-size: 1.05rem; }
+  .char-chip { font-size: .78em; padding: 4px 10px; }
+  .char-bar, .shared-bar { grid-template-columns: minmax(0, 1fr); }
+}

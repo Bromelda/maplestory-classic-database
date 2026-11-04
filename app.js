@@ -146,7 +146,10 @@ async function load() {
 
   bind();
   renderWorld();
-  fromHash() || switchTab("world");
+  renderCharChip();
+  $("#charChip").addEventListener("click", () => switchTab("calc"));
+  if (typeof readSharedBuild === "function" && readSharedBuild()) switchTab("calc");
+  else fromHash() || switchTab("world");
   loadMarket();
 }
 
@@ -178,13 +181,47 @@ async function loadMarket() {
   else if (currentEntry()) renderDetail();
 }
 // ---------- quest tracker (saved in this browser only) ----------
-const DONE_KEY = "msclassicdb.questsDone";
-let doneSet = new Set();
-try { doneSet = new Set(JSON.parse(localStorage.getItem(DONE_KEY) || "[]")); } catch { /* storage unavailable */ }
+// ---------- saved characters (stats + quest progress, kept in this browser) ----------
+const CHAR_KEY = "msclassicdb.characters";
+const DONE_KEY = "msclassicdb.questsDone"; // older single-character storage, migrated below
+function loadChars() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CHAR_KEY) || "null");
+    if (c && Array.isArray(c.list) && c.list.length) return c;
+  } catch { /* storage unavailable */ }
+  let oldCalc = {}, oldDone = [];
+  try { oldCalc = JSON.parse(localStorage.getItem("msclassicdb.calc") || "{}"); } catch { /* ignore */ }
+  try { oldDone = JSON.parse(localStorage.getItem(DONE_KEY) || "[]"); } catch { /* ignore */ }
+  return { active: "c1", list: [{ id: "c1", name: "My character", calc: oldCalc, done: oldDone }] };
+}
+let chars = loadChars();
+function activeChar() { return chars.list.find((c) => c.id === chars.active) || chars.list[0]; }
+let doneSet = new Set(activeChar().done || []);
+function saveChars() {
+  try { localStorage.setItem(CHAR_KEY, JSON.stringify(chars)); } catch { /* storage unavailable */ }
+  renderCharChip();
+}
 function isDone(id) { return doneSet.has(id); }
 function setDone(id, on) {
   on ? doneSet.add(id) : doneSet.delete(id);
-  try { localStorage.setItem(DONE_KEY, JSON.stringify([...doneSet])); } catch { /* storage unavailable */ }
+  activeChar().done = [...doneSet];
+  saveChars();
+}
+function switchCharacter(id) {
+  chars.active = id;
+  doneSet = new Set(activeChar().done || []);
+  saveChars();
+  if (typeof loadCalcFromChar === "function") loadCalcFromChar();
+}
+function charSummary(c) {
+  const k = c.calc || {};
+  return `${k.level ? `Lv ${k.level} ` : ""}${k.cls || ""}`.trim();
+}
+function renderCharChip() {
+  const chip = $("#charChip");
+  if (!chip) return;
+  const c = activeChar();
+  chip.innerHTML = `<span aria-hidden="true">👤</span><b>${esc(c.name)}</b><span>${esc(charSummary(c))}</span>`;
 }
 function npcWhere(n) {
   if (!n.locations.length) return "—";
@@ -197,7 +234,7 @@ function priceOf(name) { return idx.priceByName[String(name).toLowerCase()]; }
 
 function bind() {
   document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
-  ["#search", "#minLv", "#maxLv", "#variants", "#cat", "#qarea", "#hideDone"].forEach((s) => $(s).addEventListener("input", renderTable));
+  ["#search", "#minLv", "#maxLv", "#variants", "#cat", "#qarea", "#hideDone", "#myLevel"].forEach((s) => $(s).addEventListener("input", renderTable));
   const areas = [...new Set(db.quests.map((q) => q.area))].sort();
   $("#qarea").innerHTML = `<option value="">All areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
   document.addEventListener("click", onLinkClick);
@@ -251,6 +288,7 @@ function switchTab(tab) {
   document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = isMarket || tab === "npcs"; });
   $("#qareaWrap").hidden = tab !== "quests";
   $("#hideDoneWrap").hidden = tab !== "quests";
+  $("#myLevelWrap").hidden = tab !== "quests";
   if (!isWorld) {
     state.sortKey = isMarket ? "sales" : COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
     state.asc = !isMarket;
@@ -332,6 +370,12 @@ function filtered() {
     if (tab === "npcs") return true;
     if (tab === "quests") {
       if ($("#qarea").value && e.area !== $("#qarea").value) return false;
+      if ($("#myLevel").checked) {
+        const k = activeChar().calc || {};
+        const lv = k.level || 1;
+        if (e.level > lv || (e.max_level && e.max_level < lv)) return false;
+        if (e.jobs && k.cls && lv >= 10 && !e.jobs.includes(k.cls)) return false;
+      }
       if ($("#hideDone").checked && isDone(e.id)) return false;
     }
     if (tab === "monsters" && !showVariants && (e.variant || e.level >= 200 || e.name.startsWith("Tutorial") || (!idx.spawnsOf[e.id] && !e.drops.length))) return false;
@@ -385,7 +429,7 @@ function renderTable() {
     }).join("") + "</tr>").join("");
   $("#table").innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
   $("#count").textContent = `${rows.length.toLocaleString()} result${rows.length === 1 ? "" : "s"}` +
-    (tab === "quests" ? ` · ${db.quests.filter((q) => isDone(q.id)).length} of ${db.quests.length} done` : "");
+    (tab === "quests" ? ` · ${db.quests.filter((q) => isDone(q.id)).length} of ${db.quests.length} done by ${activeChar().name}` : "");
   $("#table").querySelectorAll("th").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.key;
     state.asc = state.sortKey === k ? !state.asc : true;

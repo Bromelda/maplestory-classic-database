@@ -14,7 +14,10 @@
 </head>
 <body>
   <header>
-    <h1>🍁 MapleStory Classic DB</h1>
+    <div class="brand-row">
+      <h1>🍁 MapleStory Classic DB</h1>
+      <button type="button" id="charChip" class="char-chip" title="Your character (open the calculator)"></button>
+    </div>
     <nav id="tabs">
       <button data-tab="world" class="active">World Map</button>
       <button data-tab="monsters">Monsters</button>
@@ -37,6 +40,7 @@
       <label class="lvctl">to <input id="maxLv" type="number" min="0" max="200" placeholder="max"></label>
       <label id="qareaWrap" hidden><select id="qarea"><option value="">All areas</option></select></label>
       <label id="hideDoneWrap" class="check" hidden><input id="hideDone" type="checkbox"> Hide done</label>
+      <label id="myLevelWrap" class="check" hidden><input id="myLevel" type="checkbox"> Only quests for my character</label>
       <label id="catWrap" hidden><select id="cat"><option value="">All categories</option></select></label>
       <label id="variantsWrap" class="check"><input id="variants" type="checkbox"> Show job-test, PQ &amp; event variants</label>
       <span id="count"></span>
