@@ -44,7 +44,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 
 ## Daily auto-update
 
-`.github/workflows/daily-update.yml` runs on GitHub every morning (about 6:17 AM Pacific). It:
+`.github/workflows/daily-update.yml` runs on GitHub every 6 hours. It:
 
 1. pulls the latest Classic data (game files + player-counted drops) and rebuilds `data/*.json`
 2. compares it with yesterday's data and adds anything new to `data/log.json` (the Log tab)
