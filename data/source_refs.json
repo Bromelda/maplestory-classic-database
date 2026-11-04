@@ -1,0 +1,50 @@
+[
+  {
+    "entity_type": "monster",
+    "entity_id": "ghost_stump",
+    "source": "MapleClassic Wiki",
+    "url": "https://mapleclassic.wiki/wiki/Ghost_Stump",
+    "facts": [
+      "level",
+      "hp",
+      "exp",
+      "attack",
+      "defense",
+      "spawns"
+    ],
+    "checked": "2026-11-03",
+    "license": "CC BY-NC-SA"
+  },
+  {
+    "entity_type": "monster",
+    "entity_id": "cold_eye",
+    "source": "MapleClassic Wiki",
+    "url": "https://mapleclassic.wiki/wiki/Cold_Eye",
+    "facts": [
+      "level",
+      "hp",
+      "exp",
+      "attack",
+      "defense",
+      "spawns"
+    ],
+    "checked": "2026-11-03",
+    "license": "CC BY-NC-SA"
+  },
+  {
+    "entity_type": "monster",
+    "entity_id": "tortie",
+    "source": "MapleClassic Wiki",
+    "url": "https://mapleclassic.wiki/wiki/Tortie",
+    "facts": [
+      "hp",
+      "exp",
+      "magic_attack",
+      "knockback",
+      "spawns",
+      "update_history"
+    ],
+    "checked": "2026-11-03",
+    "license": "CC BY-NC-SA"
+  }
+]
