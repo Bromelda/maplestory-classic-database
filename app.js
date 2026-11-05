@@ -5,7 +5,7 @@ const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta",
 const OPTIONAL = ["log", "patches", "skills", "gear", "ammo", "gear_info", "potions", "scrolls"]; // fine if missing
 const db = {};
 const byId = {};
-const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {}, usedIn: {} };
+const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {}, usedIn: {}, shopOf: {} };
 
 const $ = (s, el = document) => el.querySelector(s);
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -108,6 +108,7 @@ async function load() {
   for (const list of Object.values(idx.spawnsOf)) list.sort((a, b) => b.count - a.count);
   if (db.meta?.built_from) $("#builtFrom").textContent = `Data: ${db.meta.built_from}.`;
 
+  for (const it of db.items) for (const s of it.shops || []) (idx.shopOf[s.npc] ||= []).push({ item: it.id, price: s.price });
   for (const it of db.items) for (const r of it.crafts || []) for (const mat of r.materials) (idx.usedIn[mat.item] ||= []).includes(it.id) || idx.usedIn[mat.item].push(it.id);
   if (typeof buildSkills === "function") buildSkills();
   buildSearch();
@@ -175,6 +176,16 @@ function bind() {
   ["#search", "#minLv", "#maxLv", "#variants", "#qarea", "#hideDone", "#myLevel"].forEach((s) => $(s).addEventListener("input", renderTable));
   const areas = [...new Set(db.quests.map((q) => q.area))].sort();
   $("#qarea").innerHTML = `<option value="">All areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
+  const itemCats = [...new Set(db.items.map((i) => i.category).filter(Boolean))].sort();
+  $("#itemCat").innerHTML += itemCats.map((c) => `<option>${esc(c)}</option>`).join("");
+  $("#itemClass").innerHTML += Object.keys(WEAPONS).map((c) => `<option>${c}</option>`).join("");
+  $("#itemStat").innerHTML += ITEM_STATS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
+  ["#itemClass", "#itemCat"].forEach((s) => $(s).addEventListener("change", renderTable));
+  $("#itemStat").addEventListener("change", (e) => {
+    state.sortKey = e.target.value ? "_stat" : "level";
+    state.asc = !e.target.value;
+    renderTable();
+  });
   document.addEventListener("click", onLinkClick);
   bindSearch();
   document.addEventListener("mouseover", onHover);
@@ -182,6 +193,10 @@ function bind() {
 }
 
 function onLinkClick(e) {
+  const wearBtn = e.target.closest?.("[data-item-wear]");
+  if (wearBtn) { wearFromItemPage(Number(wearBtn.dataset.itemWear)); renderDetail(); return; }
+  const craftBtn = e.target.closest?.("[data-plan-craft]");
+  if (craftBtn) { planner.mode = "craft"; planner.craftId = craftBtn.dataset.planCraft; planner.recipe = 0; switchTab("planner"); return; }
   const routeBtn = e.target.closest?.("[data-route-to]");
   if (routeBtn) { routeTo(routeBtn.dataset.routeTo); return; }
   const box = e.target.closest?.(".qdone");
@@ -215,33 +230,37 @@ function switchTab(tab) {
   const isSkills = tab === "skills";
   const isRoute = tab === "route";
   const isHome = tab === "home";
+  const isPlanner = tab === "planner";
   $("#homeView").hidden = !isHome;
+  $("#plannerView").hidden = !isPlanner;
   $("#routeView").hidden = !isRoute;
   $("#skillsView").hidden = !isSkills;
   $("#worldView").hidden = !isWorld;
-  $("#tableWrap").hidden = isWorld || isFeed || isCalc || isSkills || isRoute || isHome;
+  $("#tableWrap").hidden = isWorld || isFeed || isCalc || isSkills || isRoute || isHome || isPlanner;
   $("#feedView").hidden = !isFeed;
   $("#calcView").hidden = !isCalc;
-  $("#controls").hidden = isWorld || isCalc || isSkills || isRoute || isHome;
+  $("#controls").hidden = isWorld || isCalc || isSkills || isRoute || isHome || isPlanner;
+  if (isPlanner) { renderPlanner(); return; }
   if (isHome) { renderHome(); return; }
   if (isRoute) { renderRoute(); return; }
   if (isCalc) { renderCalc(); return; }
   if (isSkills) { renderSkillsTab(); return; }
   if (isFeed) {
-    ["#variantsWrap", "#qareaWrap", "#hideDoneWrap"].forEach((x) => { $(x).hidden = true; });
+    ["#variantsWrap", "#qareaWrap", "#hideDoneWrap", "#itemClassWrap", "#itemCatWrap", "#itemStatWrap"].forEach((x) => { $(x).hidden = true; });
     document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = true; });
     $("#search").value = "";
     renderFeed();
     return;
   }
   $("#variantsWrap").hidden = tab !== "monsters";
+  for (const x of ["#itemClassWrap", "#itemCatWrap", "#itemStatWrap"]) $(x).hidden = tab !== "items";
   document.querySelectorAll(".lvctl").forEach((el) => { el.hidden = tab === "npcs"; });
   $("#qareaWrap").hidden = tab !== "quests";
   $("#hideDoneWrap").hidden = tab !== "quests";
   $("#myLevelWrap").hidden = tab !== "quests";
   if (!isWorld) {
-    state.sortKey = COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
-    state.asc = true;
+    state.sortKey = tab === "items" && $("#itemStat").value ? "_stat" : COLUMNS[tab].some((c) => c.key === "level") ? "level" : "name";
+    state.asc = state.sortKey !== "_stat";
     $("#search").value = "";
     renderTable();
   }
@@ -381,6 +400,25 @@ function markZone(z) {
 }
 
 // ---------- tables ----------
+const ITEM_STATS = [["ATT", "Weapon ATT"], ["MATT", "Magic ATT"], ["STR", "STR"], ["DEX", "DEX"], ["INT", "INT"], ["LUK", "LUK"], ["ACC", "Accuracy"], ["AVOID", "Avoid"], ["WDEF", "Weapon DEF"], ["MDEF", "Magic DEF"], ["HP", "HP"], ["MP", "MP"], ["SPEED", "Speed"], ["JUMP", "Jump"], ["CRIT", "Crit rate"], ["CRITDMG", "Crit damage"]];
+function columnsOf(tab) {
+  const stat = tab === "items" && $("#itemStat").value;
+  if (!stat) return COLUMNS[tab];
+  const label = ITEM_STATS.find(([k]) => k === stat)[1];
+  const cols = [...COLUMNS.items];
+  cols.splice(1, 0, { key: "_stat", label, num: true, get: (i) => i.stats?.[stat] ?? null });
+  return cols;
+}
+function itemFits(e) {
+  const cat = $("#itemCat").value, cls = $("#itemClass").value, stat = $("#itemStat").value;
+  if (cat && e.category !== cat) return false;
+  if (stat && !e.stats?.[stat]) return false;
+  if (!cls) return true;
+  const g = gearOfItem(e);
+  if (!g) return false;
+  const usable = !g.job || !!(g.job & CLASS_BIT[cls]);
+  return g.slot === "weapon" ? usable && !!WEAPONS[cls][g.weapon] : usable;
+}
 function valueOf(col, e) { return col.get ? col.get(e) : e[col.key]; }
 
 function filtered() {
@@ -393,6 +431,7 @@ function filtered() {
   const rows = (db[tab] || []).filter((e) => {
     if (q && !e.name.toLowerCase().includes(q)) return false;
     if (tab === "npcs") return true;
+    if (tab === "items" && !itemFits(e)) return false;
     if (tab === "quests") {
       if ($("#qarea").value && e.area !== $("#qarea").value) return false;
       if ($("#myLevel").checked) {
@@ -409,7 +448,7 @@ function filtered() {
     if (!isNaN(max) && (lv == null || lv > max)) return false;
     return true;
   });
-  const col = COLUMNS[tab].find((c) => c.key === state.sortKey) || COLUMNS[tab][0];
+  const col = columnsOf(tab).find((c) => c.key === state.sortKey) || COLUMNS[tab][0];
   rows.sort((a, b) => {
     const x = valueOf(col, a), y = valueOf(col, b);
     if (x == null && y == null) return 0;
@@ -423,9 +462,9 @@ function filtered() {
 
 function renderTable() {
   const tab = state.tab;
-  if (["home", "world", "calc", "skills", "route"].includes(tab)) return;
+  if (["home", "world", "calc", "skills", "route", "planner"].includes(tab)) return;
   if (FEED_TABS.includes(tab)) return renderFeed();
-  const cols = COLUMNS[tab];
+  const cols = columnsOf(tab);
   const rows = filtered();
   const type = TYPE_OF_TAB[tab];
   const cur = currentEntry();
@@ -811,13 +850,15 @@ function itemDetail(it) {
   const req = db.gear_info?.[it.gid];
   const reqText = req && Object.keys(req).length ? ["STR", "DEX", "INT", "LUK"].filter((k) => req[k]).map((k) => `${req[k]} ${k}`).join(", ") : null;
   html += dl([["Req. level", it.level], ["Req. stats", reqText], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", !it.shops && it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
+  html += gearComparison(it);
   html += sellAdvice(it);
   if (it.shops) {
     const shops = [...it.shops].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
     html += `<h3>Sold by (${shops.length})</h3><ul>${shops.map((s) => `<li>${link("npc", s.npc, s.name)}${s.town ? ` <span class="sub">${esc(s.town)}</span>` : ""}<span class="right">${s.price != null ? `${fmt(s.price)} mesos` : ""}</span></li>`).join("")}</ul>`;
   }
   if (it.crafts) {
-    html += `<h3>Crafting</h3><ul>${it.crafts.map((r) => `<li><span>${esc(r.skill)} ${r.level}: ${r.materials.map((x) => `${x.count > 1 ? `${x.count}× ` : ""}${link("item", x.item)}`).join(", ")}</span></li>`).join("")}</ul>`;
+    html += `<h3>Crafting</h3><ul>${it.crafts.map((r) => `<li><span>${esc(r.skill)} ${r.level}: ${r.materials.map((x) => `${x.count > 1 ? `${x.count}× ` : ""}${link("item", x.item)}`).join(", ")}${r.catalyst ? `, ${link("item", r.catalyst.item)}` : ""}${r.makes > 1 ? ` <span class="sub">(makes ${r.makes})</span>` : ""}</span></li>`).join("")}</ul>
+      <p><button type="button" class="cx-auto" data-plan-craft="${esc(it.id)}">Plan this craft</button></p>`;
   }
   html += questList("Needed for quests", idx.qNeedItem[it.id]);
   html += questList("Quest reward from", idx.qRewardItem[it.id]);
@@ -895,6 +936,8 @@ function npcDetail(n) {
       <p>${link("map", m.id)}${m.zone && m.zone !== m.name ? ` <span class="sub">· ${esc(m.zone)}</span>` : ""}</p>${pic}
       ${pic ? `<p class="sub" style="margin-top:4px">Circled on the map.</p>` : ""}`;
   }).join("");
+  const stock = idx.shopOf[n.id];
+  if (stock) html += `<h3>Sells (${stock.length})</h3><ul>${[...stock].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity)).map((s) => `<li>${link("item", s.item)}<span class="right">${s.price != null ? `${fmt(s.price)} mesos` : ""}</span></li>`).join("")}</ul>`;
   html += questList("Quests they give", idx.qGiver[n.id], true);
   html += questList("Quests you turn in here", idx.qEnder[n.id], true);
   return html;
@@ -978,6 +1021,19 @@ function questDetail(q) {
   return html;
 }
 
+// ---------- install on a phone ----------
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; if (state.tab === "home" && db.maps) renderHome(); });
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+function installCard(card) {
+  if (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone) return "";
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (!installPrompt && !ios) return "";
+  return card("Add to your phone", installPrompt
+    ? `<p class="sub">Open it like an app, and pages you've seen keep working with a weak signal.</p><button type="button" class="btn" id="installBtn">Install</button>`
+    : `<p class="sub">In Safari, tap the Share button, then <b>Add to Home Screen</b>. Pages you've seen keep working with a weak signal.</p>`);
+}
+
 // ---------- start page ----------
 function nextQuests(lv, cls, limit) {
   return db.quests.filter((q) => !isDone(q.id) && !q.event && q.level <= lv && (!q.max_level || q.max_level >= lv)
@@ -1019,6 +1075,8 @@ function renderHome() {
         `<p class="sub small"><button type="button" class="link-btn" data-go="calc">Open the calculator</button></p>`)}
       ${card("Next job step", jobs.length ? `<ul class="home-list">${jobs.map((j) => `<li><span class="home-text">${link("job", j.id)} <small>${esc(j.location || j.instructor || "")}</small></span><span class="right">Lv ${j.level}</span></li>`).join("")}</ul>` : `<p class="sub">You've reached the last job open in Classic so far.</p>`,
         `<p class="sub small"><button type="button" class="link-btn" data-go="jobs">See the job tree</button> · <button type="button" class="link-btn" data-go="skills">Plan your skills</button></p>`)}
+      ${installCard(card)}
+      ${card("Plan ahead", `<p class="sub">Crafting materials, time to your next levels, the best quests, and two builds side by side.</p>`, `<p class="sub small"><button type="button" class="link-btn" data-go="planner">Open the planner</button></p>`)}
       ${latest ? card("Latest news", `<p><a href="${esc(latest.url)}" target="_blank" rel="noopener">${esc(latest.name)}</a><br><span class="sub">${esc(niceDate(latest.date))}</span></p>`, `<p class="sub small"><button type="button" class="link-btn" data-go="patches">All news</button></p>`) : ""}
     </div>`;
   view.querySelectorAll("[data-home-cls]").forEach((b) => b.addEventListener("click", () => {
@@ -1035,6 +1093,13 @@ function renderHome() {
   $("#homeLevelR").addEventListener("input", (e) => { $("#homeLevel").value = e.target.value; });
   $("#homeLevel").addEventListener("change", (e) => setLevel(e.target.value));
   view.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.go)));
+  $("#installBtn")?.addEventListener("click", async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    renderHome();
+  });
   if (!prices.byName && !prices.failed && !prices.loading) { prices.loading = true; loadPrices(); }
 }
 

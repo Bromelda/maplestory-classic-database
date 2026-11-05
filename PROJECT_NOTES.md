@@ -15,7 +15,7 @@ Never use old 2006-era, GMS v83 or MSEA tables.
 
 ## Tabs
 
-Home, World Map, Monsters, Items, Maps, Routes, Quests, NPCs, Calculator, Skills, Jobs, Patches, Log.
+Home, World Map, Monsters, Items, Maps, Routes, Quests, NPCs, Calculator, Skills, Planner (`planner.js`), News.
 
 - **World Map**: the game's own world maps and nodes (`tools/fetch_worldmap.py` → `data/worldmap.json`, `assets/worldmap`), with a switcher per island. Each map's `node` is worked out in `buildWorldNodes` in `app.js`, and nodes are colored by training level. On phones there are tappable area buttons.
 - **Maps**: full map art from the game files (`tools/fetch_map_art.py` → `assets/map-art`), with sharpened minimaps (`tools/upscale_minimaps.py` → `assets/minimap-hd`) as the fallback. The auto-update does new maps. Monster sprites stand at their spawn points, with portals, NPC markers, and "How to get here" (neighbouring maps zoomed in on the portal, circled).
@@ -59,8 +59,7 @@ Home, World Map, Monsters, Items, Maps, Routes, Quests, NPCs, Calculator, Skills
 
 ## To do / ideas
 
-Agreed next, after comparing with other Classic sites (Nov 2026): page addresses search engines can list.
-Decided against: a bosses tab and party quest guides (not useful without people tracking them), market tools, accounts and minigames.
+Decided against: a bosses tab and party quest guides (not useful without people tracking them), market tools, accounts, minigames, separate pages for search engines, and a public drop report form.
 
 1. **World map art**: the game's world map images are only about 636 px wide, so they're soft on big screens. Any redraw has to keep the layout exactly, because the nodes sit on the roads.
 2. **Drop tracker desktop app** (Windows): like Minerva (github.com/itechify/minerva, MIT), it would read the Pickup Log by screen capture,
@@ -80,6 +79,8 @@ Decided against: a bosses tab and party quest guides (not useful without people 
 - `data/items.json` only has items that drop or are used in quests. Shop-only gear is in `data/gear.json`, so it's in the calculator but has no item page. Club FM's item list has no attack for throwing stars and arrows, so `tools/fetch_ammo.py` gets it from maplestory.io (`incWAT`) into `data/ammo.json`.
 - There's no Free Market button on the world map. Town pages with a door to it (Henesys, Perion) link to Free Market Entrance from their own panel.
 - The what-to-fight guide loads Club FM's price summary only to value drops. There's no Market tab on purpose. Most monsters above level 25 have no counted drop rates yet, so their drop value shows as unknown and is never guessed.
+- `tools/check_data.py` stops the auto-update from saving broken data. If it fails, nothing is committed, so look at that run's log.
+- `sw.js` serves pages network-first and images cache-first. Raise its cache name if the caching rules change.
 - `tools/player_drops.json` holds drops the owner saw in game, added by the build with no rate. Only first-hand reports go there, not lists from other sites. NiaDB's drop list still needs their permission.
 - The Free Market's 20 numbered rooms are left out on purpose (`FREE_MARKET_ROOM` in `tools/build_data.py`, and their minimaps are removed in the workflow). Only Free Market Entrance stays, because it has four NPCs and two quests start there. The site has no market prices either.
 - Map art is only fetched once per map and comes from MCW v1 (launch v1.0.0), so a patch that changes a map's look won't show until its `assets/map-art` file is deleted and fetched again.

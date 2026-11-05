@@ -158,7 +158,7 @@ footer { text-align: center; color: var(--muted); font-size: .82em; padding: 24p
 td .spr-cell { width: 34px; }
 
 /* ---------- filters, info bars, buttons ---------- */
-#qarea { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+#qarea, #itemClass, #itemCat, #itemStat { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
 .info-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
 .info-bar .sub { color: var(--muted); font-size: .88em; }
@@ -443,7 +443,7 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
   #tabs button { flex: none; padding: 8px 14px; }
   main { padding: 12px; }
   #controls input[type=search] { font-size: 16px; } /* stops iOS zooming in */
-  .cf input, .cf select, .card-head select, #qarea { font-size: 16px; }
+  .cf input, .cf select, .card-head select, #qarea, #itemClass, #itemCat, #itemStat { font-size: 16px; }
   .legend { font-size: .78em; }
   .calc-hero { padding: 16px; border-radius: 14px; }
   .calc-hero h2 { font-size: 1.2rem; }
@@ -512,6 +512,30 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
 .route-map { padding: 0 10px 10px; }
 .route-map:empty { display: none; }
 .cx-route-link { margin: 10px 0 0; }
+.plan-modes { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 620px; }
+@media (max-width: 480px) { .plan-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plan-form { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 14px; }
+.plan-form .cf { flex: 1 1 200px; }
+.plan-form .plan-small { flex: 1 1 90px; }
+#planBody .calc-card { margin-bottom: 14px; }
+.plan-h { margin: 0 0 8px; font-size: 1rem; }
+.plan-h a, .plan-steps a, .plan-quest a, .plan-mat a { color: var(--accent); }
+.plan-h .sub { color: var(--muted); font-size: .8em; font-weight: 400; }
+.plan-steps { margin: 0; padding-left: 20px; font-size: .9em; }
+.plan-steps li { padding: 3px 0; }
+.plan-mats { display: flex; flex-direction: column; }
+.plan-mat { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.plan-have { flex: none; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: .76em; }
+.plan-have input { width: 64px; font: inherit; font-size: 16px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+.plan-left { flex: none; min-width: 58px; text-align: right; font-size: .84em; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) { .plan-mat { flex-wrap: wrap; } .plan-mat .home-text { flex-basis: 100%; } .plan-left { margin-left: auto; } }
+.plan-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 10px; }
+@media (max-width: 600px) { .plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plan-check { display: block; margin: 4px 0; font-size: .86em; color: var(--muted); }
+.plan-quest { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.plan-quest .cx-auto { flex: none; min-height: 34px; }
+.cmp-table td.cmp-win { color: #8fe0ad; font-weight: 700; }
+.sell-advice .cx-auto { margin-top: 6px; }
 .cx-danger, .cx-guide-main small.cx-danger { color: #ff8b91; font-weight: 600; }
 .cx-guide-opts { display: flex; flex-wrap: wrap; gap: 8px; }
 .cx-upgrades { display: flex; flex-direction: column; gap: 8px; }

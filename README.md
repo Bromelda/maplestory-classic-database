@@ -16,10 +16,13 @@ It's a plain static website with no build step for the site itself. Open it loca
   - NPCs, plus boss respawn timers
 - **Monster pages**: the animated in-game sprite, full stats, the Classic drop table with drop rates, and every map the monster spawns on. Hover a monster anywhere to preview its drops.
 - **Item pages**: every drop, shop, craftable item and all gear, with stats, requirements, who sells it, how to craft it, every monster that drops it, and whether it's safe to sell given your quests and known recipes.
+- **Item filters**: by class, type and stat, and gear pages compare against what your character is wearing.
+- **Planner**: crafting materials from scratch, time to reach a level, quests ranked by reward, and two builds side by side.
+- **Install on a phone**: add it to your home screen, and pages you've seen keep working with a weak signal.
 - **Site-wide search**: search monsters, items, maps, areas, quests, NPCs and jobs from any page.
 - **Route planner**: step-by-step directions between any two maps, using portals, hidden portals and boats, with each portal circled on the map.
 - **Quests**: all 325 current quests as step-by-step guides. Each one covers who to talk to (circled on the map), what to kill or collect and who drops it, where to turn it in, rewards, and what it unlocks next. Tick off finished quests to track your progress; it's saved in your browser. Ended events and Forgotten Hollow quests are left out.
-- **NPCs**: all 187 NPCs with every location circled on the map, plus the quests they give and accept. NPCs also show as pins on every map.
+- **NPCs**: all 187 NPCs with every location circled on the map, what they sell, plus the quests they give and accept. NPCs also show as pins on every map.
 - **Skills**: a skill-point planner for every Classic job (1st and 2nd), with every skill's numbers at every level straight from the game files. Spend points with + / − and see what each level does and what the next one adds. SP is counted at 3 per level from level 11. The plan saves to your character, and the calculator uses it: your skill level, mastery, Rage, Precise Strikes and Focus are all picked up automatically. Skills changed in the Oct 29 patch are marked.
 - **Saved characters**: keep several characters (main, alts) in your browser. Each one remembers its stats, gear and skill settings for the calculator, and its own quest progress. Tap the 👤 chip at the top to switch. The Quests tab can show only the quests your character can do right now.
 - **Share builds**: the calculator's **Share build** button makes a link with your setup. Whoever opens it sees your build and can save it as their own character.

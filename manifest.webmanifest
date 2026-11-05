@@ -1,0 +1,15 @@
+{
+  "name": "MapleStory Classic DB",
+  "short_name": "Classic DB",
+  "description": "Free fan database for MapleStory Classic World: monsters, drops, maps, quests, a damage calculator and planners.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14100d",
+  "theme_color": "#14100d",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -305,6 +305,8 @@ def main():
             for recipe in info.get("c") or []:
                 for material, _count in recipe[2]:
                     use_item(material)
+                if recipe[5]:
+                    use_item(recipe[5][0])
     for row in build_gear(itemdb):
         used_items.setdefault(row["name"], row["gid"])
     # potions, stars, arrows and scrolls too, even ones with no known source yet
@@ -338,7 +340,8 @@ def main():
             "effect": effect,
             "stats": row[7] if row and len(row) > 7 else None,
             "shops": [{"npc": slug(s[0]), "name": s[0], "town": s[1], "price": s[2]} for s in info.get("s") or []] or None,
-            "crafts": [{"skill": r[0], "level": r[1], "materials": [{"item": slug(m), "count": c} for m, c in r[2]]} for r in info.get("c") or []] or None,
+            "crafts": [{"skill": r[0], "level": r[1], "materials": [{"item": slug(m), "count": c} for m, c in r[2]], "makes": r[4] or 1,
+                        "catalyst": {"item": slug(r[5][0]), "count": r[5][1]} if r[5] else None} for r in info.get("c") or []] or None,
         })
 
     # ---------- maps ----------

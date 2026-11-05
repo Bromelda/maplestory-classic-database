@@ -181,7 +181,11 @@ function charBar() {
     <div class="char-actions">
       <button type="button" class="btn ghost" id="charNew">+ New</button>
       ${chars.list.length > 1 ? `<button type="button" class="btn ghost danger" id="charDel">Delete</button>` : ""}
+      <button type="button" class="btn ghost" id="charCopy">Copy</button>
       <button type="button" class="btn" id="shareBtn">Share build</button>
+      <button type="button" class="btn ghost" id="charBackup">Back up</button>
+      <button type="button" class="btn ghost" id="charRestore">Restore</button>
+      <input type="file" id="charFile" accept="application/json,.json" hidden>
     </div>
     <p class="sub small" id="shareStatus" aria-live="polite">Saved in this browser. Each character keeps its own stats and quest progress.</p>
   </section>`;
@@ -215,8 +219,86 @@ function bindCharBar() {
     };
   }
   $("#shareBtn").onclick = shareBuild;
+  $("#charCopy").onclick = () => { duplicateCharacter(); $("#charName")?.select(); };
+  $("#charBackup").onclick = backupCharacters;
+  $("#charRestore").onclick = () => $("#charFile").click();
+  $("#charFile").onchange = (e) => { if (e.target.files[0]) restoreCharacters(e.target.files[0]); };
 }
 
+function duplicateCharacter() {
+  const c = activeChar();
+  const id = "c" + Date.now();
+  saveCalc();
+  chars.list.push({ ...JSON.parse(JSON.stringify(c)), id, name: `${c.name} copy`.slice(0, 24) });
+  switchCharacter(id);
+  if (state.tab === "calc") renderCalc();
+}
+function backupCharacters() {
+  saveCalc();
+  const data = JSON.stringify({ app: "msclassicdb", version: 1, saved: new Date().toISOString(), active: chars.active, list: chars.list }, null, 1);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+  a.download = "maplestory-classic-characters.json";
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  $("#shareStatus").textContent = `Saved ${chars.list.length} ${chars.list.length === 1 ? "character" : "characters"} to a file. Use Restore on any device to bring them in.`;
+}
+// only known fields of the right type come in, and restored characters are added rather than replacing any
+function cleanCharacter(raw, i) {
+  const c = {};
+  for (const [k, def] of Object.entries(DEFAULTS)) if (raw.calc && typeof raw.calc[k] === typeof def && Array.isArray(raw.calc[k]) === Array.isArray(def)) c[k] = raw.calc[k];
+  if (!WEAPONS[c.cls]) { delete c.cls; delete c.weapon; }
+  const skills = {};
+  for (const [k, v] of Object.entries(raw.skills || {})) if (/^\d+$/.test(k) && Number.isInteger(v) && v > 0 && v <= 30) skills[k] = v;
+  return {
+    id: `c${Date.now()}${i}`, name: String(raw.name || "Restored").slice(0, 24), calc: c, skills,
+    done: Array.isArray(raw.done) ? raw.done.filter((x) => typeof x === "string") : [],
+    job2: Number(raw.job2) || undefined,
+    sessions: Array.isArray(raw.sessions) ? raw.sessions.filter((s) => s && typeof s === "object").slice(0, 30) : [],
+  };
+}
+async function restoreCharacters(file) {
+  const status = $("#shareStatus");
+  try {
+    const parsed = JSON.parse(await file.text());
+    if (parsed.app !== "msclassicdb" || !Array.isArray(parsed.list) || !parsed.list.length) throw new Error("wrong file");
+    const added = parsed.list.slice(0, 50).map(cleanCharacter);
+    chars.list.push(...added);
+    switchCharacter(added[0].id);
+    if (state.tab === "calc") renderCalc();
+    $("#shareStatus").textContent = `Added ${added.length} ${added.length === 1 ? "character" : "characters"} from your backup.`;
+  } catch {
+    status.textContent = "That file isn't a character backup from this site.";
+  }
+}
+// run a saved character through the calculator without changing what's on screen
+function evalBuild(char) {
+  const savedCalc = calc, savedActive = chars.active;
+  chars.active = char.id;
+  calc = { ...DEFAULTS, ...(char.calc || {}) };
+  try {
+    if (!WEAPONS[calc.cls]?.[calc.weapon]) calc.weapon = Object.keys(WEAPONS[calc.cls])[0];
+    if (calc.skillId !== "basic" && calc.skillId !== "custom" && !skillsForWeapon().some((s) => String(s.id) === String(calc.skillId))) { calc.skillId = defaultSkill(); applySkill(); }
+    const c = withGear(calc), r = rawRange(c), fs = sheet(c);
+    const hits = ((r.min + r.max) / 2) * (1 + (c.crit / 100) * (c.critdmg / 100)) * c.hits;
+    const best = [...guideEntries(c, r).usable].sort((a, b) => b.rate.exp - a.rate.exp)[0];
+    const mob = savedCalc.target && getEntity("monster", savedCalc.target);
+    const fight = mob ? matchup(r, c, mob) : null;
+    const sk = currentSkill();
+    return {
+      name: char.name, cls: calc.cls, level: calc.level, weapon: wornGear(calc).find((g) => g.slot === "weapon")?.name || calc.weapon,
+      skillName: sk?.name || (calc.skillId === "custom" ? "Custom" : "Regular attack"),
+      min: clampDmg(r.min), max: clampDmg(r.max), avg: Math.round(hits), acc: accuracy(c), crit: c.crit, hp: fs.hp, mp: fs.mp, wdef: fs.wdef, mdef: fs.mdef, avoid: fs.avoid,
+      bestExp: best?.rate.exp ?? null, bestSpot: best?.m.name || "—",
+      mobUses: fight && fight.withMiss !== Infinity ? fight.withMiss : null, mobHit: fight ? Math.round(fight.p * 100) : null, mobExp: fight ? hourly(mob, fight, c).exp : null,
+    };
+  } finally {
+    calc = savedCalc;
+    chars.active = savedActive;
+  }
+}
 const hasSkillData = () => typeof SK !== "undefined" && SK.jobs.length > 0;
 const SPELL_ELEMENT = { "Fire Arrow": "Fire", "Poison Breath": "Poison", "Cold Beam": "Ice", "Thunder Bolt": "Lightning", "Holy Arrow": "Holy" };
 function currentSkill() {
@@ -582,6 +664,52 @@ function mobDanger(m, c) {
 // ---------- best upgrades ----------
 const UPGRADE_SLOTS = { weapon: "Weapon", ammo: "Ammo", hat: "Hat", top: "Top", bottom: "Bottom", overall: "Overall", shoes: "Shoes", gloves: "Gloves", cape: "Cape", earrings: "Earrings", shield: "Shield" };
 const DAMAGE_STATS = ["ATT", "MATT", "STR", "DEX", "INT", "LUK", "CRIT", "CRITDMG"];
+function removedBySlot(slot) {
+  const off = slot === "overall" ? ["overall", "top", "bottom"] : slot === "top" || slot === "bottom" ? [slot, "overall"] : [slot];
+  const removed = {};
+  const take = (stats) => { for (const [k, v] of Object.entries(stats || {})) if (GEAR_FIELD[k]) removed[GEAR_FIELD[k]] = (removed[GEAR_FIELD[k]] || 0) - v; };
+  for (const s of off) {
+    const it = calc.gear[s] && gearFor(calc, s).find((g) => g.gid === calc.gear[s]);
+    if (it) { take(it.stats); take(calc.gearBonus[s]); }
+  }
+  return removed;
+}
+let gearByGid = null;
+function gearOfItem(it) {
+  gearByGid ||= new Map((db.gear || []).map((g) => [g.gid, g]));
+  return gearByGid.get(it.gid) || (db.gear || []).find((g) => g.name === it.name) || null;
+}
+function classCanUse(g) {
+  const usable = !g.job || !!(g.job & CLASS_BIT[calc.cls]);
+  return g.slot === "weapon" ? usable && !!WEAPONS[calc.cls][g.weapon] : usable;
+}
+// what this gear would do for the current character, for its item page
+function gearComparison(it) {
+  const g = gearOfItem(it);
+  if (!g) return "";
+  if (!classCanUse(g)) return `<div class="sell-advice maybe"><b>Not for your ${esc(calc.cls)}</b><span>${esc(activeChar().name)} can't use this.</span></div>`;
+  if (calc.gear[g.slot] === g.gid && (g.slot !== "weapon" || calc.weapon === g.weapon)) return `<div class="sell-advice safe"><b>You're wearing this</b><span>${esc(activeChar().name)} has it in the calculator.</span></div>`;
+  const base = withGear(calc), before = avgHit(base);
+  const t = { ...base, weapon: g.slot === "weapon" ? g.weapon : base.weapon };
+  if (g.slot === "weapon" && !calc.gear.weapon) { t.watk -= calc.watk; t.matk -= calc.matk; }
+  for (const [field, v] of Object.entries(removedBySlot(g.slot))) t[field] += v;
+  for (const [k, v] of Object.entries(g.stats)) if (GEAR_FIELD[k]) t[GEAR_FIELD[k]] += v;
+  const pct = before ? ((avgHit(t) - before) / before) * 100 : 0;
+  const needs = gearNeeds(g, t);
+  const word = Math.abs(pct) < 0.05 ? "No change in damage" : `${pct > 0 ? "+" : ""}${pct.toFixed(1)}% damage`;
+  const worn = g.slot === "top" || g.slot === "bottom" ? calc.gear.overall : calc.gear[g.slot];
+  return `<div class="sell-advice ${pct > 0.05 ? "safe" : pct < -0.05 ? "keep" : "maybe"}"><b>${word}</b><span>Compared with ${worn ? "what" : "the empty slot"} ${esc(activeChar().name)} ${worn ? "is wearing" : "has"}, on the current skill.${needs.length ? ` Needs ${esc(needs.join(", "))}.` : ""}</span>
+    <span><button type="button" class="cx-auto" data-item-wear="${g.gid}">Wear it in the calculator</button></span></div>`;
+}
+function wearFromItemPage(gid) {
+  const g = (db.gear || []).find((x) => x.gid === gid);
+  if (!g) return;
+  if (g.slot === "weapon") calc.weapon = g.weapon;
+  setGear(g.slot, gid);
+  picker.slot = null;
+  picker.list = false;
+  renderPicker();
+}
 function avgHit(t) { const r = rawRange(t); return ((r.min + r.max) / 2) * (1 + (t.crit / 100) * (t.critdmg / 100)); }
 function bestUpgrades(limit) {
   const base = withGear(calc);
@@ -590,13 +718,7 @@ function bestUpgrades(limit) {
   const out = [];
   for (const slot of Object.keys(UPGRADE_SLOTS)) {
     if (slot === "shield" && NO_SHIELD.has(calc.weapon)) continue;
-    const off = slot === "overall" ? ["overall", "top", "bottom"] : slot === "top" || slot === "bottom" ? [slot, "overall"] : [slot];
-    const removed = {};
-    const take = (stats, sign) => { for (const [k, v] of Object.entries(stats || {})) if (GEAR_FIELD[k]) removed[GEAR_FIELD[k]] = (removed[GEAR_FIELD[k]] || 0) + sign * v; };
-    for (const s of off) {
-      const it = calc.gear[s] && gearFor(calc, s).find((g) => g.gid === calc.gear[s]);
-      if (it) { take(it.stats, -1); take(calc.gearBonus[s], -1); }
-    }
+    const removed = removedBySlot(slot);
     const typedWeapon = slot === "weapon" && !calc.gear.weapon;
     for (const g of gearFor(calc, slot)) {
       if (calc.gear[slot] === g.gid || !Object.keys(g.stats).some((k) => DAMAGE_STATS.includes(k))) continue;
@@ -613,6 +735,35 @@ function bestUpgrades(limit) {
   }
   const byValue = (a, b) => (b.perMillion ?? -1) - (a.perMillion ?? -1);
   return out.sort(calc.upSort === "value" ? byValue : (a, b) => b.gain - a.gain).slice(0, limit);
+}
+function renderSkillTable() {
+  const box = $("#calcSkills");
+  if (!box) return;
+  const saved = { skillId: calc.skillId, skill: calc.skill, hits: calc.hits, mastery: calc.mastery, element: calc.element };
+  const target = calc.target && getEntity("monster", calc.target);
+  const list = ["basic", ...skillsForWeapon().map((s) => String(s.id))];
+  const rows = list.map((id) => {
+    calc.skillId = id;
+    applySkill();
+    const t = withGear(calc), r = rawRange(t), sk = currentSkill();
+    const perUse = ((r.min + r.max) / 2) * (1 + (t.crit / 100) * (t.critdmg / 100)) * t.hits;
+    const lv = sk?.levels ? usedLevel(sk) : null;
+    const reach = sk?.levels ? skillAt(sk, lv).mobCount || 1 : sk?.mobs || 1;
+    const fight = target ? matchup(r, t, target) : null;
+    return { id, name: sk?.name || "Regular attack", lv, perUse, perSec: perUse / attackSeconds(t), reach, uses: fight?.withMiss };
+  });
+  Object.assign(calc, saved);
+  const top = Math.max(...rows.map((x) => x.perSec));
+  box.innerHTML = `<div class="card-head"><h3>Compare your skills</h3></div>
+    <div class="calc-tablewrap"><table><thead><tr><th>Skill</th><th class="num">Lv</th><th class="num">Per use</th><th class="num">Per second</th><th class="num">${target ? `Uses on ${esc(target.name)}` : "Targets"}</th></tr></thead>
+    <tbody>${rows.map((x) => `<tr class="pick ${String(calc.skillId) === x.id ? "selected" : ""}" data-use-skill="${x.id}"><td>${esc(x.name)}${x.perSec === top ? ' <span class="badge">Best</span>' : ""}</td><td class="num">${x.lv ?? "—"}</td><td class="num">${fmt(Math.round(x.perUse))}</td><td class="num">${fmt(Math.round(x.perSec))}</td><td class="num">${target ? (x.uses === Infinity ? "—" : x.uses) : x.reach}</td></tr>`).join("")}</tbody></table></div>
+    <p class="sub small">One target, after crits and before monster defense, at your planned skill levels (or max if you haven't planned them). Attack speed here is by weapon, so skills with their own timing may differ. Tap a row to use that skill.</p>`;
+  box.querySelectorAll("[data-use-skill]").forEach((row) => row.addEventListener("click", () => {
+    calc.skillId = row.dataset.useSkill;
+    applySkill();
+    saveCalc();
+    renderCalc();
+  }));
 }
 function renderUpgrades() {
   const box = $("#calcUpgrades");
@@ -1054,6 +1205,7 @@ function renderCalc() {
       <div class="calc-out">
         <div id="calcSummary"></div>
         <section class="calc-card" id="calcSheet"></section>
+        <section class="calc-card" id="calcSkills"></section>
         <section class="calc-card">
           <div class="card-head"><h3>Fight a monster</h3>
             <select id="c_target" aria-label="Pick a monster"><option value="">Pick a monster…</option>
@@ -1356,6 +1508,7 @@ function renderCalcOut() {
     <p class="sub small">Tap a row to see the full matchup above. Hits = average needed, with crits. Damage is after the monster's defense${r.magic ? ", element" : ""} and the level-gap penalty.</p>
     <p class="sub small">Formulas: NiaDB (<a href="https://meowdb.com/msclassic/formulas/damage" target="_blank" rel="noopener">damage</a>, <a href="https://meowdb.com/msclassic/formulas" target="_blank" rel="noopener">stats and accuracy</a>, <a href="https://meowdb.com/msclassic/formulas/leveling" target="_blank" rel="noopener">HP, AP, EXP and mesos</a>, <a href="https://meowdb.com/msclassic/formulas/attack-speed" target="_blank" rel="noopener">attack speed</a>, <a href="https://meowdb.com/msclassic/formulas/spawns" target="_blank" rel="noopener">spawns</a>, <a href="https://meowdb.com/msclassic/formulas/damage-taken" target="_blank" rel="noopener">damage taken</a>), <a href="https://fullboosts.com/blog/maplestory-classic/articles/maplestory-classic-damage-formula-guide" target="_blank" rel="noopener">FullBoosts</a>, <a href="https://ms-classic.com/guides/accuracy-and-hit-rate-explained" target="_blank" rel="noopener">MS-Classic</a>. Skill values: NiaDB skill pages (linked). Monster stats, items and requirements: Classic game files.</p>`;
   renderUpgrades();
+  renderSkillTable();
   $("#calcTable").querySelectorAll("tr[data-pick]").forEach((tr) => tr.addEventListener("click", (e) => {
     calc.target = tr.dataset.pick; saveCalc();
     $("#c_target").value = calc.target;
