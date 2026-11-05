@@ -53,6 +53,7 @@ from daybook import DayBook
 from dropscan import DropScan, SCAN_POLL
 from vitals import VitalsReader
 import quickbar
+from scrollbody import scrolling_body
 from potwatch import PotReader, guess_item, same_icon, search_area as pot_search_area
 from platforms import create_platform, hotkey_text, parse_hotkey
 from report import Health, Recent
@@ -3703,13 +3704,15 @@ class App:
         w.resizable(False, False)
         w.transient(self.root)
         r = self._window_rect()
+        most = min(w.winfo_screenheight() - 200, px(620))       # (taller than this, Settings scrolls)
         if r:                                    # over the overlay, so on the same screen (and scaling)
-            w.geometry(f"+{r[0] + 40}+{r[1] + 40}")
+            w.geometry(f"+{r[0] + 40}+{max(0, min(r[1] + 40, w.winfo_screenheight() - most - 140))}")
         w.attributes("-topmost", bool(self.cfg["topmost"]))
         for delay in (0, 150, 800):
             w.after(delay, lambda: PLATFORM.style_window(w, INK, TEXT_DIM) if w.winfo_exists() else None)
-        body = tk.Frame(w, bg=BG)
-        body.pack(padx=px(26), pady=px(22))
+        foot = tk.Frame(w, bg=BG)                # (the buttons stay in view when the rest scrolls)
+        foot.pack(side="bottom", fill="x", padx=px(26), pady=(px(8), px(14)))
+        body = scrolling_body(w, BG, most, padx=px(26), pady=px(22), style="Dark.Vertical.TScrollbar")
         text = dict(bg=BG, fg=FG, font=th.font("semibold", 12))
         dim = dict(bg=BG, fg=DIM, font=th.font("regular", 11))
         wrap = px(380)
@@ -3861,8 +3864,8 @@ class App:
         for var in (gap, transparency, topmost, hud, repot, size):
             var.trace_add("write", apply)
         self._hotkey_settings(body)
-        buttons = tk.Frame(body, bg=BG)
-        buttons.pack(fill="x", pady=(px(22), px(4)))
+        buttons = tk.Frame(foot, bg=BG)
+        buttons.pack(fill="x")
         Button(buttons, th, text="Close", kind="primary", width=96, height=38, radius=11, size=12,
                command=w.destroy, bg=BG).pack(side="right")
         Button(buttons, th, text="Data folder", kind="secondary", width=104, height=38, radius=11, size=12,

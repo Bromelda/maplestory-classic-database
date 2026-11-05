@@ -24,8 +24,10 @@ EXACT = 5                       # how far off a listed amount still counts as th
 BOOST = 1.3                     # how far over a listed amount a jump can be and still probably be that potion
 LIVE = 5                        # seconds since an item's count was seen that it still counts as in view
 SETTLE = 2                      # seconds a count waits for a pickup line that explains it (the lines can lag)
-QUICK_DROP = 5                  # a bigger fall than this at once, or a number with digits lost, is probably a misread
+QUICK_DROP, QUICK_RISE = 5, 20  # a bigger change than this at once is probably a misread
 LOOKS_DROP, LOOKS_RISE, LOOKS_ODD = 2, 3, 8     # how many looks in a row have to agree on a new count
+PICKED_RISE = 3                 # a rise this small with no pickup line is a pickup whose line wasn't read, not a purchase
+LOOKS_LOST = 1200               # a number with digits lost (216 and 21) is nearly always a misread: about 5 minutes of looks
 
 
 def _blank():
@@ -150,8 +152,10 @@ class DayBook:
             need = LOOKS_RISE
         else:
             need = LOOKS_DROP
-        if was is not None and (was - value > QUICK_DROP or _digits_lost(was, value)):
+        if was is not None and (was - value > QUICK_DROP or value - was > QUICK_RISE):
             need = LOOKS_ODD
+        if was is not None and _digits_lost(was, value):
+            need = LOOKS_LOST
         if looks < need:
             return False
         del self.count_maybe[name]
@@ -166,8 +170,8 @@ class DayBook:
             if now - self.moved_at.get(name, -SETTLE) < SETTLE:
                 return False                                # (its pickup line may be on its way)
         if change > 0:
-            used = it["from_jumps"]                         # used while out of view, and bought more besides
-            it["bought"] += change + used
+            used = it["from_jumps"]                         # used while out of view, and got more besides
+            it["picked" if change + used <= PICKED_RISE else "bought"] += change + used
         else:
             used = -change                                  # (no change at all: those jumps weren't this potion)
         it["used"] += used - it["from_jumps"]

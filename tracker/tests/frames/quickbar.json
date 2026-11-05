@@ -58,5 +58,100 @@
    "item": null,
    "count": 110
   }
+ },
+ "quickbar_2.png": {
+  "A": {
+   "item": "Meat",
+   "count": 163
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 223
+  }
+ },
+ "quickbar_3.png": {
+  "A": {
+   "item": "Meat",
+   "count": 159
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 217
+  }
+ },
+ "quickbar_4.png": {
+  "A": {
+   "item": "Meat",
+   "count": 157
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 215
+  }
+ },
+ "quickbar_5.png": {
+  "A": {
+   "item": "Meat",
+   "count": 155
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 214
+  }
+ },
+ "quickbar_6.png": {
+  "A": {
+   "item": "Meat",
+   "count": 155
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 213
+  }
+ },
+ "quickbar_7.png": {
+  "A": {
+   "item": "Meat",
+   "count": 151
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 210
+  }
+ },
+ "quickbar_8.png": {
+  "A": {
+   "item": "Meat",
+   "count": 149
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 210
+  }
+ },
+ "quickbar_9.png": {
+  "F3": {
+   "item": "Orange Potion",
+   "count": 420
+  }
+ },
+ "quickbar_10.png": {
+  "F3": {
+   "item": "Orange Potion",
+   "count": 421
+  }
+ },
+ "quickbar_11.png": {
+  "F3": {
+   "item": "Orange Potion",
+   "count": 422,
+   "may_skip": true
+  }
+ },
+ "quickbar_12.png": {
+  "F3": {
+   "item": "Orange Potion",
+   "count": 423
+  }
  }
 }

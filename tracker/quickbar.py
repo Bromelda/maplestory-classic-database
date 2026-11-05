@@ -28,11 +28,14 @@ ICON_TOP = 36                       # how much of a slot's top has no count over
 COUNT_FX = 1.5
 BAND_TOP, BAND_H, BAND_LEFT, BAND_W = 30, 30, -6, 72        # the count's part of a slot, in pixels of a 1440-tall window
 STARTS, COUNT_ROWS = range(9, 17), range(10, 16)            # where the first digit can be in that part, at digit size
+ROW_OF = (13, 12, 14)               # which row of that part the digits are on, for each row of slots
 STEP, ONE_STEP = 22, 14             # how far apart digits are at digit size (a 1 is narrower)
 READ_OK = 0.8                       # how well a digit must fit
-READ_LEAD = 0.08                    # how much better than the next best it must be
-NEAR_MISS = 0.5                     # a poorer fit than READ_OK but better than this, on dark, is a digit that isn't clear
-PLATE_DARK = 0.3                    # how much of a digit's place is dark (each digit sits on black)
+READ_LEAD = 0.05                    # how much better than the next best it must be
+# After a number there's only the item's picture. On real pictures that fits a digit at most 0.59 and is at most 0.32
+# dark. Fit better than this, or darker (each digit sits on black), and there's a digit there that wasn't read.
+# (Not counting a 1: it's so narrow that the edge of a picture can look like one.)
+UNCLEAR_FIT, PLATE_DARK = 0.62, 0.36
 
 
 def area(rect):
@@ -176,39 +179,46 @@ class QuickBar:
         seen_as = band.tobytes()
         if seen_as in self.read_before:
             return self.read_before[seen_as]
-        got = self._read_band(band)
+        got = self._read_band(band, ROW_OF[KEYS.index(key) // 4])
         if len(self.read_before) > 500:
             self.read_before.clear()
         self.read_before[seen_as] = got
         return got
 
-    def _read_band(self, band):
+    def _read_band(self, band, row):
+        """The number's read from wherever it fits best. If that place isn't clear, the number isn't: a poorer place
+        that happens to read cleanly is how 216 came out as 21."""
         ink = soft_ink(band)
         dark = band.max(axis=2) < 90
         best = None
         for start in STARTS:
-            for row in COUNT_ROWS:
-                got = self._digits(ink, dark, start, row)
-                if got and (best is None or (len(got[0]), got[1]) > (len(best[0]), best[1])):
+            for y in (row - 1, row, row + 1):
+                got = self._digits(ink, dark, start, y)
+                if got and (best is None or got[1] > best[1]):
                     best = got
-        if best is None or (len(best[0]) > 1 and best[0][0] == "0"):
+        if best is None or not best[0] or (len(best[0]) > 1 and best[0][0] == "0"):
             return None
         return int(best[0])
 
     def _digits(self, ink, dark, pos, row):
-        """The digits left to right from a place: (their text, the worst fit), or None if any isn't clear."""
-        text, worst = "", 1.0
+        """The digits left to right from a place: (their text, how much fits there), or None if there are none.
+        The text is empty if any isn't clear. The fits are added up, so more digits fitting beats fewer."""
+        text, fits = "", []
         while len(text) <= 5:
             ranked = sorted(((max(fit_at(ink, t, x, row) for x in range(pos - 1, pos + 2)), d) for d, t in self.shapes.items()), reverse=True)
             score, digit = ranked[0]
             if score < READ_OK:
+                if not text:
+                    return None
                 place = dark[row:row + 26, pos:pos + 15]
-                if score >= NEAR_MISS and place.size and float(place.mean()) >= PLATE_DARK:
-                    return None             # something's printed here, but not clearly: don't read the number short
+                wide = next(fit for fit, d in ranked if d != "1")
+                if wide >= UNCLEAR_FIT or (place.size and float(place.mean()) >= PLATE_DARK):
+                    return "", sum(fits)            # a digit's here, but not clearly: don't read the number short
                 break
+            fits.append(score)
             if score - ranked[1][0] < READ_LEAD:
-                return None
+                return "", sum(fits)
             at = max(range(pos - 1, pos + 2), key=lambda x: fit_at(ink, self.shapes[digit], x, row))
-            text, worst = text + digit, min(worst, score)
+            text += digit
             pos = at + step_of(digit)
-        return (text, worst) if text else None
+        return text, sum(fits)

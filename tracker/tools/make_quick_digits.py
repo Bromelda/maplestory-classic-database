@@ -45,6 +45,7 @@ for name, slots in truth.items():
         text = str(want["count"])
         ink = qb.soft_ink(qb.count_band(img, key))
         score, spots, row = max(((*fit(ink, text, start, row), row) for start in qb.STARTS for row in qb.COUNT_ROWS), key=lambda v: v[0])
+        assert abs(row - qb.ROW_OF[qb.KEYS.index(key) // 4]) <= 1, (name, key, row)
         print(f"{name} {key}: {text} fits {score:.2f} at row {row}, {spots}")
         for ch, at in zip(text, spots):
             cells.setdefault(ch, []).append(ink[row:row + 26, at:at + shapes[ch].shape[1]])
