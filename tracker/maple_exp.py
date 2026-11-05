@@ -47,9 +47,12 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 import ocr
 import report
 from hud import LAYOUTS as HUD_LAYOUTS, THEMES as HUD_THEMES, HudCard
-from msgwatch import GH0 as GH0_MSG, Font as MessageFont, MessageWatcher, stack_area
+from msgwatch import GH0 as GH0_MSG, Font as MessageFont, MessageWatcher, stack_area, true_gh
 from itemwatch import ItemReader
+from daybook import DayBook
 from dropscan import DropScan, SCAN_POLL
+from vitals import VitalsReader
+import quickbar
 from potwatch import PotReader, guess_item, same_icon, search_area as pot_search_area
 from platforms import create_platform, hotkey_text, parse_hotkey
 from report import Health, Recent
@@ -102,6 +105,7 @@ ICON_PATH = ASSETS / "icon.ico"
 POLL_SECONDS = 1.5          # how often to read the EXP bar
 MESOS_UNSEEN = 15           # seconds without reading the mesos (the inventory closed) before the card guesses them
 MESSAGE_POLL = 0.1          # how often the game's message stack is looked at (msgwatch.py)
+VITALS_POLL = 0.25          # how often the HP and MP numbers are read, for potions used (vitals.py)
 POT_EVERY = 5               # ...and the potion popup, every this many of those looks
 KILL_QUIET = 12             # seconds without EXP lines before the slime hops from the EXP readings instead
 POTS_STALE = 600            # seconds of tracking without a look at the potion popup before the card marks pot cost "~"
@@ -137,7 +141,8 @@ DEFAULTS = {"gap_seconds": 120, "transparency": 0, "topmost": True,
             "hud": True, "hud_layout": "full", "hud_theme": "brown", "hud_scale": 0.5, "hud_width": 1390,
             "hud_tall": 0, "hud_repot": True, "hud_opacity": 1.0,
             "save_captures": False,     # save pictures of the potion popup and the pickup lines, for testing
-            "drop_scanner": True}       # watch the field: which monster each drop came from (dropscan.py)
+            "drop_scanner": True,       # watch the field: which monster each drop came from (dropscan.py)
+            "drop_clips": True}         # keep short videos around kills, for finding the scanner's mistakes (clips.py)
 SHAPE_LABELS = {"square": "Square", "wide": "Wide", "bar": "Bar"}
 SHAPE_BLURBS = {"square": "The narrow card: the big number, the level bar and Start/Pause.",
                 "wide": "Longer sideways: the level bar on top and four numbers in a row.",
@@ -248,6 +253,7 @@ def load_config():
               "repot": lambda v: isinstance(v, dict) and type(v.get("mesos")) is int,
               "pot_cost": lambda v: type(v) is int,
               "drop_scanner": lambda v: type(v) is bool,
+              "drop_clips": lambda v: type(v) is bool,
               "loot_prices": lambda v: isinstance(v, dict) and all(
                   isinstance(k, str) and type(p) is int and p >= 0 for k, p in v.items()),
               "pots": lambda v: isinstance(v, list) and all(
@@ -2997,6 +3003,15 @@ FALLBACK_FONT = {"Manrope": "Segoe UI", "Manrope SemiBold": "Segoe UI Semibold",
 LOG_HINT = "Click a line to write a note about it. Right-click to copy, rename or delete it."
 
 
+def _load_heals():
+    """What each potion and food recovers, from the scanner's data."""
+    return json.loads((ASSETS / "scan_data.json").read_text(encoding="utf-8")).get("heals", {})
+
+
+def _load_heal_gids():
+    return json.loads((ASSETS / "scan_data.json").read_text(encoding="utf-8")).get("heal_gids", {})
+
+
 class App:
     def __init__(self, root, templates):
         self.root = root
@@ -3115,9 +3130,18 @@ class App:
         self.picked_mesos, self.timed_mesos, self.loot, self.pickups_seen = 0, 0, {}, False
         try:                                    # (which monster each drop came from: dropscan.py)
             self.drop_scan = DropScan(ASSETS, DATA_DIR / "drops")
+            self.drop_scan.keep_clips(bool(self.cfg.get("drop_clips")))
         except Exception as e:
             self.drop_scan = None
             log_error("loading the drop scanner", e)
+        try:                                    # (the day's mesos and potions: daybook.py, vitals.py)
+            self.daybook = DayBook(DATA_DIR / "daybook.json", _load_heals())
+            self.vitals = VitalsReader(ASSETS)
+            self.quick_bar = quickbar.QuickBar(ASSETS, _load_heal_gids())
+        except Exception as e:
+            self.daybook, self.vitals, self.quick_bar = None, None, None
+            log_error("loading the day's account", e)
+        self.vitals_at = 0.0
         threading.Thread(target=self._message_worker, daemon=True).start()
         threading.Thread(target=self._scan_worker, daemon=True).start()
         root.after(200, self._pump)
@@ -3562,6 +3586,8 @@ class App:
                                        self.job, party_label(self.party)) if x)
         if self.drop_scan and self.cfg.get("drop_scanner") and self.session.started:
             where = f"{where}\n{self.drop_scan.status()}"
+        if self.daybook:
+            where = "\n".join([where] + self.daybook.lines())
         if self.skip_log:
             return f"{where}\nNot logging this run."
         if not self.session.on:
@@ -3789,6 +3815,19 @@ class App:
                             "Results stay on this PC, in the data folder's drops folder. Only drops it's sure of "
                             "are kept. It only looks at the picture and never touches the game.",
                  wraplength=wrap, justify="left", **dim).pack(anchor="w")
+        clips = tk.BooleanVar(value=bool(self.cfg.get("drop_clips")))
+        self._switch(body, "Save short clips around kills", clips).pack(anchor="w", pady=(px(8), 0))
+
+        def clips_changed(*_):
+            self.cfg.update(drop_clips=bool(clips.get()))
+            save_config(self.cfg)
+            if self.drop_scan:
+                self.drop_scan.keep_clips(bool(clips.get()))
+        clips.trace_add("write", clips_changed)
+        tk.Label(body, text="Videos of the game window, chat included, for finding out why the scanner got something wrong. "
+                            "They stay on this PC, in the drops folder's clips folder. They use up to 5 GB, "
+                            "and the oldest are deleted first. Turn this off once the scanner works well.",
+                 wraplength=wrap, justify="left", **dim).pack(anchor="w")
         Button(body, self.theme, "Open the drops folder", kind="secondary", width=260, height=34, radius=10, size=12, bg=BG,
                command=self._open_drops).pack(anchor="w", pady=(px(6), 0))
         self._section(body, "Potions (controller)")
@@ -4005,6 +4044,9 @@ class App:
                 try:
                     rect, g = self.reader.last_rect, self.reader.gh
                     if self.messages and rect and g and self.reader.hwnd and self.reader.mode == "window":
+                        if self.drop_scan:
+                            self.drop_scan.gh_measured = g
+                        g = true_gh(g, rect[3])
                         shot = self.reader._hide_own(grab(sct, *stack_area(rect, g)))
                         if shot:
                             lines = self.messages.look(shot[0], g, t0)
@@ -4015,6 +4057,16 @@ class App:
                                 self.q.put(("messages", (found, t0)))
                                 if self.cfg.get("save_captures"):
                                     self._save_capture("messages", shot[0], found)
+                        if self.vitals and t0 - self.vitals_at >= VITALS_POLL:
+                            self.vitals_at = t0
+                            bar = self.reader._hide_own(grab(sct, *VitalsReader.area(rect)))
+                            if bar:
+                                self.daybook.vitals(**self.vitals.read_area(bar[0], rect[3] / 1440))
+                            shot = self.reader._hide_own(grab(sct, *quickbar.area(rect)))
+                            if shot:
+                                for name, count in (self.quick_bar.read(shot[0], rect[3] / 1440) or {}).values():
+                                    if name and count is not None:
+                                        self.daybook.count(name, count, now=t0)
                         turn = (turn + 1) % POT_EVERY
                         if self.pot_reader and not turn:
                             self._look_for_pots(sct, rect, g)
@@ -4086,6 +4138,12 @@ class App:
 
     def _pickups(self, found, when):
         """Pickup lines read: mesos picked up count exactly, items go on the loot list (potions: see PotTracker)."""
+        if self.daybook:                        # (the day's account doesn't depend on Start)
+            for p in found:
+                if p[0] == "mesos":
+                    self.daybook.picked_mesos(p[1])
+                else:
+                    self.daybook.picked_item(p[1], p[2], p[3])
         if not self.session.started:
             return
         for p in found:
@@ -4149,6 +4207,10 @@ class App:
             counts[item["id"]] = counts.get(item["id"], 0) + count
         used = self.pots.observe(counts, when, self.session.on, self.in_town)
         prices = {it["id"]: it["price"] for it in items}
+        if self.daybook:
+            for it in items:
+                if it["id"] in counts and it.get("name") not in (None, "Item"):
+                    self.daybook.count(it["name"], counts[it["id"]])
         cost = sum(n * prices.get(i, 0) for i, n in used.items())
         if cost:
             self.cfg["pot_cost"] = int(self.cfg.get("pot_cost") or 0) + int(cost)
@@ -4293,6 +4355,8 @@ class App:
             save_config(self.cfg)
         if r.mesos is not None:
             self.meso.observe(r.mesos, now, t.elapsed(), self.session.started)   # (through pauses: shop trips)
+            if self.daybook and self.meso.value is not None:
+                self.daybook.mesos(self.meso.value)
         if r.party is not None:                         # believe a new party size once seen twice
             seen, n = self._party_seen
             n = n + 1 if r.party == seen else 1
@@ -5060,7 +5124,7 @@ class App:
         self._note_flush()
         self.stop_evt.set()
         if self.drop_scan:
-            self.drop_scan.save()
+            self.drop_scan.finish()
         try:
             self._remember_log_size()
         except Exception as e:

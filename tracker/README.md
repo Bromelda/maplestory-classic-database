@@ -5,12 +5,32 @@ A desktop tracker for MapleStory Classic World: EXP per hour, mesos, loot and po
 
 Status: **not tested on the real game yet.** See [What's been checked](#whats-been-checked).
 
+## Your day
+
+The Log page keeps a running account of the day, saved in `daybook.json` in the tracker's data folder:
+
+- **Mesos:** the first time you open your inventory each day sets your starting mesos. Each time after, it shows what
+  you've made. What you spend at shops comes off that, and is shown as spent.
+- **Potions:** potions and food you pick up, from the message lines, and what you use, from jumps in your HP and MP. A jump
+  of exactly a potion's amount counts as that potion. MP potions can heal more than listed, so a jump up to 30% over
+  is marked with `?` as probably that one. Any other jump, like a Heal from a party member, is listed by its size.
+- **Potion counts:** when an item's count is on screen, the count is the truth: had, plus picked up, less what's left, is
+  what you used, and a rise beyond your pickups is bought. While the count's in view, jumps don't add to that item. While
+  it isn't, they keep the tally going, and the next count corrects them. Counts come from the quick bar (the Short Cut
+  button) while it's open, and the controller's popup. Items on the bar are recognised from real pictures of it, made
+  by `tools/make_quick_digits.py`. It's only been checked at 2560x1440.
+
 ## What the scanner does
 
-1. Follows the monsters on screen by their sprites, using only the ones that live on the current map.
+1. Follows the monsters on screen by their sprites, using only the ones that live on the current map, in their hit and
+   death poses too.
 2. Sees one vanish, and pairs it with your "You received EXP" line. No EXP line means someone else's kill.
-3. Watches the spot it died on for something new landing there.
-4. Sees that thing leave the ground and pairs it with your pickup line, which gives the item's exact name.
+3. Looks around where it died for the pictures of coins and of what that monster is known to drop.
+4. Sees that thing leave the ground and pairs it with your pickup line, which gives the item's exact name. They have to
+   agree: a coin can't become an item, or one item another.
+
+A drop the database doesn't list has no picture to look for, so it isn't seen landing. On a map with one kind of monster it
+still goes on the drop list from the pickup line, but not in the rate.
 
 ## What counts
 
@@ -31,7 +51,8 @@ out and counted, so you get a line like "412 kills counted, 58 skipped", with th
 
 ## Run it
 
-Needs Python 3.10 or newer, and [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) for reading new item names.
+Needs Python 3.10 or newer, and [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki). The scanner can't work without
+Tesseract, because it reads the map's name to know which monsters to look for. Keep the minimap open too.
 
 ```bash
 py -3 -m pip install -r requirements.txt
@@ -51,6 +72,8 @@ Everything stays in `%APPDATA%\MapleEXP\drops`:
 - `new_for_database.json`: drops the database doesn't list yet, shaped like `tools/player_drops.json`
 - `pictures/`: what each drop looked like on the ground, for checking by eye
 - `log.jsonl` and `session-*.json`: the raw results
+- `clips/`: short videos around kills and pickups, for finding out why it got something wrong. They show the whole game
+  window, chat included. They use up to 5 GB, the oldest are deleted first, and Settings has a switch to turn them off.
 
 Check new drops against their pictures before copying them to the database.
 
@@ -90,11 +113,23 @@ the fix stop counting.
 
 This is the way to find out how well it works, and to tune it, without risking anything in a live session.
 
+The tracker saves its own clips, with the message lines it read beside them. This runs the scanner over all of them:
+
 ```bash
-py -3 tools/replay.py clip.mp4 --map "The Land of Wild Boar II" --gh 10 --out seen.mp4
+py -3 tools/replay.py
 ```
 
-`--gh` is the height of the game's digits, about 10 at 1080p. The output video has boxes drawn on what it saw.
+This runs one and makes a video with boxes drawn on what it saw:
+
+```bash
+py -3 tools/replay.py "%APPDATA%\MapleEXP\drops\clips\clip-name.avi" --out seen.mp4
+```
+
+For a video from something else, name the map. `--gh` is the height of the game's digits, about 10 at 1080p:
+
+```bash
+py -3 tools/replay.py other.mp4 --map "The Land of Wild Boar II" --gh 10 --out seen.mp4
+```
 
 ## What's been checked
 
@@ -103,6 +138,7 @@ py -3 tools/replay.py clip.mp4 --map "The Land of Wild Boar II" --gh 10 --out se
 | The rules, one situation at a time (`tests/test_lootwatch.py`) | Passing |
 | The scanner on made-up footage: real map art and sprites, stand-in player, scrolling view (`tests/test_fieldwatch.py`) | Passing |
 | Saving, map names, the report (`tests/test_dropscan.py`) | Passing |
+| Saving clips and replaying them, on made-up footage (`tests/test_clips.py`) | Passing |
 | Finding a real Wild Boar in one real 1920x1080 screenshot, among all 83 monsters | Correct: 0.74 against 0.68 for the next best |
 | The tracker window with the scanner connected | **Not run yet** |
 | A real kill, drop and pickup in the real game | **Not done yet** |
@@ -110,8 +146,9 @@ py -3 tools/replay.py clip.mp4 --map "The Land of Wild Boar II" --gh 10 --out se
 The first time it sees a given window size, it takes a few seconds to learn how big sprites show, and it can miss the
 drops of kills made around then. It remembers the size afterwards.
 
-Things most likely to need tuning on real footage: hit and death animations (the sprites only cover standing and
-moving), skill effects over monsters, drops that spin (mesos), and how fast the scenery should learn.
+Tried on real clips of a busy party map: it read HP and MP in all 832 frames, it found coins and items by their pictures
+with few false fits, and it no longer loses its place. But party members' pets took most drops as they landed, so it saw few
+settle. That's why these clips don't show how well it counts, which needs a solo session.
 
 ## Safety
 

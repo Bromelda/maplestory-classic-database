@@ -51,9 +51,13 @@ def load_sprite(species):
     return out
 
 
-def load_icon(name):
+def raw_icon(name):
     im = np.array(Image.open(SITE / "assets" / "item" / name).convert("RGBA"))
-    bgr, mask = im[..., 2::-1].copy(), (im[..., 3] > 128).astype(np.uint8) * 255
+    return im[..., 2::-1].copy(), (im[..., 3] > 128).astype(np.uint8) * 255
+
+
+def load_icon(name):
+    bgr, mask = raw_icon(name)
     w, h = round(bgr.shape[1] * SCREEN_SCALE), round(bgr.shape[0] * SCREEN_SCALE)
     return cv2.resize(bgr, (w, h), interpolation=cv2.INTER_NEAREST), cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
 
@@ -137,6 +141,7 @@ def play(scene, species, seconds, events=(), scale=None, map_name=None):
     led.species_here = list(species)
     field = fw.FieldWatch(led, ROOT / "assets" / "mob", DATA, scale=scale)
     field.set_species(species)
+    field.icons.add("Pig's Ribbon", *RAW_ICON_A)
     queue = sorted(events, key=lambda e: e[0])
     cost, frames = 0.0, 0
     t = 0.0
@@ -164,6 +169,7 @@ def play(scene, species, seconds, events=(), scale=None, map_name=None):
 WORLD = load_world()
 icons = sorted(p.name for p in (SITE / "assets" / "item").glob("*.png"))
 ICON_A = load_icon(icons[len(icons) // 3])
+RAW_ICON_A = raw_icon(icons[len(icons) // 3])
 GROUND = 700.0
 # Everything up to t=4 is the scanner getting to know the map.
 SCALE = fw.WORK_H / VIEW_H * SCREEN_SCALE

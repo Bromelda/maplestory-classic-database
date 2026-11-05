@@ -20,6 +20,7 @@ How it works, each look (about 8 times a second), on a half-size copy of the pic
 5. A drop that stops being there has left the ground. If something is standing on it, it comes back.
 """
 from dataclasses import dataclass
+import time
 from pathlib import Path
 
 import cv2
@@ -35,7 +36,8 @@ WARM_UP = 16                # looks at a map before anything on the ground is be
 CALM_DIFF = 10              # this close to the scenery: the scenery's right about this pixel
 CALM_LOOKS = 12             # looks of that before a pixel is known to be real ground
 SHIFT_MAX = 0.35            # the most the view can move between looks (share of the picture)
-LINE_UP_OK = 14.0           # average difference between two looks once lined up, at most, to trust the move
+LINE_UP_OK = 24.0           # average difference between two looks once lined up, at most, to trust the move. Real
+                            # maps have far layers that scroll at other speeds and clouds that drift: 9 to 20 is normal
 LOST_LOOKS = 16             # looks in a row with no trustworthy move (2 seconds; a skill's flash is shorter): start again
 MATCH_OK = 0.62             # how alike a followed monster must look to its sprite
 MATCH_NEW = 0.72            # ...to start following one
@@ -44,20 +46,24 @@ GONE_AFTER = 0.9            # seconds not found before a monster has vanished (b
 FORGET_AFTER = 1.8          # ...and before it's forgotten for good (found again before this: it was only hidden)
 RECENT = 0.4                # found this recently: it's still standing where it was
 EDGE = 40                   # a monster last seen this close to the view's edge (plus half its width) walked out of view
-ICON = 32                   # an item's icon, in sprite pixels
-ICON_MIN, ICON_MAX = 0.3, 1.5      # share of ICON a thing on the ground can measure
-STAY_S = 0.35               # seconds something must stay put to be a drop
+ICON_OK = 0.72              # how alike something must look to a coin's or item's picture to be one. On real footage
+                            # real ones scored 0.78 to 0.90, at the working size
+ICON_DIFF = 55.0            # ...how far its colours can be from the picture's, not just its pattern
+ICON_FLAT = 0.55            # ...and how much of the picture's contrast it must have (a plain wall can fit a pale item)
+ICON_STILL = 0.5            # ...and to still be there, once it's being watched (coins spin, others walk over it)
+DROP_BEFORE = 1.3           # a drop can land this long before its monster's last seen
+SCAN_BUDGET = 0.1           # seconds per look for looking for drops, and again for new monsters
+STAY_S = 0.3                # seconds something must stay put to be a drop
 STAY_X, STAY_Y = 3, 7       # how far it can wander meanwhile (drops bob up and down), working px
-FLICKER_MAX = 60            # how much a spot may have been blinking on and off lately for it to count as steady
 DROP_ZONE = 110.0            # how far from a vanished monster to look for its drop (sprite pixels)
 DROP_ZONE_Y = 90.0
 DROP_ZONE_S = 3.5           # ...and for how long
-GHOST = 0.75                # the scenery itself looks this much like a monster: it had got in there
-                            # (plain scenery can reach 0.68 by chance, on the one real picture we have)
-SAME_DROP = 0.45            # how alike a drop must look to itself to be still there
 LOST_LOOKS_LOOT = 2         # looks in a row not there before it's lost
 FORGET_LOOT = 8.0           # seconds lost before it's no longer watched
 FULL_SEARCH_EVERY = 8       # looks between searching the whole view for one monster's sprites
+MOST_TRIES = 6              # places to try for a new monster in one look, biggest first (each costs tens of ms)
+SCENERY_SHIFT = 4           # how far off the view's position can be, in working pixels
+SCENERY_DIFF = 16.0         # a picture this close to the scenery, once lined up by itself, is the scenery
 # Sprite size to working size, most likely first. A real 1920x1080 window shows them at 0.66.
 SCALES = (0.66, 0.72, 0.6, 0.8, 0.55, 0.9, 0.5, 1.0, 0.46, 0.42)
 SCALE_SURE = 0.72           # how alike a sprite must look to believe this is its size
@@ -97,12 +103,14 @@ class SpriteBank:
     def __init__(self, folder, data):
         self.folder, self.data = Path(folder), data
         self.raw = {}               # species -> frames at the game's own size
+        self.poses = {}             # species -> being hit and dying, from assets/mob_poses
         self.scale = None           # sprite pixels to working pixels, once found
         self._at = {}
 
     def use(self, species):
-        self.raw = {}
+        self.raw, self.poses = {}, {}
         self._at = {}
+        poses = self.folder.parent / "mob_poses"
         for s in species:
             gid = self.data.gid_of(s) if self.data else s
             p = self.folder / f"{gid}.gif"
@@ -110,20 +118,102 @@ class SpriteBank:
                 frames = sprite_frames(p)
                 if frames:
                     self.raw[s] = frames
+                    self.poses[s] = [cut for cut in (_cut_png(q) for q in sorted(poses.glob(f"{gid}_*.png"))) if cut]
+
+    def following(self, species):
+        """What this monster can look like once it's being followed: being hit and dying as well."""
+        key = (species, self.scale, "following")
+        if key not in self._at:
+            self._at[key] = self.templates(species) + self._sized(self.poses.get(species, []), self.scale)
+        return self._at[key]
 
     def templates(self, species, scale=None):
         scale = scale or self.scale
         key = (species, scale)
         if key not in self._at:
+            self._at[key] = self._sized(self.raw.get(species, []), scale)
+        return self._at[key]
+
+    @staticmethod
+    def _sized(frames, scale):
+        made = []
+        for bgr, mask in frames:
+            w, h = max(4, round(bgr.shape[1] * scale)), max(4, round(bgr.shape[0] * scale))
+            b = cv2.resize(bgr, (w, h), interpolation=cv2.INTER_AREA)
+            m = (cv2.resize(mask, (w, h), interpolation=cv2.INTER_AREA) > 127).astype(np.uint8) * 255
+            made.append((b, m))
+            made.append((b[:, ::-1].copy(), m[:, ::-1].copy()))
+        return made
+
+
+
+COINS = (9000000, 9000001, 9000002, 9000003)    # the game's pictures for dropped mesos, smallest amount first
+
+
+def _cut_png(path):
+    """A picture file cut to what's drawn in it, as (bgr, mask), or None."""
+    pic = _png(path)
+    if pic is None or not pic[1].any():
+        return None
+    ys, xs = np.nonzero(pic[1])
+    y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    return pic[0][y0:y1, x0:x1], pic[1][y0:y1, x0:x1]
+
+
+def _png(path):
+    """A picture file as (bgr, mask), or None."""
+    im = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    if im is None or im.ndim != 3 or im.shape[2] != 4:
+        return None
+    return im[..., :3].copy(), (im[..., 3] > 128).astype(np.uint8) * 255
+
+
+class DropIcons:
+    """The pictures of what can land on this map: mesos, and everything its monsters are known to drop."""
+
+    def __init__(self, folder, data=None):
+        self.folder, self.data = Path(folder), data
+        self.raw, self.extra, self._at = {}, {}, {}
+
+    def use(self, species):
+        self.raw, self._at = {}, {}
+        coins = [_png(self.folder / f"{gid}.png") for gid in COINS]
+        if any(coins):
+            self.raw["mesos"] = [c for c in coins if c]
+        for s in species:
+            for name in (self.data.drops_of(s) if self.data else []):
+                gid = self.data.icon_of(name)
+                pic = _png(self.folder / f"{gid}.png") if gid else None
+                if pic and name not in self.raw:
+                    self.raw[name] = [pic]
+
+    def add(self, name, bgr, mask):
+        """One more picture to look for, beyond what the data lists."""
+        self.extra.setdefault(name, []).append((bgr, mask))
+        self._at = {}
+
+    def templates(self, scale, species=None):
+        """[(name, picture, mask)], at this size: everything, or what this monster can drop."""
+        key = (scale, species)
+        if key not in self._at:
+            drops = set(self.data.drops_of(species)) if species and self.data else None
             made = []
-            for bgr, mask in self.raw.get(species, []):
-                w, h = max(4, round(bgr.shape[1] * scale)), max(4, round(bgr.shape[0] * scale))
-                b = cv2.resize(bgr, (w, h), interpolation=cv2.INTER_AREA)
-                m = (cv2.resize(mask, (w, h), interpolation=cv2.INTER_AREA) > 127).astype(np.uint8) * 255
-                made.append((b, m))
-                made.append((b[:, ::-1].copy(), m[:, ::-1].copy()))
+            for name, pics in list(self.raw.items()) + list(self.extra.items()):
+                if drops is not None and name != "mesos" and name not in drops and name not in self.extra:
+                    continue
+                for bgr, mask in pics:
+                    w, h = max(4, round(bgr.shape[1] * scale)), max(4, round(bgr.shape[0] * scale))
+                    made.append((name, cv2.resize(bgr, (w, h), interpolation=cv2.INTER_AREA),
+                                 (cv2.resize(mask, (w, h), interpolation=cv2.INTER_AREA) > 127).astype(np.uint8) * 255))
             self._at[key] = made
         return self._at[key]
+
+
+def _looks_like(patch, picture, mask):
+    """A fit's pattern can be right on something the wrong colour, or on nearly nothing at all."""
+    on = mask > 0
+    a, b = patch.astype(np.float32)[on], picture.astype(np.float32)[on]
+    return float(np.sqrt(((a - b) ** 2).mean())) <= ICON_DIFF and float(a.mean(axis=1).std()) >= ICON_FLAT * float(b.mean(axis=1).std())
 
 
 def best_match(area, templates):
@@ -318,6 +408,7 @@ class Spot:
     h: int
     first: float
     last: float
+    name: str = None            # what its picture says it is: an item's name, or "mesos"
     ledger_id: int = None       # set when it's a drop
     picture: np.ndarray = None
     missing: int = 0
@@ -331,6 +422,7 @@ class FieldWatch:
         self.ledger, self.data = ledger, data
         self.bank = SpriteBank(sprites_folder, data)
         self.bank.scale = scale
+        self.icons = DropIcons(Path(sprites_folder).parent / "icons", data)
         self.finder = ScaleFinder()
         self.camera = Camera()
         self.scenery = Scenery()
@@ -354,6 +446,7 @@ class FieldWatch:
             return
         self.species = list(species)
         self.bank.use(species)
+        self.icons.use(species)
         self.start_again()
 
     def start_again(self):
@@ -414,15 +507,14 @@ class FieldWatch:
         # Nothing new is learned where a monster has just vanished, or its drop would fade into the
         # scenery before it's been there long enough to be sure of it.
         s = self._sprite_scale()
-        for zx, zy, _ in self._zones(now):
+        for zx, zy, _, _ in self._zones(now):
             self._mark(keep, zx, zy, 2 * DROP_ZONE * s, 2 * DROP_ZONE_Y * s)
         on_top = self.scenery.compare(small, x0, y0, keep, hold, now)
         on_top[ui > 0] = 0
         self._search(small, on_top, now)
         self._vanished(now)
-        if self.scenery.looks >= WARM_UP:
-            self._ground(small, on_top, x0, y0, now)
-        self._watch_drops(small, on_top, now)
+        self._ground(small, on_top, ui, now)
+        self._watch_drops(small, now)
         self.last = {"on_top": on_top, "small": small, "x0": x0, "y0": y0}
 
     def _to_screen(self, x, y):
@@ -452,7 +544,7 @@ class FieldWatch:
             area = small[max(0, y0):max(0, y1), max(0, x0):max(0, x1)]
             if area.size == 0:
                 continue
-            got = best_match(area, self.bank.templates(t.species)) if self.bank.scale else None
+            got = best_match(area, self.bank.following(t.species)) if self.bank.scale else None
             if got and got[0] >= MATCH_OK:
                 nx, ny = max(0, x0) + got[1] + got[3] / 2, max(0, y0) + got[2] + got[4] / 2
                 t.x, t.y = self._to_world(nx, ny)
@@ -471,7 +563,7 @@ class FieldWatch:
                 t.reported = True
                 x, y = self.to_ledger(t.x, t.y)
                 self.ledger.mob_gone(t.species, x, y, t.seen, track=t.id)
-                self.gone_spots.append((t.x, t.y, t.seen))
+                self.gone_spots.append((t.x, t.y, t.seen, t.species))
             if gone_for < FORGET_AFTER:
                 keep.append(t)
         self.tracks = keep
@@ -487,13 +579,19 @@ class FieldWatch:
         self._turn += 1
         n, _, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(on_top, np.ones((5, 5), np.uint8)))
         s = self._sprite_scale()
-        for k in range(1, n):
+        tries, began = 0, time.perf_counter()
+        for k in sorted(range(1, n), key=lambda i: -stats[i][4]):
             x, y, bw, bh, area = stats[k]
             if bw < 14 * s or bh < 14 * s or bw > 260 * s or bh > 260 * s:
                 continue
             if self._followed(x + bw / 2, y + bh / 2, bw, bh):
                 continue
+            if self.where and self._is_scenery(small, x, y, bw, bh, *self.where):
+                continue
             self._try_start(small, species, x - 12, y - 12, x + bw + 12, y + bh + 12, now)
+            tries += 1
+            if tries >= MOST_TRIES or time.perf_counter() - began > SCAN_BUDGET:
+                break
         if self._turn % FULL_SEARCH_EVERY == 0 or self.scenery.looks <= WARM_UP:     # (at first: before they're learned in)
             self._search_at = (self._search_at + 1) % len(species)
             self._try_start(small, [species[self._search_at]], 0, 0, small.shape[1], small.shape[0], now, whole=True)
@@ -551,93 +649,91 @@ class FieldWatch:
 
     # ---------- drops ----------
 
-    def _icon_box(self):
-        s = self._sprite_scale()
-        return ICON * s * ICON_MIN, ICON * s * ICON_MAX
-
     def _zones(self, now):
         """Where a drop could be landing now: around monsters that have just stopped being found."""
         self.gone_spots = [g for g in self.gone_spots if now - g[2] <= DROP_ZONE_S]
         zones = list(self.gone_spots)
-        zones += [(t.x, t.y, t.seen) for t in self.tracks if not t.reported and 0.12 <= now - t.seen]
+        zones += [(t.x, t.y, t.seen, t.species) for t in self.tracks if not t.reported and 0.12 <= now - t.seen]
         return zones
 
-    def _in_zone(self, wx, wy, zones):
-        """The zone this spot is in: when its monster vanished (the latest, if several), or None."""
+    def _icons_near(self, small, ui, zone):
+        """Coins and items around where a monster vanished: [(score, x, y, w, h, name)], on the picture."""
         s = self._sprite_scale()
-        times = [z[2] for z in zones if abs(z[0] - wx) <= DROP_ZONE * s and abs(z[1] - wy) <= DROP_ZONE_Y * s]
-        return max(times) if times else None
+        templates = self.icons.templates(s, zone[3])
+        if not templates:
+            return []
+        H, W = small.shape[:2]
+        sx, sy = self._to_screen(zone[0], zone[1])
+        x0, x1 = max(0, int(sx - DROP_ZONE * s)), min(W, int(sx + DROP_ZONE * s))
+        y0, y1 = max(0, int(sy - DROP_ZONE_Y * s)), min(int(H * 0.88), int(sy + DROP_ZONE_Y * s))
+        area = small[y0:y1, x0:x1]
+        found = []
+        for name, t, m in templates:
+            th, tw = t.shape[:2]
+            if area.shape[0] < th or area.shape[1] < tw:
+                continue
+            res = np.nan_to_num(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED, mask=m), nan=-1.0, posinf=-1.0, neginf=-1.0)
+            for ay, ax in zip(*np.nonzero(res >= ICON_OK)):
+                cx, cy = x0 + int(ax) + tw / 2, y0 + int(ay) + th / 2
+                if not ui[int(cy), int(cx)] and _looks_like(area[ay:ay + th, ax:ax + tw], t, m):
+                    found.append((float(res[ay, ax]), cx, cy, tw, th, name))
+        # One thing shows as many near fits, and maybe as more than one picture: the best fit says what it is.
+        found.sort(key=lambda f: -f[0])
+        kept = []
+        for f in found:
+            if not any(abs(f[1] - k[1]) < (f[3] + k[3]) / 3 and abs(f[2] - k[2]) < (f[4] + k[4]) / 3 for k in kept):
+                kept.append(f)
+        return kept
 
-    def _ground(self, small, on_top, x0, y0, now):
-        zones = self._zones(now)
-        low, high = self._icon_box()
-        seen_now = []
-        if zones:
-            k = max(3, round(6 * self._sprite_scale()) | 1)     # (a drop like the scenery comes in pieces)
-            solid = cv2.morphologyEx(on_top, cv2.MORPH_CLOSE, np.ones((k, k), np.uint8))
-            n, labels, stats, _ = cv2.connectedComponentsWithStats(solid)
-            for k in range(1, n):
-                x, y, bw, bh, area = stats[k]
-                if not (low <= bw <= high and low <= bh <= high) or area < 0.25 * bw * bh:
-                    continue
-                cx, cy = x + bw / 2, y + bh / 2
-                if self._followed(cx, cy, bw, bh, now):      # (not one that's gone: its drop lands right there)
-                    continue
+    def _ground(self, small, on_top, ui, now):
+        """Looks for what's landed around monsters that have just stopped being found."""
+        zones = self._zones(now) if self.bank.scale else []
+        seen_now, began = [], time.perf_counter()
+        # (If there isn't time for them all, the next look starts where this one stopped.)
+        start = self._turn % max(1, len(zones))
+        for zone in zones[start:] + zones[:start]:
+            for _, cx, cy, tw, th, name in self._icons_near(small, ui, zone):
                 wx, wy = self._to_world(cx, cy)
-                vanished = self._in_zone(wx, wy, zones)
-                if vanished is None:
-                    continue
                 if any(abs(d.x - wx) <= d.w / 2 + STAY_X and abs(d.y - wy) <= d.h / 2 + STAY_Y for d in self.drops):
                     continue
-                seen_now.append((wx, wy, bw, bh, x, y, vanished))
+                box = int(cx - tw / 2), int(cy - th / 2), int(tw), int(th)
+                if not self._is_scenery(small, *box, *self.where) and self._came_after(on_top, *box, zone[2]):
+                    seen_now.append((wx, wy, tw, th, name))
+            if time.perf_counter() - began > SCAN_BUDGET:
+                break
         keep = []
-        for wx, wy, bw, bh, sx, sy, vanished in seen_now:
-            spot = next((c for c in self.spots if abs(c.x - wx) <= STAY_X and abs(c.y - wy) <= STAY_Y), None)
+        for wx, wy, tw, th, name in seen_now:
+            spot = next((c for c in self.spots if abs(c.x - wx) <= STAY_X and abs(c.y - wy) <= STAY_Y and c.name == name), None)
             if spot is None:
-                if not self._was_steady(int(sx), int(sy), int(bw), int(bh), x0, y0):
-                    continue
-                if not self._came_after(int(sx), int(sy), int(bw), int(bh), x0, y0, on_top, vanished):
-                    continue
-                if self._ghost(small, int(sx), int(sy), int(bw), int(bh), x0, y0):
-                    continue
-                spot = Spot(wx, wy, int(bw), int(bh), now, now)
+                spot = Spot(wx, wy, int(tw), int(th), now, now, name)
                 self.spots.append(spot)
             else:
                 spot.last = now
-                spot.w, spot.h = max(spot.w, int(bw)), max(spot.h, int(bh))
             keep.append(spot)
             if now - spot.first >= STAY_S:
                 self._become_drop(spot, small, now)
-        self.spots = [c for c in self.spots if c.ledger_id is None and (c in keep or now - c.last < 0.3)]
+        self.spots = [c for c in self.spots if c.ledger_id is None and (c in keep or now - c.last < 1.0)]
 
-    def _came_after(self, sx, sy, bw, bh, x0, y0, on_top, vanished):
-        """Did this come after the monster vanished? What was there before can't be what it dropped."""
+    def _came_after(self, on_top, sx, sy, bw, bh, vanished):
+        """Did this get here around when the monster died? What was on the ground well before can't be its drop.
+        (A monster's last seen a moment after it dies, while it fades, so a little before counts.)"""
+        x0, y0 = self.where
         born = self.scenery.born[y0 + sy:y0 + sy + bh, x0 + sx:x0 + sx + bw]
         on = on_top[sy:sy + bh, sx:sx + bw] > 0
-        return bool(on.any()) and float(np.median(born[on])) >= vanished - 0.3
+        return not on.any() or float(np.median(born[on])) >= vanished - DROP_BEFORE
 
-    def _ghost(self, small, sx, sy, bw, bh, x0, y0):
-        """A monster that stood still from the start got learned into the scenery. When it goes, the
-        spot differs from the "scenery", and looks new. Then the scenery itself shows the monster:
-        that's put right, and it's no drop."""
-        pad = 60
-        H, W = small.shape[:2]
-        ax0, ay0 = max(0, sx - pad), max(0, sy - pad)
-        ax1, ay1 = min(W, sx + bw + pad), min(H, sy + bh + pad)
-        pic = self.scenery.pic[y0 + ay0:y0 + ay1, x0 + ax0:x0 + ax1]
-        area = np.clip(pic, 0, 255).astype(np.uint8)
-        for species in self.bank.raw:
-            got = best_match(area, self.bank.templates(species))
-            if got and got[0] >= GHOST:
-                x, y, tw, th = got[1:]
-                pic[y:y + th, x:x + tw] = small[ay0 + y:ay0 + y + th, ax0 + x:ax0 + x + tw].astype(np.int16)
-                return True
-        return False
-
-    def _was_steady(self, sx, sy, bw, bh, x0, y0):
-        """Had this spot been quiet before now? Scenery that moves by itself never is."""
-        f = self.scenery.flicker[y0 + sy:y0 + sy + bh, x0 + sx:x0 + sx + bw]
-        return f.size > 0 and float(f.mean()) <= FLICKER_MAX
+    def _is_scenery(self, small, sx, sy, bw, bh, x0, y0):
+        """Is this just the scenery, a few pixels from where the view's position says? Added-up moves drift
+        a little, and detailed ground that's a pixel off looks new."""
+        H, W = self.scenery.pic.shape[:2]
+        ax0, ay0 = x0 + sx - SCENERY_SHIFT, y0 + sy - SCENERY_SHIFT
+        ax1, ay1 = x0 + sx + bw + SCENERY_SHIFT, y0 + sy + bh + SCENERY_SHIFT
+        patch = small[sy:sy + bh, sx:sx + bw]
+        if ax0 < 0 or ay0 < 0 or ax1 > W or ay1 > H or patch.shape[0] != bh or patch.shape[1] != bw:
+            return False
+        ground = np.clip(self.scenery.pic[ay0:ay1, ax0:ax1], 0, 255).astype(np.uint8)
+        worst = cv2.minMaxLoc(cv2.matchTemplate(ground, patch, cv2.TM_SQDIFF))[0]
+        return float(np.sqrt(worst / (3 * bw * bh))) <= SCENERY_DIFF
 
     def _crop(self, small, x, y, w, h):
         sx, sy = self._to_screen(x, y)
@@ -653,7 +749,7 @@ class FieldWatch:
             return
         spot.picture = pic.copy()
         lx, ly = self.to_ledger(spot.x, spot.y)
-        lo = self.ledger.loot_seen(lx, ly, spot.first, picture=spot.picture)
+        lo = self.ledger.loot_seen(lx, ly, spot.first, picture=spot.picture, item=spot.name)
         spot.ledger_id = lo.id
         self.drops.append(spot)
 
@@ -666,12 +762,14 @@ class FieldWatch:
         if x0 < 0 or y0 < 0 or x1 > W or y1 > H:
             return None                         # out of view: no news
         area = small[y0:y1, x0:x1]
-        if area.shape[0] < d.picture.shape[0] or area.shape[1] < d.picture.shape[1]:
-            return None
-        res = cv2.matchTemplate(area, d.picture, cv2.TM_CCOEFF_NORMED)
-        return float(np.nan_to_num(res).max()) >= SAME_DROP
+        for name, t, m in self.icons.templates(self._sprite_scale()):
+            if name == d.name and area.shape[0] >= t.shape[0] and area.shape[1] >= t.shape[1]:
+                res = cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED, mask=m)
+                if float(np.nan_to_num(res, nan=-1.0, posinf=-1.0, neginf=-1.0).max()) >= ICON_STILL:
+                    return True
+        return False
 
-    def _watch_drops(self, small, on_top, now):
+    def _watch_drops(self, small, now):
         keep = []
         for d in self.drops:
             there = self._still_there(small, d)

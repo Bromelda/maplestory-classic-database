@@ -93,6 +93,7 @@ class Loot:
     status: str = "open"        # open, tied, foreign, mixed, credited, left, taken
     picture: object = None      # what it looked like (kept with the credit, to check by eye)
     credit: object = None
+    item: str = None            # what its picture says it is, if there was one: an item's name, or "mesos"
 
 
 @dataclass
@@ -109,6 +110,14 @@ class Credit:
     picture: object = None
     deaths: list = field(default_factory=list)
     void: bool = False
+
+
+def _could_be(seen, said):
+    """Could what was seen on the ground be what the pickup line says? (A long name is cut off with "...".)"""
+    if seen is None:
+        return True
+    a, b = seen.lower(), str(said).lower()
+    return a == b or (b.endswith("...") and a.startswith(b.rstrip(". "))) or (a.endswith("...") and b.startswith(a.rstrip(". ")))
 
 
 class DropLedger:
@@ -204,9 +213,9 @@ class DropLedger:
             if d.own and abs(d.t - t) <= self.rules.exp_s:
                 d.party = True
 
-    def loot_seen(self, x, y, t, picture=None):
+    def loot_seen(self, x, y, t, picture=None, item=None):
         self.drops_seen += 1
-        lo = Loot(self._id(), x, y, t, picture=picture)
+        lo = Loot(self._id(), x, y, t, picture=picture, item=item)
         self.loots.append(lo)
         return lo
 
@@ -389,7 +398,8 @@ class DropLedger:
         taken = [lo for lo in self.loots
                  if lo.t_lost is not None and lo.credit is None
                  and lo.status in ("tied", "foreign", "mixed")
-                 and -r.pick_after <= t - lo.t_lost <= r.pick_before]
+                 and -r.pick_after <= t - lo.t_lost <= r.pick_before
+                 and _could_be(lo.item, name)]
         if taken:
             lo = min(taken, key=lambda x: abs(t - x.t_lost))
             others = [o for o in taken if o is not lo]

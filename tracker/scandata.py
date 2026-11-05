@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Raise this after any fix that changes what gets counted. tools/publish_drops.py only uses sessions from
 # the current version, so results from before a fix can't mix in with the good ones.
-SCANNER_VERSION = 1
+SCANNER_VERSION = 2
 
 
 def _key(text):
@@ -20,6 +20,7 @@ class GameData:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
         self.monsters = raw["monsters"]
         self.maps = raw["maps"]
+        self.item_gids = raw.get("item_gids", {})
         self._map_keys = {_key(name): name for name in self.maps}
         self._drops = {mid: {_key(n) for n in m.get("drops", [])} for mid, m in self.monsters.items()}
 
@@ -48,6 +49,14 @@ class GameData:
     def name_of(self, species):
         m = self.monsters.get(species)
         return m["name"] if m else (species or "Unknown")
+
+    def drops_of(self, species):
+        m = self.monsters.get(species)
+        return m.get("drops", []) if m else []
+
+    def icon_of(self, item):
+        """The game's number for an item, which names its picture in assets/icons."""
+        return self.item_gids.get(item)
 
     def gid_of(self, species):
         m = self.monsters.get(species)

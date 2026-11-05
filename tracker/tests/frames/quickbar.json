@@ -1,0 +1,62 @@
+{
+ "quickbar_0.png": {
+  "F3": {
+   "item": "Orange Potion",
+   "count": 373
+  },
+  "F4": {
+   "item": "Blue Potion",
+   "count": 178
+  },
+  "A": {
+   "item": "Meat",
+   "count": 318
+  },
+  "S": {
+   "item": "Cake",
+   "count": 0
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 361
+  },
+  "1": {
+   "item": "Magic Potion",
+   "count": 22
+  },
+  "4": {
+   "item": null,
+   "count": 111
+  }
+ },
+ "quickbar_1.png": {
+  "F3": {
+   "item": "Orange Potion",
+   "count": 386
+  },
+  "F4": {
+   "item": "Blue Potion",
+   "count": 180
+  },
+  "A": {
+   "item": "Meat",
+   "count": 269
+  },
+  "S": {
+   "item": "Cake",
+   "count": 0
+  },
+  "D": {
+   "item": "Lemon",
+   "count": 330
+  },
+  "1": {
+   "item": "Magic Potion",
+   "count": 21
+  },
+  "4": {
+   "item": null,
+   "count": 110
+  }
+ }
+}

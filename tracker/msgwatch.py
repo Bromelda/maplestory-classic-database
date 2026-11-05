@@ -59,6 +59,13 @@ CHARS = "0123456789+"
 TRIES = 4                   # looks to read a line that isn't clear (it's bright for longer)
 
 
+def true_gh(gh, window_h):
+    """The game's UI size for reading the stack, from the window's height when it's close to the measured
+    digit height. That's measured in whole pixels, and this reader needs it to within a few percent."""
+    exact = window_h * GH0 / 2160
+    return exact if abs(gh - exact) <= 0.2 * exact else gh
+
+
 def stack_area(rect, gh):
     """The part of the screen with the message stack: (x, y, w, h)."""
     wx, wy, ww, wh = rect

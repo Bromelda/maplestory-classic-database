@@ -6,8 +6,8 @@ everything on this PC, in the data folder's "drops" folder:
     session-<when>.json     what one play session found (tools/drop_report.py adds them all up)
     log.jsonl               every drop tied to a monster, one per line, as it happened
     pictures/               what each of those looked like on the ground, to check by eye
-
-Those small crops are the only pictures it ever keeps.
+    clips/                  short videos around kills, for finding out why it got something wrong (clips.py).
+                            There's a switch for these in Settings.
 """
 import json
 import re
@@ -17,6 +17,7 @@ from pathlib import Path
 
 import cv2
 
+from clips import ClipKeeper
 from fieldwatch import FieldWatch
 from lootwatch import DropLedger
 from scandata import SCANNER_VERSION, GameData
@@ -27,6 +28,21 @@ SCAN_POLL = 0.125           # how often to look at the field
 
 def _safe(text):
     return re.sub(r"[^A-Za-z0-9_-]+", "_", str(text))[:60]
+
+
+def feed(ledger, lines, found, now):
+    """Tells the rules what the message stack said. The live tracker and a replay of a clip both use this."""
+    for line in lines:                  # (first, so a kill's own line knows it's a party)
+        if line.kind == "bonus":
+            ledger.party_exp(line.born)
+    for line in lines:
+        if line.kind == "exp" and line.amount is not None:
+            ledger.exp(line.amount, line.born)
+    for p in found:
+        if p[0] == "mesos":
+            ledger.pickup("mesos", p[1], "", now)
+        elif p[0] == "item":
+            ledger.pickup(p[1], p[2], p[3], now)
 
 
 class DropScan:
@@ -42,6 +58,10 @@ class DropScan:
         self.pictures = 0
         self.height = None              # the game window's height, at the last look
         self.scales = self._load_scales()
+        self.clips = ClipKeeper(self.folder / "clips", self._clip_info)
+        self.happened = 0               # monsters seen to vanish and drops seen landing, at the last look
+        self.gh_measured = None         # (for the clips: what the tracker measured the game's UI size as)
+        self.lines_heard = 0
 
     # ---------- what comes in ----------
 
@@ -51,6 +71,7 @@ class DropScan:
         if found == self.map or (found is None and name):
             return                      # (a misread name isn't a new map)
         with self.lock:
+            self.clips.cut()
             self.map = found
             self.ledger.set_map(found, now)
             self.field.set_species(self.data.species_on(found) if found else [])
@@ -59,25 +80,25 @@ class DropScan:
         """New message lines. lines: msgwatch.Line, for the EXP. found: pickups as read: ("mesos", amount)
         or ("item", name, qty, tab)."""
         with self.lock:
-            for line in lines:                  # (first, so a kill's own line knows it's a party)
-                if line.kind == "bonus":
-                    self.ledger.party_exp(line.born)
-            for line in lines:
-                if line.kind == "exp" and line.amount is not None:
-                    self.ledger.exp(line.amount, line.born)
-            for p in found:
-                if p[0] == "mesos":
-                    self.ledger.pickup("mesos", p[1], "", now)
-                elif p[0] == "item":
-                    self.ledger.pickup(p[1], p[2], p[3], now)
+            self.lines_heard += len(lines)
+            feed(self.ledger, lines, found, now)
+            said = [{"kind": x.kind, "amount": x.amount, "born": x.born} for x in lines if x.kind in ("exp", "bonus")]
+            if said or found:
+                self.clips.event({"lines": said, "found": [list(p) for p in found]}, now)
+                self.clips.mark(now)
 
     def look(self, frame, now):
         """A picture of the game window."""
         with self.lock:
             self._sprite_size(frame.shape[0], now)
             if self.field.species:
+                self.clips.frame(frame, now)
                 self.field.look(frame, now)
                 self._remember_size(frame.shape[0])
+                happened = self.ledger.vanished_seen + self.ledger.drops_seen
+                if happened != self.happened:   # (the EXP line may never have been read: that's worth seeing)
+                    self.happened = happened
+                    self.clips.mark(now)
             self.ledger.tick(now)
         if now - self.saved_at >= SAVE_EVERY:
             self.saved_at = now
@@ -115,6 +136,20 @@ class DropScan:
             pass
 
     # ---------- what goes out ----------
+
+    def _clip_info(self):
+        return {"map": self.map, "scale": self.field.bank.scale, "version_scanner": SCANNER_VERSION,
+                "live": self.ledger.summary_line(), "gh_measured": self.gh_measured, "lines_heard": self.lines_heard}
+
+    def keep_clips(self, on):
+        with self.lock:
+            self.clips.switch(on)
+
+    def finish(self):
+        """The tracker's closing."""
+        self.save()
+        with self.lock:
+            self.clips.finish()
 
     def _credited(self, c):
         """A drop was tied to a monster (called from inside the ledger, the lock is held)."""
@@ -164,7 +199,8 @@ class DropScan:
         """One line for the tracker's window."""
         with self.lock:
             if not self.field.species:
-                return "Drop scanner: waiting for a map with monsters"
+                return ("Drop scanner: waiting for a map with monsters" if self.map
+                        else "Drop scanner: can't start until the map's name is read (needs Tesseract and the minimap open)")
             if self.field.bank.scale is None:
                 return "Drop scanner: looking for monsters to learn their size"
             return "Drop scanner: " + self.ledger.summary_line()
