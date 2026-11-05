@@ -5,11 +5,13 @@ A desktop tracker for MapleStory Classic World: EXP per hour, mesos, loot and po
 
 Status: **not tested on the real game yet.** See [What's been checked](#whats-been-checked).
 
-## Your day
+## Your run
 
-The Log page keeps a running account of the day, saved in `daybook.json` in the tracker's data folder:
+The Log page keeps a running account from when the tracker opens until it closes. Each time it opens, this account and
+the repot numbers on the tracker card start fresh, even after a crash. Settings, the log of past sessions, clips and
+drop results are kept. While it's open, the account is saved in `daybook.json` in the tracker's data folder.
 
-- **Mesos:** the first time you open your inventory each day sets your starting mesos. Each time after, it shows what
+- **Mesos:** the first time you open your inventory each run sets your starting mesos. Each time after, it shows what
   you've made. What you spend at shops comes off that, and is shown as spent.
 - **Potions:** potions and food you pick up, from the message lines, and what you use, from jumps in your HP and MP. A jump
   of exactly a potion's amount counts as that potion. MP potions can heal more than listed, so a jump up to 30% over

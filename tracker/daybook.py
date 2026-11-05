@@ -1,7 +1,8 @@
-"""A running account of the day: mesos made and spent, and potions picked up and used. Saved after every change,
-one entry per calendar day, in daybook.json in the tracker's data folder.
+"""A running account of one run: mesos made and spent, and potions picked up and used, from when the tracker opens
+until it closes. Each time it opens, it starts fresh. Saved after every change in daybook.json in the tracker's data
+folder, under the date the run started.
 
-Mesos only show while the inventory's open, so the first reading of the day is where the day starts, and each
+Mesos only show while the inventory's open, so the first reading of the run is where the run starts, and each
 later one is compared with the one before. Mesos picked up are known from the message lines, so if the count
 went up by less than that, or down, the difference went to a shop.
 
@@ -52,9 +53,13 @@ class DayBook:
     def __init__(self, path, heals=None, today=None):
         self.path = Path(path)
         self.heals = heals or {}        # item name: {"hp": amount, "mp": amount, "hp_pct": share, "mp_pct": share}
-        self.today = today or (lambda: time.strftime("%Y-%m-%d"))
+        self.run = (today or (lambda: time.strftime("%Y-%m-%d")))()     # (a run past midnight stays one run)
         self.lock = threading.Lock()
-        self.days = self._load()
+        self.days = {}
+        try:
+            self.path.unlink()          # (starting fresh: the last run's over)
+        except OSError:
+            pass
         self.last = {}                  # "hp"/"mp": the last value believed
         self.most = {}
         self.maybe = {}                 # a new reading, waiting to be seen twice
@@ -62,15 +67,8 @@ class DayBook:
         self.count_at = {}              # item name: when its count was last in view
         self.moved_at = {}              # item name: when its count or its pickups last changed
 
-    def _load(self):
-        try:
-            days = json.loads(self.path.read_text(encoding="utf-8"))
-            return days if isinstance(days, dict) else {}
-        except (OSError, ValueError):
-            return {}
-
     def _day(self):
-        return self.days.setdefault(self.today(), _blank())
+        return self.days.setdefault(self.run, _blank())
 
     def _save(self):
         try:
@@ -255,15 +253,15 @@ class DayBook:
     # ---------- what's shown ----------
 
     def lines(self):
-        """Today, as lines of text."""
+        """This run, as lines of text."""
         with self.lock:
             d = self._day()
             out = []
             if d["start"] is None:
-                out.append("Today: open your inventory to set your starting mesos")
+                out.append("This run: open your inventory to set your starting mesos")
             else:
                 made = d["now"] - d["start"]
-                text = f"Today: {made:+,} mesos · started {d['start']:,} · now {d['now']:,}"
+                text = f"This run: {made:+,} mesos · started {d['start']:,} · now {d['now']:,}"
                 if d["spent"]:
                     text += f" · spent {d['spent']:,}"
                 out.append(text)

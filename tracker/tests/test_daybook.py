@@ -194,15 +194,15 @@ try:
     b.count("Meat", 97, now=time.monotonic() + 305)
     check("used while out of view and bought more: both show", meat["used"] == used_before + 3 and meat["bought"] == 50 and meat["count"] == 97, meat)
 
-    again = DayBook(path, HEALS, today=lambda: date[0])
-    check("it's still there after a restart", again.days["2026-11-05"]["spent"] == 4_000 and again.days["2026-11-05"]["items"]["Meat"]["picked"] == 2)
     date[0] = "2026-11-06"
-    b.mesos(2_000_000)
+    picked = d["picked_mesos"]
     b.picked_mesos(10)
-    b.mesos(2_000_010)
-    new = b.days["2026-11-06"]
-    check("a new day starts from its own first reading", new["start"] == 2_000_000 and new["spent"] == 0 and "+10 mesos" in b.lines()[0], new)
-    check("and the old day is kept", b.days["2026-11-05"]["spent"] == 4_000)
+    check("a run past midnight stays one run", list(b.days) == ["2026-11-05"] and d["picked_mesos"] == picked + 10, list(b.days))
+    check("it's saved while it's open", path.exists())
+
+    again = DayBook(path, HEALS, today=lambda: date[0])
+    check("opening it again starts fresh", again.days == {} and not path.exists(), again.days)
+    check("and asks for the inventory again", "open your inventory" in again.lines()[0], again.lines())
 
     path.write_text("not json", encoding="utf-8")
     check("a broken file doesn't stop it", DayBook(path, HEALS).days == {})

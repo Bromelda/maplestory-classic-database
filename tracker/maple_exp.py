@@ -3018,6 +3018,8 @@ class App:
         self.root = root
         self._fresh = not CONFIG_PATH.exists()          # a first install: it picks a compact shape
         self.cfg = {**DEFAULTS, **load_config()}
+        self.cfg.pop("repot", None)                     # (each run starts fresh, even after a crash: daybook.py too)
+        self.cfg.pop("pot_cost", None)
         mode = self.cfg.get("mode", "window")
         self.reader = ScreenReader(templates, mode, self.cfg.get("region"))
         saved = self.cfg.get("mesos_box")
