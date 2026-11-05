@@ -203,7 +203,7 @@ function renderComparePlan() {
     <section class="calc-card"><div class="calc-tablewrap"><table class="cmp-table"><thead><tr><th></th><th class="num">${esc(a.name)}</th><th class="num">${esc(b.name)}</th></tr></thead><tbody>
       ${text("Class and level", `${a.cls} ${a.level}`, `${b.cls} ${b.level}`)}
       ${text("Weapon", a.weapon, b.weapon)}
-      ${text("Skill", a.skillName, b.skillName)}
+      <tr><td>Skill</td>${[a, b].map((x) => `<td class="num"><span class="sk-cell">${skillIcon(x.skill)}<span>${esc(x.skillName)}</span></span></td>`).join("")}</tr>
       ${row("Lowest hit", "min")}${row("Highest hit", "max")}${row("Average per use", "avg")}
       ${row("Accuracy", "acc")}${row("Crit rate %", "crit")}${row("HP", "hp")}${row("MP", "mp")}
       ${row("Weapon DEF", "wdef")}${row("Magic DEF", "mdef")}${row("Avoid", "avoid")}

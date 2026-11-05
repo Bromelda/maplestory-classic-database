@@ -18,6 +18,7 @@ Never use old 2006-era, GMS v83 or MSEA tables.
 Home, World Map, Monsters, Items, Maps, Routes, Quests, NPCs, Calculator, Skills, Planner (`planner.js`), News.
 
 - **World Map**: the game's own world maps and nodes (`tools/fetch_worldmap.py` → `data/worldmap.json`, `assets/worldmap`), with a switcher per island. Each map's `node` is worked out in `buildWorldNodes` in `app.js`, and nodes are colored by training level. On phones there are tappable area buttons.
+- **Skill icons**: `tools/fetch_skills.py` saves each skill's icon from the game files to `assets/skill/<id>.png`. `skillIcon()` in `skills.js` draws them in the Skills tab, the calculator and Compare builds.
 - **Maps**: full map art from the game files (`tools/fetch_map_art.py` → `assets/map-art`), with sharpened minimaps (`tools/upscale_minimaps.py` → `assets/minimap-hd`) as the fallback. The auto-update does new maps. Monster sprites stand at their spawn points, with portals, NPC markers, and "How to get here" (neighbouring maps zoomed in on the portal, circled).
   Maps with no walking way in explain how you get there (job tests, Kerning PQ).
 - **Monsters / Items**: stats, Classic drop tables with rates and kill counts, sprites.

@@ -612,6 +612,10 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
 .sk-now { font-size: .86em; }
 .sk-next { font-size: .78em; color: var(--muted); }
 .sk-note { font-size: .76em; color: #f3c56b; }
+.sk-cell { display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+.sk-picked { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.sk-picked > .cf { flex: 1; }
+.sk-picked > .cx-ico { margin-top: 23px; }
 .stepper { display: flex; align-items: center; gap: 4px; flex: none; }
 .stepper button { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: 1.1rem; cursor: pointer; }
 .stepper button.mx { width: auto; padding: 0 8px; font-size: .78rem; font-weight: 600; color: var(--accent); }

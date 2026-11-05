@@ -62,7 +62,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 | Minimaps and monster sprites | Classic World game files, via [Club FM](https://maplefm.gg). `tools/upscale_minimaps.py` makes sharper minimaps (`assets/minimap-hd`), shown for any map without art |
 | World maps and their nodes | Classic World game files, via [maplestory.io](https://maplestory.io) (`tools/fetch_worldmap.py`) |
 | Quests and NPC positions | Classic World game data (maplestory.io) + MapleClassic Wiki, via [Club FM](https://maplefm.gg) |
-| Skills (every level) | Classic World game files via maplestory.io (launch v1.0.0), with Oct 29 patch changes applied or flagged |
+| Skills (every level) and their icons | Classic World game files via maplestory.io (launch v1.0.0), with Oct 29 patch changes applied or flagged |
 | Drop values in the what-to-fight guide | [Club FM](https://maplefm.gg) public price summary, loaded live in the browser |
 | Calculator gear lists | Classic World game files, via [Club FM](https://maplefm.gg) / maplestory.io (`data/gear.json`, `data/ammo.json`) |
 | Job levels and instructors | Game quest data plus [Henesys.gg](https://henesys.gg/guides/beginner), [Metaroad](https://metaroad.gg/maplestory-classic/meta/beginners-guide-maplestory-classic-world), [MapleStory-Classic.com](https://maplestory-classic.com/guides/first-job-advancement-guide) |

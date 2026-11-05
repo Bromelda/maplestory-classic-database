@@ -289,7 +289,7 @@ function evalBuild(char) {
     const sk = currentSkill();
     return {
       name: char.name, cls: calc.cls, level: calc.level, weapon: wornGear(calc).find((g) => g.slot === "weapon")?.name || calc.weapon,
-      skillName: sk?.name || (calc.skillId === "custom" ? "Custom" : "Regular attack"),
+      skill: sk, skillName: sk?.name || (calc.skillId === "custom" ? "Custom" : "Regular attack"),
       min: clampDmg(r.min), max: clampDmg(r.max), avg: Math.round(hits), acc: accuracy(c), crit: c.crit, hp: fs.hp, mp: fs.mp, wdef: fs.wdef, mdef: fs.mdef, avoid: fs.avoid,
       bestExp: best?.rate.exp ?? null, bestSpot: best?.m.name || "—",
       mobUses: fight && fight.withMiss !== Infinity ? fight.withMiss : null, mobHit: fight ? Math.round(fight.p * 100) : null, mobExp: fight ? hourly(mob, fight, c).exp : null,
@@ -750,13 +750,13 @@ function renderSkillTable() {
     const lv = sk?.levels ? usedLevel(sk) : null;
     const reach = sk?.levels ? skillAt(sk, lv).mobCount || 1 : sk?.mobs || 1;
     const fight = target ? matchup(r, t, target) : null;
-    return { id, name: sk?.name || "Regular attack", lv, perUse, perSec: perUse / attackSeconds(t), reach, uses: fight?.withMiss };
+    return { id, sk, name: sk?.name || "Regular attack", lv, perUse, perSec: perUse / attackSeconds(t), reach, uses: fight?.withMiss };
   });
   Object.assign(calc, saved);
   const top = Math.max(...rows.map((x) => x.perSec));
   box.innerHTML = `<div class="card-head"><h3>Compare your skills</h3></div>
     <div class="calc-tablewrap"><table><thead><tr><th>Skill</th><th class="num">Lv</th><th class="num">Per use</th><th class="num">Per second</th><th class="num">${target ? `Uses on ${esc(target.name)}` : "Targets"}</th></tr></thead>
-    <tbody>${rows.map((x) => `<tr class="pick ${String(calc.skillId) === x.id ? "selected" : ""}" data-use-skill="${x.id}"><td>${esc(x.name)}${x.perSec === top ? ' <span class="badge">Best</span>' : ""}</td><td class="num">${x.lv ?? "—"}</td><td class="num">${fmt(Math.round(x.perUse))}</td><td class="num">${fmt(Math.round(x.perSec))}</td><td class="num">${target ? (x.uses === Infinity ? "—" : x.uses) : x.reach}</td></tr>`).join("")}</tbody></table></div>
+    <tbody>${rows.map((x) => `<tr class="pick ${String(calc.skillId) === x.id ? "selected" : ""}" data-use-skill="${x.id}"><td><span class="sk-cell">${skillIcon(x.sk)}<span>${esc(x.name)}${x.perSec === top ? ' <span class="badge">Best</span>' : ""}</span></span></td><td class="num">${x.lv ?? "—"}</td><td class="num">${fmt(Math.round(x.perUse))}</td><td class="num">${fmt(Math.round(x.perSec))}</td><td class="num">${target ? (x.uses === Infinity ? "—" : x.uses) : x.reach}</td></tr>`).join("")}</tbody></table></div>
     <p class="sub small">One target, after crits and before monster defense, at your planned skill levels (or max if you haven't planned them). Attack speed here is by weapon, so skills with their own timing may differ. Tap a row to use that skill.</p>`;
   box.querySelectorAll("[data-use-skill]").forEach((row) => row.addEventListener("click", () => {
     calc.skillId = row.dataset.useSkill;
@@ -1178,13 +1178,13 @@ function renderCalc() {
           <p class="cf-note full">${hasGear ? "The gear you picked is added to these for you." : "Pick your gear above and enter your stats without it, or leave it empty and enter your totals."}</p>
         </fieldset>
         <fieldset><legend>Skill</legend>
-          ${sel("skillId", "Skill", skillOpts)}
+          <div class="sk-picked full">${skillIcon(sk)}${sel("skillId", "Skill", skillOpts)}</div>
           ${sk?.levels ? `<label class="cf"><span>Skill level</span><input type="number" id="c_skLv" min="1" max="${sk.max}" value="${usedLevel(sk)}" inputmode="numeric"><small>1–${sk.max}. Saved to your skill plan.</small></label>` : ""}
           ${num("skill", magic ? "Spell power" : "Damage %", 1, 9999, sk?.levels ? (sk.note ? esc(sk.note) : "From the game files") : sk ? `<a href="${NIADB}${sk.src}" target="_blank" rel="noopener">Max level value · NiaDB ↗</a>${sk.note ? ` ${esc(sk.note)}` : ""}` : calc.skillId === "custom" ? "From your skill's tooltip" : "")}
           ${num("hits", "Hits per use", 1, 10)}
           ${!magic ? "" : calc.skillId === "custom" ? sel("element", "Spell element", ELEMENTS.map((e) => [e, e]), false)
             : calc.element !== "None" ? `<p class="cf-note full">${esc(calc.element)} spell: monsters weak to it take 25% more, and ones that resist it take 25% less.</p>` : ""}
-          ${!magic && ms ? `<label class="cf"><span>${esc(ms.name)} level</span><input type="number" id="c_msLv" min="0" max="${ms.max}" value="${planLevel(ms.id)}" inputmode="numeric"><small>0–${ms.max} · mastery ${physMastery(calc)}, +${skillAt(ms, planLevel(ms.id)).x || 0} accuracy</small></label>`
+          ${!magic && ms ? `<div class="sk-picked">${skillIcon(ms)}<label class="cf"><span>${esc(ms.name)} level</span><input type="number" id="c_msLv" min="0" max="${ms.max}" value="${planLevel(ms.id)}" inputmode="numeric"><small>0–${ms.max} · mastery ${physMastery(calc)}, +${skillAt(ms, planLevel(ms.id)).x || 0} accuracy</small></label></div>`
             : magic && calc.skillId === "custom" ? num("mastery", "Spell mastery", 0, 10, "0–10. From your skill's tooltip") : ""}
           ${sk?.mobs > 1 ? `<p class="cf-note full">Hits up to ${sk.mobs} monsters at once.</p>` : ""}
         </fieldset>
@@ -1317,8 +1317,8 @@ function buffRow(row) {
   const lv = timed ? usedLevel(s) : planLevel(s.id);
   const desc = lv ? describeLevel(s, skillAt(s, lv)) : "Not learned";
   return `<div class="cx-buff full">
-    ${timed ? `<label class="cx-buff-main"><input type="checkbox" data-buff="${esc(s.name)}" ${calc.buffs[s.name] ? "checked" : ""}><span><b>${esc(s.name)}</b><small>${esc(desc)}</small></span></label>`
-      : `<div class="cx-buff-main"><span><b>${esc(s.name)}</b><small>${esc(desc)}</small></span></div>`}
+    ${timed ? `<label class="cx-buff-main"><input type="checkbox" data-buff="${esc(s.name)}" ${calc.buffs[s.name] ? "checked" : ""}>${skillIcon(s)}<span><b>${esc(s.name)}</b><small>${esc(desc)}</small></span></label>`
+      : `<div class="cx-buff-main">${skillIcon(s)}<span><b>${esc(s.name)}</b><small>${esc(desc)}</small></span></div>`}
     <label class="cx-buff-lv"><span>Lv</span><input type="number" data-plan="${s.id}" data-timed="${timed ? 1 : ""}" min="0" max="${s.max}" value="${lv}" inputmode="numeric" aria-label="${esc(s.name)} level"></label>
   </div>`;
 }
@@ -1351,7 +1351,7 @@ function renderCalcOut() {
   const pos = (v) => `${Math.max(0, Math.min(100, (v / Math.max(1, top)) * 100)).toFixed(1)}%`;
   $("#calcSummary").innerHTML = `
     <section class="cx-dmg">
-      <div class="cx-dmg-top"><span>${esc(skillName)}${c.hits > 1 ? ` · ${c.hits} hits` : ""}</span><span>${esc(c.cls)} · Lv ${c.level} · ${esc(c.weapon)}</span></div>
+      <div class="cx-dmg-top"><span class="sk-cell">${skillIcon(sk)}<span>${esc(skillName)}${c.hits > 1 ? ` · ${c.hits} hits` : ""}</span></span><span>${esc(c.cls)} · Lv ${c.level} · ${esc(c.weapon)}</span></div>
       <div class="cx-dmg-num">${fmt(lo)}<i>–</i>${fmt(hi)}</div>
       <div class="cx-range" aria-hidden="true">
         <div class="cx-range-hit" style="left:${pos(lo)};right:calc(100% - ${pos(hi)})"></div>

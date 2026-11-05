@@ -4,9 +4,12 @@ into data/skills.json. The values come straight from the Classic World game file
 
     python3 tools/fetch_skills.py data/skills.json
 
-Only names, max levels, weapon requirements and the per-level numbers are kept
-(no icons or tooltip text). If the API can't be reached, the existing file is left as is.
+Names, max levels, weapon requirements and the per-level numbers are kept (no tooltip text),
+and each skill's icon is saved to assets/skill/<id>.png. If the API can't be reached, the
+existing files are left as they are.
 """
+import base64
+import binascii
 import json
 import sys
 import time
@@ -14,6 +17,7 @@ import urllib.request
 from pathlib import Path
 
 API = "https://maplestory.io/api/MCW/1/job/{job}/skillbook"
+ICONS = Path(__file__).resolve().parent.parent / "assets" / "skill"
 # Beginner, 1st jobs and 2nd jobs available in Classic World.
 JOBS = {
     0: ("Beginner", "Beginner"),
@@ -38,14 +42,34 @@ def fetch(job):
         return json.load(r)
 
 
+def save_icon(skill_id, data):
+    """Saves one skill's icon if it's really a PNG, and only rewrites the file if it changed."""
+    try:
+        png = base64.b64decode(data or "", validate=True)
+    except (binascii.Error, ValueError):
+        return
+    if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+        return
+    path = ICONS / f"{int(skill_id)}.png"
+    if not path.exists() or path.read_bytes() != png:
+        path.write_bytes(png)
+
+
 def main(out_path):
     out = Path(out_path)
+    ICONS.mkdir(parents=True, exist_ok=True)
+    try:
+        had = {j["job"]: j for j in json.loads(out.read_text(encoding="utf-8"))["jobs"]}
+    except (OSError, ValueError, KeyError):
+        had = {}
     jobs = []
     for job, (cls, name) in JOBS.items():
         try:
             book = fetch(job)
-        except Exception as e:  # keep going; a missing job just isn't updated
+        except Exception as e:  # keep going; a job that fails keeps what it already had
             print(f"job {job}: {e}")
+            if job in had:
+                jobs.append(had[job])
             continue
         skills = []
         for s in book.get("skills") or []:
@@ -53,6 +77,7 @@ def main(out_path):
             for lp in s.get("levelProperties") or []:
                 levels.append({k: number(v) for k, v in lp.items() if k != "hs" and not isinstance(v, (dict, list))})
             desc = s.get("description") or {}
+            save_icon(s.get("id"), s.get("icon"))
             skills.append({
                 "id": s.get("id"),
                 "name": desc.get("name") or (desc.get("names") or {}).get("en"),

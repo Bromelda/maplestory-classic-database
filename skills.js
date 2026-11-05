@@ -55,6 +55,10 @@ function buildSkills() {
     }),
   }));
 }
+// A skill's icon from the game files. A regular attack or custom value has none, so it gets a plain tile.
+function skillIcon(sk) {
+  return `<span class="cx-ico">${sk?.levels ? `<img src="assets/skill/${sk.id}.png" alt="" loading="lazy" onerror="this.remove()">` : "<i>⚔</i>"}</span>`;
+}
 function skillAt(sk, lv) { return lv >= 1 ? sk.levels[Math.min(lv, sk.max) - 1] || {} : {}; }
 function skillHits(l) { return Math.max(1, (l.attackCount || 1) * (l.bulletCount && l.bulletCount > 1 ? l.bulletCount : 1)); }
 function classJobs(cls) { return SK.jobs.filter((j) => j.cls === cls); }
@@ -139,6 +143,7 @@ function renderSkillsTab() {
         const lv = planLevel(s.id);
         const next = lv < s.max ? describeLevel(s, skillAt(s, lv + 1)) : null;
         return `<div class="sk-row ${lv ? "on" : ""}">
+          ${skillIcon(s)}
           <div class="sk-main"><span class="sk-name"><b>${esc(s.name)}</b>${s.attack ? '<span class="badge">Attack</span>' : ""}</span>
             <span class="sk-now">${lv ? esc(describeLevel(s, skillAt(s, lv))) : "Not learned"}</span>
             ${next ? `<span class="sk-next">Next: ${esc(next)}</span>` : ""}
