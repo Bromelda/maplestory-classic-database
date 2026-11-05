@@ -44,7 +44,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 
 1. **Classic only.** Nothing from old GMS, MSEA or v83 tables.
 2. **Monster stats** (level, HP, EXP and so on) come from the Classic World game files, cross-checked against a second Classic source. When a patch changes a monster, the game files win and the old value is noted. For example, the v1.1.0 patch (Oct 29, 2026) lowered the HP of Clang, Copper Drake, Drake and Tortie, and some sites still show the old HP.
-3. **Drops** are player-counted from Classic World kills (MapleClassic Wiki, game version 0.9.0). A rate is shown with the number of kills it's based on. Drops reported by Classic players but not yet counted are marked "reported".
+3. **Drops** are player-counted from Classic World kills (MapleClassic Wiki, game version 0.9.0). A rate is shown with the number of kills it's based on. Drops reported by Classic players but not yet counted are marked "reported", including drops seen first-hand by this site's owner (`tools/player_drops.json`).
 4. **Level ranges:** when the game data has none for a map, the range is worked out from the monsters on it and labeled that way.
 5. **Not included yet:** Forgotten Hollow (Glowshroom, Raffle, Golden Stirge, Aqumander, Echopus, Rafflesia, Duskmander, Myewood, Rotten Mushroom, Sporewood, Rotten Mushmom). It isn't open in Classic yet and its stats have only one source. Orbis, El Nath and 3rd job aren't in Classic yet either.
 

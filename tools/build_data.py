@@ -169,6 +169,22 @@ def main():
             })
             used_items[item_name] = guide_ids.get(item_name)
 
+    # first-hand reports added by hand (tools/player_drops.json), shown as "reported" with no rate.
+    # Only drops someone saw in game go in there, never lists copied from other sites.
+    gid_by_name = {}
+    for r in itemdb["items"]:
+        gid_by_name.setdefault(r[0], r[1])
+    player_file = Path(__file__).resolve().parent / "player_drops.json"
+    for mob, names in (json.loads(player_file.read_text(encoding="utf-8")) if player_file.exists() else {}).items():
+        for name in names:
+            if name not in gid_by_name and name not in guide_ids:
+                sys.exit(f"tools/player_drops.json: unknown item {name!r}")
+            if mob not in mobs_src:
+                sys.exit(f"tools/player_drops.json: unknown monster {mob!r}")
+            if not any(d["item"] == slug(name) for d in drops_by_mob.get(mob, [])):
+                drops_by_mob.setdefault(mob, []).append({"item": slug(name), "rate": None, "kills": None})
+                used_items.setdefault(name, guide_ids.get(name) or gid_by_name.get(name))
+
     # ---------- monsters ----------
     monsters = []
     for name, m in sorted(mobs_src.items(), key=lambda kv: (kv[1]["lv"], kv[0])):
