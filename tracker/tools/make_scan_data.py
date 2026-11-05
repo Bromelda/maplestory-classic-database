@@ -117,7 +117,12 @@ def main():
     item_gids = {n: gid_by_name[n] for m in monsters.values() for n in m["drops"] if n in gid_by_name}
     heals = {i["name"]: heal_of(i.get("effect")) for i in all_items if heal_of(i.get("effect"))}
     heal_gids = {n: gid_by_name[n] for n in heals if n in gid_by_name}
-    out.write_text(json.dumps({"monsters": monsters, "maps": maps, "item_gids": item_gids, "heals": heals, "heal_gids": heal_gids}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    shop_prices = {}
+    for i in all_items:
+        asked = [s["price"] for s in i.get("shops") or [] if s.get("price")]
+        if i.get("type") == "Use" and (i.get("shop_price") or asked):
+            shop_prices[i["name"]] = i.get("shop_price") or min(asked)
+    out.write_text(json.dumps({"monsters": monsters, "maps": maps, "item_gids": item_gids, "heals": heals, "heal_gids": heal_gids, "shop_prices": shop_prices}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     make_icons(list(item_gids.values()) + list(heal_gids.values()))
     make_poses(m["gid"] for m in monsters.values())
     sprites = HERE / "assets" / "mob"

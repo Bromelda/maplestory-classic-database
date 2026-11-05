@@ -3009,6 +3009,11 @@ def _load_heals():
     return json.loads((ASSETS / "scan_data.json").read_text(encoding="utf-8")).get("heals", {})
 
 
+def _load_prices():
+    """What shops ask for each potion and food, from the scanner's data."""
+    return json.loads((ASSETS / "scan_data.json").read_text(encoding="utf-8")).get("shop_prices", {})
+
+
 def _load_heal_gids():
     return json.loads((ASSETS / "scan_data.json").read_text(encoding="utf-8")).get("heal_gids", {})
 
@@ -3138,7 +3143,7 @@ class App:
             self.drop_scan = None
             log_error("loading the drop scanner", e)
         try:                                    # (the day's mesos and potions: daybook.py, vitals.py)
-            self.daybook = DayBook(DATA_DIR / "daybook.json", _load_heals())
+            self.daybook = DayBook(DATA_DIR / "daybook.json", _load_heals(), prices=_load_prices())
             self.vitals = VitalsReader(ASSETS)
             self.quick_bar = quickbar.QuickBar(ASSETS, _load_heal_gids())
         except Exception as e:

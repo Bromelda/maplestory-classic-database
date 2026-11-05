@@ -12,7 +12,9 @@ the repot numbers on the tracker card start fresh, even after a crash. Settings,
 drop results are kept. While it's open, the account is saved in `daybook.json` in the tracker's data folder.
 
 - **Mesos:** the first time you open your inventory each run sets your starting mesos. Each time after, it shows what
-  you've made. What you spend at shops comes off that, and is shown as spent.
+  you've made. What you spend at shops comes off that, and is shown as spent. What you get from selling is shown as
+  sold, as one total, since the game doesn't say what was sold. A quest reward or a trade counts as sold too. Selling
+  and buying in one trip are told apart by what the potions you bought cost at shop prices.
 - **Potions:** potions and food you pick up, from the message lines, and what you use, from jumps in your HP and MP. A jump
   of exactly a potion's amount counts as that potion. MP potions can heal more than listed, so a jump up to 30% over
   is marked with `?` as probably that one. Any other jump, like a Heal from a party member, is listed by its size.

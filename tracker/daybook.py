@@ -4,7 +4,9 @@ folder, under the date the run started.
 
 Mesos only show while the inventory's open, so the first reading of the run is where the run starts, and each
 later one is compared with the one before. Mesos picked up are known from the message lines, so if the count
-went up by less than that, or down, the difference went to a shop.
+went up by less than that, or down, the difference went to a shop, and if it went up by more, it came from selling
+(or a quest or a trade: the game doesn't say which). Selling and buying between two readings would cancel out, so what
+the potions bought cost at shop prices is taken into account too: whatever the mesos didn't fall by, for those, was sold.
 
 Nothing in the game says when a potion's used, but HP or MP jumps. A jump the size of a known potion is that
 potion. MP potions can heal more than their listed amount (a skill can raise it), so a jump up to 30% over a
@@ -26,18 +28,19 @@ BOOST = 1.3                     # how far over a listed amount a jump can be and
 LIVE = 5                        # seconds since an item's count was seen that it still counts as in view
 SETTLE = 2                      # seconds a count waits for a pickup line that explains it (the lines can lag)
 QUICK_DROP, QUICK_RISE = 5, 20  # a bigger change than this at once is probably a misread
+MATCH_SECONDS = 30              # how long a fall in the mesos can wait to be put down to potions bought
 LOOKS_DROP, LOOKS_RISE, LOOKS_ODD = 2, 3, 8     # how many looks in a row have to agree on a new count
 PICKED_RISE = 3                 # a rise this small with no pickup line is a pickup whose line wasn't read, not a purchase
 LOOKS_LOST = 1200               # a number with digits lost (216 and 21) is nearly always a misread: about 5 minutes of looks
 
 
 def _blank():
-    return {"start": None, "now": None, "picked_mesos": 0, "spent": 0, "other": 0, "pending_mesos": 0, "items": {}, "jumps": {}}
+    return {"start": None, "now": None, "picked_mesos": 0, "spent": 0, "sold": 0, "pending_mesos": 0, "cost_seen": 0, "items": {}, "jumps": {}}
 
 
 def _item(day, name):
     it = day["items"].setdefault(name, {})
-    for key, value in (("picked", 0), ("used", 0), ("bought", 0), ("first", None), ("count", None), ("seen", None),
+    for key, value in (("picked", 0), ("used", 0), ("bought", 0), ("cost", 0), ("first", None), ("count", None), ("seen", None),
                        ("pending", 0), ("from_jumps", 0)):
         it.setdefault(key, value)
     return it
@@ -50,9 +53,10 @@ def _digits_lost(a, b):
 
 
 class DayBook:
-    def __init__(self, path, heals=None, today=None):
+    def __init__(self, path, heals=None, today=None, prices=None):
         self.path = Path(path)
         self.heals = heals or {}        # item name: {"hp": amount, "mp": amount, "hp_pct": share, "mp_pct": share}
+        self.prices = prices or {}      # item name: what a shop asks for it
         self.run = (today or (lambda: time.strftime("%Y-%m-%d")))()     # (a run past midnight stays one run)
         self.lock = threading.Lock()
         self.days = {}
@@ -63,6 +67,7 @@ class DayBook:
         self.last = {}                  # "hp"/"mp": the last value believed
         self.most = {}
         self.maybe = {}                 # a new reading, waiting to be seen twice
+        self.unmatched, self.unmatched_at = 0, 0.0     # mesos that fell, not yet put down to potions bought
         self.count_maybe = {}           # item name: (a new count, how many looks in a row)
         self.count_at = {}              # item name: when its count was last in view
         self.moved_at = {}              # item name: when its count or its pickups last changed
@@ -81,23 +86,32 @@ class DayBook:
 
     # ---------- mesos ----------
 
-    def mesos(self, value):
+    def mesos(self, value, now=None):
         """A confirmed reading of the inventory's mesos."""
+        now = time.monotonic() if now is None else now
         with self.lock:
             d = self._day()
-            if d["now"] == value:
-                return
+            cost = sum(i.get("cost", 0) for i in d["items"].values())
+            new_cost, d["cost_seen"] = cost - d["cost_seen"], cost
             if d["start"] is None:
                 d["start"], d["now"], d["pending_mesos"] = value, value, 0
-                self._save()
-                return
-            change = value - d["now"]
-            picked = d["pending_mesos"]
-            if change < picked:
-                d["spent"] += picked - change
-            else:
-                d["other"] += change - picked       # sold something, a quest reward, a trade
-            d["now"], d["pending_mesos"] = value, 0
+            elif d["now"] != value:
+                change = value - d["now"] - d["pending_mesos"]
+                if change < 0:
+                    d["spent"] -= change
+                    self.unmatched, self.unmatched_at = self.unmatched - change, now
+                else:
+                    d["sold"] += change                 # sold something, a quest reward, a trade
+                d["now"], d["pending_mesos"] = value, 0
+            if new_cost > 0:
+                # Potions bought: a fall in the mesos just now was them. If it fell by less, or rose, something was
+                # sold in between, which hid the rest of what they cost.
+                if now - self.unmatched_at > MATCH_SECONDS:
+                    self.unmatched = 0
+                matched = min(self.unmatched, new_cost)
+                self.unmatched -= matched
+                d["spent"] += new_cost - matched
+                d["sold"] += new_cost - matched
             self._save()
 
     def picked_mesos(self, amount):
@@ -169,7 +183,11 @@ class DayBook:
                 return False                                # (its pickup line may be on its way)
         if change > 0:
             used = it["from_jumps"]                         # used while out of view, and got more besides
-            it["picked" if change + used <= PICKED_RISE else "bought"] += change + used
+            if change + used <= PICKED_RISE:
+                it["picked"] += change + used
+            else:
+                it["bought"] += change + used
+                it["cost"] = it.get("cost", 0) + (change + used) * self.prices.get(name, 0)
         else:
             used = -change                                  # (no change at all: those jumps weren't this potion)
         it["used"] += used - it["from_jumps"]
@@ -264,6 +282,8 @@ class DayBook:
                 text = f"This run: {made:+,} mesos · started {d['start']:,} · now {d['now']:,}"
                 if d["spent"]:
                     text += f" · spent {d['spent']:,}"
+                if d["sold"]:
+                    text += f" · sold {d['sold']:,}"
                 out.append(text)
             parts = [self._item_text(n, i) for n, i in sorted(d["items"].items())
                      if i.get("seen") != 0 or i["used"] or i["picked"] or i.get("bought") or i.get("first")]
@@ -277,5 +297,6 @@ class DayBook:
         title = name.lstrip("~") + ("?" if name.startswith("~") else "")
         if it.get("count") is None:
             return f"{title} +{it['picked']} −{it['used']}"
-        return (f"{title}: had {it['first']:,}, picked {it['picked']:,}, bought {it['bought']:,}, "
+        cost = f" for {it['cost']:,}" if it.get("cost") else ""
+        return (f"{title}: had {it['first']:,}, picked {it['picked']:,}, bought {it['bought']:,}{cost}, "
                 f"used {it['used']:,}, left {it['seen']:,}")

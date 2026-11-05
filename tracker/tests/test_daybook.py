@@ -31,7 +31,7 @@ base = Path(tempfile.mkdtemp(prefix="daybook"))
 try:
     date = ["2026-11-05"]
     path = base / "day.json"
-    b = DayBook(path, HEALS, today=lambda: date[0])
+    b = DayBook(path, HEALS, today=lambda: date[0], prices={"Red Potion": 50, "Lemon": 150})
     check("before any reading it asks for the inventory", "open your inventory" in b.lines()[0], b.lines())
 
     b.picked_mesos(50)
@@ -41,7 +41,7 @@ try:
 
     b.picked_mesos(300)
     b.mesos(1_000_300)
-    check("what was picked up is what it rose by: nothing spent", d["spent"] == 0 and d["other"] == 0 and d["now"] == 1_000_300, d)
+    check("what was picked up is what it rose by: nothing spent", d["spent"] == 0 and d["sold"] == 0 and d["now"] == 1_000_300, d)
 
     b.picked_mesos(500)
     b.mesos(996_800)        # picked up 500, then spent 4,000 on potions
@@ -49,9 +49,10 @@ try:
     check("made today takes out what was spent", "-3,200 mesos" in b.lines()[0] and "spent 4,000" in b.lines()[0], b.lines())
 
     b.mesos(1_046_800)      # sold something
-    check("selling isn't spending", d["spent"] == 4_000 and d["other"] == 50_000, d)
+    check("selling isn't spending", d["spent"] == 4_000 and d["sold"] == 50_000, d)
+    check("what selling brought in shows", "sold 50,000" in b.lines()[0], b.lines())
     b.mesos(1_046_800)
-    check("the same reading again changes nothing", d["spent"] == 4_000 and d["other"] == 50_000)
+    check("the same reading again changes nothing", d["spent"] == 4_000 and d["sold"] == 50_000)
 
     # Potions, using jumps from the real game.
     def read(hp=None, mp=None):
@@ -143,7 +144,27 @@ try:
     check("a rise with no pickup is bought", red["bought"] == 100 and red["used"] == 5, red)
     check("it adds up", red["first"] + red["picked"] + red["bought"] - red["used"] == red["seen"], red)
     text = " ".join(b.lines())
-    check("it shows the whole account", "Red Potion: had 200, picked 10, bought 100, used 5, left 305" in text, text)
+    check("it shows the whole account", "Red Potion: had 200, picked 10, bought 100 for 5,000, used 5, left 305" in text, text)
+    before = d["now"]
+    spent_before, sold_before = d["spent"], d["sold"]
+    b.mesos(before + 15_000, now=time.monotonic() + 100)    # (long after the earlier shop trip) sold 20,000 worth and bought that 5,000 of potions between two readings
+    check("selling and buying in one trip are told apart", d["spent"] == spent_before + 5_000 and d["sold"] == sold_before + 20_000, d)
+    check("and both show", f"spent {d['spent']:,}" in b.lines()[0] and f"sold {d['sold']:,}" in b.lines()[0])
+    check("what the trip made stays right", d["now"] == before + 15_000)
+
+    # The inventory stays open while buying: the mesos fall before the potions' count is settled.
+    seen("Lemon", 100, 3100)
+    spent_before, sold_before = d["spent"], d["sold"]
+    b.mesos(d["now"] - 15_000, now=3110)
+    seen("Lemon", 200, 3110, looks=8)
+    b.count("Lemon", 200, now=3115)
+    b.mesos(d["now"], now=3116)
+    check("potions bought with the inventory open aren't counted twice", d["spent"] == spent_before + 15_000 and d["sold"] == sold_before, d)
+    check("a potion's cost shows", d["items"]["Lemon"]["cost"] == 15_000, d["items"]["Lemon"])
+    seen("Lemon", 300, 3200, looks=8)
+    b.count("Lemon", 300, now=3205)
+    b.mesos(d["now"], now=3206)
+    check("potions bought with no fall in the mesos means something was sold", d["spent"] == spent_before + 30_000 and d["sold"] == sold_before + 15_000, d)
     seen("Red Potion", 306, 1090)
     b.count("Red Potion", 306, now=1095)
     check("a rise of one with no line is a pickup whose line was missed", red["picked"] == 11 and red["bought"] == 100, red)
