@@ -512,8 +512,19 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
 .route-map { padding: 0 10px 10px; }
 .route-map:empty { display: none; }
 .cx-route-link { margin: 10px 0 0; }
-.plan-modes { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 620px; }
-@media (max-width: 480px) { .plan-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plan-modes { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 760px; }
+.lt-actions { padding: 8px 0; border-top: 0; }
+.lt-file { cursor: pointer; }
+.cx-auto.on { background: var(--accent-soft); }
+.lt-preview { display: block; width: 100%; height: auto; border-radius: 8px; background: #000; touch-action: none; cursor: crosshair; }
+.lt-read { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; font-size: .9em; }
+.lt-read div { display: flex; flex-direction: column; min-width: 0; }
+.lt-read span, .lt-read small { color: var(--muted); font-size: .8em; }
+.lt-read a { color: var(--accent); }
+.lt-read small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-raw summary { cursor: pointer; margin-top: 10px; color: var(--muted); font-size: .86em; }
+.lt-raw pre { margin: 6px 0 0; padding: 8px; border-radius: 8px; background: var(--bg); color: var(--muted); font-size: .78em; white-space: pre-wrap; }
+@media (max-width: 600px) { .plan-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .plan-form { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 14px; }
 .plan-form .cf { flex: 1 1 200px; }
 .plan-form .plan-small { flex: 1 1 90px; }

@@ -877,13 +877,15 @@ function renderTracker() {
       </div>
       <div class="cx-bonus-actions"><button type="button" class="btn" id="trkStop">Save session</button><button type="button" class="btn ghost" id="trkCancel">Cancel</button></div>`
     : `<p class="sub small">Time a real session to see your actual numbers next to the estimates. ${target ? `Timing ${esc(target.name)}.` : "Pick a monster above to compare it with the estimate."}</p>
-      <button type="button" class="btn" id="trkStart">Start timer</button>`}
+      <button type="button" class="btn" id="trkStart">Start timer</button>
+      <button type="button" class="btn ghost" id="trkLive">Track it automatically</button>`}
     ${past.length ? `<div class="calc-tablewrap cx-track-table"><table><thead><tr><th>Monster</th><th class="num">Time</th><th class="num">EXP/hr</th><th class="num">Mesos/hr</th><th class="num">Kills/hr</th></tr></thead><tbody>${past.slice(0, 8).map((s) => {
       const per = 3600000 / Math.max(1, s.ms);
       return `<tr><td>${esc(s.mobName || "Any")}<small class="cx-track-est">${s.estExp ? ` est. ${shortNum(s.estExp)} EXP/hr` : ""}</small></td><td class="num">${clockText(s.ms)}</td><td class="num">${shortNum(s.exp * per)}</td><td class="num">${shortNum(s.meso * per)}</td><td class="num">${s.kills ? shortNum(s.kills * per) : "—"}</td></tr>`;
     }).join("")}</tbody></table></div>
     ${(() => { const last = past.find((s) => s.estKills && s.kills); if (!last) return ""; const ratio = (last.kills * 3600000) / Math.max(1, last.ms) / last.estKills; return `<p class="sub small">Your last session ran at ${Math.round(ratio * 100)}% of the estimated kills per hour. Set "Time spent attacking" above to match if it's far off.</p>`; })()}
     <button type="button" class="cx-auto" id="trkClear">Clear history</button>` : ""}`;
+  $("#trkLive")?.addEventListener("click", () => { planner.mode = "live"; switchTab("planner"); });
   $("#trkStart")?.addEventListener("click", () => {
     try { localStorage.setItem(TRACK_KEY, String(Date.now())); } catch { /* storage unavailable */ }
     renderTracker();

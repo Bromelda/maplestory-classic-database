@@ -15,14 +15,17 @@ Source rules (see README "Data sources"):
     and are kept only when a second Classic source (NiaDB, MapleStoryClassic.org /
     MapleClassic Wiki) agrees. Disagreements are resolved in OVERRIDES below, with the
     old value kept in `previous` so nothing is hidden.
-  * Drops are player-counted Classic World kills from the MapleClassic Wiki only.
-    Old GMS/MSEA tables are never used.
+  * Drops are player-counted Classic World kills from the MapleClassic Wiki, plus the owner's own
+    drop scanner counts (tools/scanned_drops.json). Old GMS/MSEA tables are never used.
   * Maps, portals and spawns: MapleClassic Wiki + Classic game files.
 """
 import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import scanned_drops  # noqa: E402
 
 SRC = Path(sys.argv[1] if len(sys.argv) > 1 else "fm/data")
 OUT = Path(__file__).resolve().parent.parent / "data"
@@ -185,6 +188,12 @@ def main():
                 drops_by_mob.setdefault(mob, []).append({"item": slug(name), "rate": None, "kills": None})
                 used_items.setdefault(name, guide_ids.get(name) or gid_by_name.get(name))
 
+    # counted by the owner's drop scanner (tools/scanned_drops.py says which rate wins)
+    scanned_mesos = scanned_drops.merge(
+        drops_by_mob, used_items, slug, lambda mob: mob in mobs_src,
+        lambda name: name in gid_by_name or name in guide_ids or name == "Meso",
+        lambda name: guide_ids.get(name) or gid_by_name.get(name))
+
     # ---------- monsters ----------
     monsters = []
     for name, m in sorted(mobs_src.items(), key=lambda kv: (kv[1]["lv"], kv[0])):
@@ -202,6 +211,8 @@ def main():
         meso = None
         if m.get("meso") and m["meso"][0] is not None:
             meso = {"min": m["meso"][0], "max": m["meso"][1], "basis": m["meso"][3]}
+        elif name in scanned_mesos:
+            meso = {"min": scanned_mesos[name], "max": scanned_mesos[name], "basis": "scanned"}
         d = sorted(drops_by_mob.get(name, []), key=lambda x: -(x["rate"] or 0))
         monsters.append({
             "id": slug(name),

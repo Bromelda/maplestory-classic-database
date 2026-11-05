@@ -799,19 +799,24 @@ function monsterDetail(mob) {
     ["Attack", fmt(mob.atk)], ["Magic attack", mob.matk ? fmt(mob.matk) : null],
     ["Weapon / magic DEF", `${fmt(mob.wdef)} / ${fmt(mob.mdef)}`], ["Accuracy", fmt(mob.acc)], ["Avoid", fmt(mob.avoid)],
     ["Weak to", esc(mob.weak)], ["Resists", esc(mob.resist)], ["Undead", mob.undead ? "Yes" : null],
-    ["Mesos", mob.meso ? `${fmt(mob.meso.min)}–${fmt(mob.meso.max)}${mob.meso.basis === "reported" ? " (player-reported)" : ""}` : null],
+    ["Mesos", mob.meso ? (mob.meso.basis === "scanned" ? `About ${fmt(mob.meso.min)}` : `${fmt(mob.meso.min)}–${fmt(mob.meso.max)}${mob.meso.basis === "reported" ? " (player-reported)" : ""}`) : null],
   ]);
   if (mob.previous?.hp) {
     html += `<div class="note">HP was lowered from ${fmt(mob.previous.hp)} to ${fmt(mob.hp)} in the ${esc(mob.previous.until)}. Some sites still show the old number.</div>`;
   }
   html += `<h3>Drop table (${mob.drops.length})</h3>`;
   if (mob.drops.length) {
-    const kills = mob.drops.find((d) => d.kills)?.kills;
+    const kills = mob.drops.find((d) => d.kills && d.source !== "scanned")?.kills;
+    const scanKills = mob.drops.find((d) => d.source === "scanned")?.kills;
+    const rateRange = (d) => (d.range ? ` <span class="sub">${rateText(d.range[0])}–${rateText(d.range[1])}</span>` : "");
     html += `<table class="drops"><tbody>${mob.drops.map((d) => {
       const it = getEntity("item", d.item);
-      return `<tr><td>${link("item", d.item)}${it?.type ? ` <span class="sub">${esc(it.type)}</span>` : ""}</td><td class="num">${rateText(d.rate)}</td></tr>`;
+      return `<tr><td>${link("item", d.item)}${it?.type ? ` <span class="sub">${esc(it.type)}</span>` : ""}</td><td class="num">${rateText(d.rate)}${rateRange(d)}</td></tr>`;
     }).join("")}</tbody></table>`;
-    html += `<p class="sub" style="margin-top:6px">${kills ? `Rates counted in Classic World over ${kills.toLocaleString()} kills.` : "Drops reported by Classic players; no rate counted yet."}</p>`;
+    const notes = [];
+    if (kills) notes.push(`Rates counted in Classic World over ${kills.toLocaleString()} kills.`);
+    if (scanKills) notes.push(`Rates with a range were counted by this site's drop scanner over ${scanKills.toLocaleString()} kills. The true rate is probably within the range.`);
+    html += `<p class="sub" style="margin-top:6px">${notes.join(" ") || "Drops reported by Classic players; no rate counted yet."}</p>`;
   } else {
     html += `<p class="sub">No Classic drops reported yet.</p>`;
   }

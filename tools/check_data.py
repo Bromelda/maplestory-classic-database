@@ -57,6 +57,7 @@ def main(old_dir, new_dir):
             if not isinstance(m.get("hp"), (int, float)) or m["hp"] <= 0:
                 problems.append(f"monster {m.get('name')} has HP {m.get('hp')}")
             problems += [f"{m['name']} drops unknown item {d['item']}" for d in m["drops"] if d["item"] not in ids["items"]]
+            problems += [f"{m['name']} drops {d['item']} at {d['rate']}%" for d in m["drops"] if d.get("rate") is not None and not 0 <= d["rate"] <= 100]
         for mp in data["maps"]:
             problems += [f"{mp['name']} spawns unknown monster {s['monster']}" for s in mp["spawns"] if s["monster"] not in ids["monsters"]]
             problems += [f"{mp['name']} has a portal to unknown map {p['to']}" for p in mp["portals"] if p["to"] not in ids["maps"]]

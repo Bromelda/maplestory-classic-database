@@ -4,13 +4,13 @@
 const planner = { mode: "craft", craftId: "", qty: 1, recipe: 0, have: {}, material: "", target: 0, percent: 0, questSort: "exp", locked: false, a: "", b: "" };
 
 function renderPlanner() {
-  const modes = [["craft", "Crafting"], ["level", "Leveling"], ["quests", "Quests"], ["compare", "Compare builds"]];
+  const modes = [["craft", "Crafting"], ["level", "Leveling"], ["quests", "Quests"], ["compare", "Compare builds"], ["live", "Live tracker"]];
   $("#plannerView").innerHTML = `
     <section class="cx-intro"><div><h2>Planner</h2><p>Work out what to craft, how long a level takes, which quests pay best, and which build wins.</p></div></section>
     <div class="cx-modes plan-modes" role="radiogroup" aria-label="Planner">${modes.map(([v, t]) => `<button type="button" class="cx-mode ${planner.mode === v ? "on" : ""}" data-plan-mode="${v}" role="radio" aria-checked="${planner.mode === v}">${t}</button>`).join("")}</div>
     <div id="planBody"></div>`;
   document.querySelectorAll("[data-plan-mode]").forEach((b) => b.addEventListener("click", () => { planner.mode = b.dataset.planMode; renderPlanner(); }));
-  ({ craft: renderCraftPlan, level: renderLevelPlan, quests: renderQuestPlan, compare: renderComparePlan })[planner.mode]();
+  ({ craft: renderCraftPlan, level: renderLevelPlan, quests: renderQuestPlan, compare: renderComparePlan, live: renderLive })[planner.mode]();
 }
 
 // ---------- crafting ----------

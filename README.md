@@ -17,7 +17,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 - **Monster pages**: the animated in-game sprite, full stats, the Classic drop table with drop rates, and every map the monster spawns on. Hover a monster anywhere to preview its drops.
 - **Item pages**: every drop, shop, craftable item and all gear, with stats, requirements, who sells it, how to craft it, every monster that drops it, and whether it's safe to sell given your quests and known recipes.
 - **Item filters**: by class, type and stat, and gear pages compare against what your character is wearing.
-- **Planner**: crafting materials from scratch, time to reach a level, quests ranked by reward, and two builds side by side.
+- **Planner**: crafting materials from scratch, time to reach a level, quests ranked by reward, two builds side by side, and an early-test live tracker that reads EXP, map and pickup messages by screen share (nothing is uploaded, and it never touches the game).
 - **Install on a phone**: add it to your home screen, and pages you've seen keep working with a weak signal.
 - **Site-wide search**: search monsters, items, maps, areas, quests, NPCs and jobs from any page.
 - **Route planner**: step-by-step directions between any two maps, using portals, hidden portals and boats, with each portal circled on the map.
@@ -47,7 +47,7 @@ It's a plain static website with no build step for the site itself. Open it loca
 
 1. **Classic only.** Nothing from old GMS, MSEA or v83 tables.
 2. **Monster stats** (level, HP, EXP and so on) come from the Classic World game files, cross-checked against a second Classic source. When a patch changes a monster, the game files win and the old value is noted. For example, the v1.1.0 patch (Oct 29, 2026) lowered the HP of Clang, Copper Drake, Drake and Tortie, and some sites still show the old HP.
-3. **Drops** are player-counted from Classic World kills (MapleClassic Wiki, game version 0.9.0). A rate is shown with the number of kills it's based on. Drops reported by Classic players but not yet counted are marked "reported", including drops seen first-hand by this site's owner (`tools/player_drops.json`).
+3. **Drops** are player-counted from Classic World kills (MapleClassic Wiki, game version 0.9.0), plus counts from this site's own drop scanner (`tracker/`), which only go up after passing the checks in `tracker/tools/publish_drops.py`. A rate is shown with the number of kills it's based on, and scanner rates also show a likely range. Drops reported by Classic players but not yet counted are marked "reported", including drops seen first-hand by this site's owner (`tools/player_drops.json`).
 4. **Level ranges:** when the game data has none for a map, the range is worked out from the monsters on it and labeled that way.
 5. **Not included yet:** Forgotten Hollow (Glowshroom, Raffle, Golden Stirge, Aqumander, Echopus, Rafflesia, Duskmander, Myewood, Rotten Mushroom, Sporewood, Rotten Mushmom). It isn't open in Classic yet and its stats have only one source. Orbis, El Nath and 3rd job aren't in Classic yet either.
 
