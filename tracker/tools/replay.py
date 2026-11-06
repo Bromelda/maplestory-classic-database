@@ -25,6 +25,7 @@ from fieldwatch import FieldWatch  # noqa: E402
 from lootwatch import DropLedger  # noqa: E402
 from scandata import GameData  # noqa: E402
 from dropscan import SCAN_POLL, feed  # noqa: E402
+from linecount import LineCounter  # noqa: E402
 
 
 def replay_clip(path, out_path=None, setup=None):
@@ -33,7 +34,10 @@ def replay_clip(path, out_path=None, setup=None):
     path = Path(path)
     info = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
     data = GameData(ROOT / "assets" / "scan_data.json")
-    ledger = DropLedger(data)
+    counter = LineCounter(data)
+    counter.set_map(info["map"], 0.0)
+    ledger = DropLedger(data, on_other=counter.other_kill)
+    ledger.counter = counter
     ledger.set_map(info["map"])
     field = FieldWatch(ledger, ROOT / "assets" / "mob", data, scale=info.get("scale"))
     field.set_species(data.species_on(info["map"]))
@@ -44,7 +48,7 @@ def replay_clip(path, out_path=None, setup=None):
     def said(upto):
         while events and events[0]["t"] <= upto:
             e = events.pop(0)
-            feed(ledger, [SimpleNamespace(**x) for x in e.get("lines", [])], e.get("found", []), e["t"])
+            feed(ledger, [SimpleNamespace(**x) for x in e.get("lines", [])], e.get("found", []), e["t"], counter)
 
     cap, out, t = cv2.VideoCapture(str(path)), None, 0.0
     for t in info["times"]:
@@ -78,6 +82,8 @@ def show(ledger, field, data):
     print("New for the database:", {data.name_of(s): v for s, v in ledger.new_drops().items()})
     print("Rates:", {data.name_of(s): v for s, v in ledger.rates().items()})
     print("Pickups not tied to anything:", ledger.untied)
+    if getattr(ledger, "counter", None):
+        print("From the lines:", ledger.counter.results(float("inf")))
 
 
 def all_clips(folder):
@@ -123,7 +129,8 @@ def main():
     if args.gh:
         import msgwatch as mw                   # (the tracker's own message reader)
         from itemwatch import ItemReader
-        watcher, items = mw.MessageWatcher(mw.Font(ROOT / "assets")), ItemReader(ROOT / "assets")
+        items = ItemReader(ROOT / "assets")
+        watcher = mw.MessageWatcher(mw.Font(ROOT / "assets"), lambda band, right, s: items.is_line(band, right, s))
     cap = cv2.VideoCapture(args.video)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     step = max(1, round(fps * SCAN_POLL))

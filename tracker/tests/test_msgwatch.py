@@ -120,5 +120,37 @@ check(f"a flash over the stack adds nothing ({sorted(g for g, _ in got)})",
 got = run([], 3)
 check("an empty stack: nothing", got == [])
 
+# A sign behind the stack: a bright row ending further right, again and again. Only lines it's sure of say where lines end.
+watch = mw.MessageWatcher(font)
+blank = np.zeros((4, 4), np.uint8)
+sure = mw.Row(574, 300, "white", 200.0, blank, blank, ("mesos", 5, True))
+sign = mw.Row(584, 300, "white", 200.0, blank, blank, ("text", None, False))
+watch.rows = lambda img, gh: ([sure, sign, sign, sign], [None] * 4)
+watch.look(np.zeros((4, 4, 3), np.uint8), 20.0, 0.0)
+check(f"scenery behind the stack doesn't move where lines end ({watch.edge})", watch.edge == 574)
+
+# A line's end is known: scenery just past it doesn't change where it's read from.
+watch = mw.MessageWatcher(font)
+got = run([(0.5, ["mesos 16"])], 4)
+check("the known end doesn't stop lines being read", got == [("mesos 16", "white")])
+
+# Looks further apart (a busy PC, or a clip): a new line has had time to dim before it's seen.
+watch = mw.MessageWatcher(font)
+watch.peak["white"] = 200.0
+row = mw.Row(574, 300, "white", 172.0, blank, blank, ("mesos", 5, True))
+watch.gap = 0.1
+check("a tenth of a second on, a dimmed line isn't new", not watch._fresh(row))
+watch.gap = 0.35
+check("a third of a second on, it can be", watch._fresh(row))
+row.bright = 120.0
+check("but not one that's gone this dim", not watch._fresh(row))
+
+# Pale scenery: the shadow's hidden, but the letters still stand out from what's around them.
+pale = np.full((36, 120, 3), 200, np.uint8)
+cv2.putText(pale, "+8", (50, 26), cv2.FONT_HERSHEY_PLAIN, 1.5, (235, 255, 255), 1)
+seen = mw.strokes(pale, 1.0)
+check("letters on pale scenery stand out", seen[:, 50:80].max() > 0.9 and seen[:, :40].max() < 0.1)
+check("plain scenery has nothing to see", mw.strokes(np.full((36, 120, 3), 200, np.uint8), 1.0).max() == 0)
+
 print("\nALL PASSED" if not failures else f"\n{failures} FAILED")
 sys.exit(1 if failures else 0)

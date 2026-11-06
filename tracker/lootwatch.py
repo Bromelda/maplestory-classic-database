@@ -123,10 +123,11 @@ def _could_be(seen, said):
 class DropLedger:
     """Feed it events, call tick() now and then. credits has the drops, kills the deaths decided."""
 
-    def __init__(self, data=None, rules=None, on_credit=None):
+    def __init__(self, data=None, rules=None, on_credit=None, on_other=None):
         self.data = data                # scandata.GameData, or None
         self.rules = rules or Rules()
         self.on_credit = on_credit
+        self.on_other = on_other        # a monster seen to vanish with no EXP line of mine: (species, when)
         self.map = None
         self.species_here = []
         self.vision = False             # is something actually watching the field?
@@ -256,6 +257,10 @@ class DropLedger:
     def _party(self, t):
         return t <= self.party_until
 
+    def in_party(self, t):
+        """Has a party bonus line been seen lately?"""
+        return self._party(t)
+
     def _own(self, d, amount, t):
         d.own, d.exp = True, amount
         d.t = min(d.t, t)               # the line comes as it dies: the sprite can take longer to go
@@ -341,6 +346,8 @@ class DropLedger:
         d.clean = clean
         if d.party:
             d.skip.add("party")
+        if self.on_other and not d.own and d.species:
+            self.on_other(d.species, d.t)
 
     def _kill_finished(self, d, now):
         """No more can happen to this kill: its drops have had time to land and all have been settled."""

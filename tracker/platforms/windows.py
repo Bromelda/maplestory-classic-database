@@ -177,6 +177,11 @@ class WindowsPlatform(Platform):
     name = "Windows"
 
     def setup_process(self):
+        # The game comes first: this program only gets what it leaves spare (BELOW_NORMAL_PRIORITY_CLASS).
+        try:
+            ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+        except Exception:
+            pass
         # Use physical pixels so window positions, tkinter and mss screenshots all agree on
         # scaled displays.
         try:
@@ -367,6 +372,26 @@ class WindowsPlatform(Platform):
             ctypes.windll.user32.SetWindowPos(hwnd, wintypes.HWND(-1), x, y, w, h, (0 if rect else 0x1 | 0x2) | 0x10 | 0x40)
         else:
             _ShowWindow(hwnd, 0)                                        # SW_HIDE
+
+    def tuck_window(self, root):
+        hwnd = _GetAncestor(root.winfo_id(), 2)
+        # In front, plain minimize hands the keyboard to the window behind it, the game. Otherwise SW_SHOWMINNOACTIVE
+        # leaves the keyboard where it is.
+        _ShowWindow(hwnd, 6 if self.own_window_in_front() else 7)
+
+    def bring_window_back(self, root):
+        _ShowWindow(_GetAncestor(root.winfo_id(), 2), 4)                # SW_SHOWNOACTIVATE
+
+    def window_tucked(self, root):
+        return bool(_IsIconic(_GetAncestor(root.winfo_id(), 2)))
+
+    def own_window_in_front(self):
+        hwnd = _GetForegroundWindow()
+        if not hwnd:
+            return False
+        pid = wintypes.DWORD()
+        _GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return pid.value == os.getpid()
 
     def game_in_front(self):
         hwnd = _GetForegroundWindow()

@@ -99,7 +99,7 @@ try:
     exp_at = [e["t"] for e in info["events"] if e["lines"]]
     check("the EXP line is in the clip, with its time", len(exp_at) == 1 and 9.0 <= exp_at[0] <= 10.5, exp_at)
     check("the pickup is in the clip", any(e["found"] for e in info["events"]), info["events"])
-    check("the frame times are kept", len(info["times"]) > 100 and abs(info["times"][1] - 0.125) < 0.01, info["times"][:3])
+    check("the frame times are kept", len(info["times"]) > 60 and abs(info["times"][1] - 0.25) < 0.01, info["times"][:3])
     cap = cv2.VideoCapture(str(made[0]))
     frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     ok, first = cap.read()

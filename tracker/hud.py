@@ -17,7 +17,7 @@ times a second, the slime (bobbing, hopping when EXP comes in), the "+EXP" that 
 in edit mode the frame you drag.
 
 It's a borderless, click-through window over the game, painted pixel by pixel (rounded corners
-and a soft shadow). In edit mode (Shift+5 by default) it stops being click-through: drag it to
+and a soft shadow). In edit mode (Shift+F5 by default) it stops being click-through: drag it to
 move it, drag its right edge to make it wider, its bottom edge to make it bigger, its corner for
 both, and right-click for its layout, theme and size. Where it is, is kept relative to the game
 window, so it follows the game.

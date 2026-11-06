@@ -27,7 +27,8 @@ MIN_KILLS = 200             # kills of a monster before its rates go on the webs
 def add_up(folder, version=None):
     """Everything in the session files added up. With version, only the sessions from that scanner version."""
     total = {"counted": 0, "skipped": Counter(), "untied": 0, "tied": 0, "seen": {}, "kills": Counter(), "drops": {}, "mesos": {},
-             "new": {}, "sessions": 0, "ignored": 0}
+             "new": {}, "sessions": 0, "ignored": 0,
+             "line": {"solo_kills": Counter(), "kills": Counter(), "drops": {}, "mesos": {}, "listed": {}, "skipped": Counter(), "read": Counter()}}
     for path in sorted(Path(folder).glob("session-*.json")):
         try:
             s = json.loads(path.read_text(encoding="utf-8"))
@@ -53,7 +54,64 @@ def add_up(folder, version=None):
         for mob, items in s.get("new_drops", {}).items():
             have = total["new"].setdefault(mob, [])
             have.extend(i for i in items if i not in have)
+        _add_lines(total["line"], s.get("line") or {})
     return total
+
+
+def _add_lines(t, s):
+    """What the message lines counted (linecount.py), added up. These stay apart from the rest: nothing here goes on the
+    website until it's been checked against the monsters with counted rates."""
+    t["solo_kills"].update(s.get("solo_kills") or {})
+    t["kills"].update(s.get("kills") or {})
+    t["skipped"].update(s.get("skipped") or {})
+    t["read"].update(s.get("read") or {})
+    for mob, items in (s.get("drops") or {}).items():
+        t["drops"].setdefault(mob, Counter()).update(items)
+    for mob, m in (s.get("mesos") or {}).items():
+        have = t["mesos"].setdefault(mob, [0, 0])
+        have[0] += m[0]
+        have[1] += m[1]
+    for mob, items in (s.get("listed") or {}).items():
+        for item, m in items.items():
+            have = t["listed"].setdefault(mob, {}).setdefault(item, [0, 0])
+            have[0] += m[0]
+            have[1] += m[1]
+
+
+def _lines_section(t):
+    """The report's part for what the message lines counted."""
+    e = html.escape
+    r = t["read"]
+    parts = []
+    if r.get("exp_bar"):
+        parts.append(f"EXP {min(1, r.get('exp_lines', 0) / r['exp_bar']):.0%}")
+    if r.get("mesos_box"):
+        parts.append(f"mesos {min(1, r.get('mesos_lines', 0) / r['mesos_box']):.0%}")
+    seen = r.get("items_read", 0) + r.get("items_unread", 0)
+    if seen:
+        parts.append(f"item names {r.get('items_read', 0)} of {seen}")
+    if not t["solo_kills"] and not parts:
+        return ""
+    out = ["<h2>Counted from the message lines</h2>",
+           "<p>Not on the website: these need checking against monsters with counted rates first.</p>"]
+    if parts:
+        out.append(f"<p>How much was read, against the EXP bar and mesos count: {e(', '.join(parts))}.</p>")
+    if t["solo_kills"]:
+        out.append("<p>Kills named by their line, alone: " + e(", ".join(f"{m} {n}" for m, n in t["solo_kills"].most_common())) + ".</p>")
+    rows = [(mob, item, *m) for mob, items in t["listed"].items() for item, m in items.items() if m[0]]
+    if rows:
+        out.append("<h3>Items only one kind on the map drops</h3><ul>")
+        out += [f"<li>{e(mob)}: {e(item)}, {got} in {n} kills ({got / n:.1%})</li>" for mob, item, got, n in sorted(rows, key=lambda x: (x[0], -x[2]))]
+        out.append("</ul>")
+    if t["kills"]:
+        out.append("<h3>Stretches of one kind</h3><ul>")
+        for mob, n in t["kills"].most_common():
+            items = ", ".join(f"{i} {c} ({c / n:.1%})" for i, c in t["drops"].get(mob, Counter()).most_common())
+            m = t["mesos"].get(mob)
+            coins = f"; mesos {m[0]} times ({m[0] / n:.0%}), {m[1] / m[0]:.0f} on average" if m and m[0] else ""
+            out.append(f"<li>{e(mob)}, {n} kills: {e(items) or 'no items'}{e(coins)}</li>")
+        out.append("</ul>")
+    return "\n".join(out)
 
 
 def page(t):
@@ -79,7 +137,7 @@ td,th{{border-bottom:1px solid #8884;padding:4px 8px;text-align:left}}small{{fon
 <h1>Drop scanner report</h1>
 <p>{t['sessions']} sessions. <b>{t['counted']} kills counted, {sum(t['skipped'].values())} skipped.</b>
 {t['untied']} pickups couldn't be tied to a monster, so they aren't in here.</p>
-<ul>{why}</ul>{''.join(rows)}"""
+<ul>{why}</ul>{''.join(rows)}{_lines_section(t["line"])}"""
 
 
 def main():

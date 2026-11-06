@@ -18,7 +18,8 @@ or more higher (the same shape and amount, never brighter: a line only dims), an
 below them are new. Two identical "+16" lines in a row are still told apart, by the rows above
 them and by brightness. A row is read digit by digit from the right, against the digits'
 shapes (assets/msg_font.npz, made by tools/make_msg_font.py), and the kind of line from the
-word before the bracket; a new line that isn't clear is read again at the next looks. Lines
+word before the bracket; a new line that isn't clear is read again at the next looks. Pale
+scenery can hide the letters' shadow, so a row that isn't clear is tried again by strokes(). Lines
 with no amount (items) are left for Tesseract. A look where something bright passes over the
 stack (a skill's flash) and no line can be found again is left out.
 
@@ -41,6 +42,7 @@ SHADOW = 3                  # the letters' shadow, down and to the right
 DIGIT_W, BRACKET_W = 20, 10
 CONTEXT_W = 120             # the word before the "(", that tells the kind of line
 FRESH = 0.94                # a new line's letters: as bright as lines get (seen within a tenth of a second)
+FRESH_LATE = 0.8            # ...when the last look was longer ago than that, it's had time to dim
 LOOK_W = 300                # how much of a line's right end to compare it by (all lines are longer)
 END_W = 2 * DIGIT_W        # ...and its last two digits (or "+" and a digit), as they are
 GAP = 30                    # the widest gap inside a line (between words)
@@ -108,6 +110,16 @@ def feature(bgr, s):
     k = max(3, int(round(5 * s)) | 1)
     near = cv2.dilate(edge.astype(np.uint8), np.ones((k, k), np.uint8)) > 0
     return (np.clip((L - FEAT_LOW * peak) / ((0.95 - FEAT_LOW) * peak), 0, 1) * near).astype(np.float32)
+
+
+def strokes(bgr, s):
+    """A second way of seeing the letters, for pale scenery that hides their shadow from feature(): what's lighter than
+    the pixels around it. Letters are thin, so this picks them out whatever's behind them."""
+    L = lightness(bgr).astype(np.float32)
+    k = max(3, int(round(9 * s)) | 1)
+    d = L - cv2.blur(L, (k, k))
+    top = float(np.percentile(d, 99))
+    return np.clip(d / top, 0, 1).astype(np.float32) if top > 8 else np.zeros(L.shape, np.float32)
 
 
 def _ncc(a, b):
@@ -180,7 +192,15 @@ class Font:
         little more) and where it ends: (kind, amount, sure). kind: "mesos", "exp", "bonus", or "text"
         for a line that doesn't end in an amount (an item: Tesseract reads those); None when it went
         wrong part way. sure: every digit, and the kind, were clear."""
-        F = feature(band, s)
+        got = self._read(feature(band, s), s, right)
+        if got[2]:
+            return got
+        other = self._read(strokes(band, s), s, right)
+        if other[2]:
+            return other
+        return other if got[0] in (None, "text") and other[0] not in (None, "text") else got
+
+    def _read(self, F, s, right):
         chars, kinds = self._at(s)
         h, w = chars["+"].shape
         mid = F.shape[0] // 2
@@ -234,14 +254,17 @@ class Font:
 class MessageWatcher:
     """Looks at the message stack again and again (look()), and says what new lines came in."""
 
-    def __init__(self, font):
+    def __init__(self, font, is_item=None):
         self.font = font
+        self.is_item = is_item          # (band, where the line ends, s): is this row an item line? It can be read at once
         self.before = None              # the rows at the last look
         self.lines = {}                 # row -> Line, the lines in the stack now
         self.edge = None                # where the lines end, learned from the bright ones
         self.peak = {}                  # how bright new lines are, by colour (it depends on the game's size)
         self.skipped = 0                # looks in a row left out as unclear
         self.fit = []                   # how well the old lines were found again, at the last look
+        self.gap = 0.0                  # how long since the last look
+        self.look_at = None
 
     def reset(self):
         self.before, self.lines, self.skipped = None, {}, 0
@@ -268,6 +291,8 @@ class MessageWatcher:
                 out.append(None)
                 continue
             right = int(xs[-1]) + 1
+            if self.edge is not None:           # (they all end at the same spot: what's past it is scenery)
+                right = min(right, int(round(self.edge)))
             # The line's left end: letters and words, with gaps of no more than GAP.
             on = np.nonzero(cols[:right])[0]
             gaps = np.nonzero(np.diff(on) > GAP * s)[0]
@@ -296,7 +321,7 @@ class MessageWatcher:
 
     def _fresh(self, row):
         """Is a row's line as bright as a new one?"""
-        return row.bright >= FRESH * self.peak.get(row.colour, row.bright)
+        return row.bright >= (FRESH if self.gap <= 0.15 else FRESH_LATE) * self.peak.get(row.colour, row.bright)
 
     def _shift(self, before, now, s, age=None):
         """How many rows the stack moved up since the last look (new lines in at the bottom): the move
@@ -346,12 +371,16 @@ class MessageWatcher:
         have been read since the last look (Line, done). A line is read again at the next looks
         while it's unclear (and while it's there): a row up, the scenery behind it is different."""
         s = gh / GH0
+        self.gap = now - self.look_at if self.look_at is not None else 0.0
+        self.look_at = now
         rows, bands = self.rows(img, gh)
         for r in rows:
             if r:
                 top = self.peak.get(r.colour, 0) * 0.999
                 self.peak[r.colour] = max(top, r.bright)
-        bright_ends = [r.right for r in rows if r and self._fresh(r)]
+        # (Only lines it's sure of say where lines end: a sign or a spear behind the stack is bright too, and would drag
+        # this away from the real lines until they fell outside it, and none were heard at all.)
+        bright_ends = [r.right for r in rows if r and self._fresh(r) and r.said and r.said[2]]
         if bright_ends:
             e = float(np.median(bright_ends))
             self.edge = e if self.edge is None else 0.9 * self.edge + 0.1 * e
@@ -385,6 +414,10 @@ class MessageWatcher:
                 continue
             kind, amount, sure = rows[line.row].said
             line.band, line.span = bands[line.row], (rows[line.row].left, rows[line.row].right)
+            if self.edge is not None:           # (scenery past the line's end isn't the line)
+                line.span = line.span[0], min(line.span[1], int(round(self.edge)))
+            if kind == "text" and self.is_item and self.is_item(line.band, line.span[1], s):
+                sure = True                     # (read it now, at its brightest, before the stack moves it)
             line.tries.append((kind, amount, sure))
             if sure or len(line.tries) >= TRIES:
                 self._finish(line, out)

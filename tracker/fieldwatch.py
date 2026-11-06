@@ -3,7 +3,9 @@ where they died, and sees it leave the ground. It tells lootwatch.DropLedger, wh
 
 This only ever looks at pictures of the game window. It doesn't touch the game in any way.
 
-How it works, each look (about 8 times a second), on a half-size copy of the picture:
+How it works, on a smaller copy of the picture. It looks 10 times a second, and has to fit in that time, so a look has
+two parts: following what's already known (the view, the monsters, the drops), every look, and finding what's new
+(steps 2, the search in 3, and the search in 4), a few times a second, for a fixed amount of time each:
 
 1. Camera. The view scrolls, so everything is kept in world position: how far the view moved since the
    last look is measured (phase correlation) and then checked (does the moved picture really line up?).
@@ -36,9 +38,15 @@ WARM_UP = 16                # looks at a map before anything on the ground is be
 CALM_DIFF = 10              # this close to the scenery: the scenery's right about this pixel
 CALM_LOOKS = 12             # looks of that before a pixel is known to be real ground
 SHIFT_MAX = 0.35            # the most the view can move between looks (share of the picture)
-LINE_UP_OK = 24.0           # average difference between two looks once lined up, at most, to trust the move. Real
-                            # maps have far layers that scroll at other speeds and clouds that drift: 9 to 20 is normal
-LOST_LOOKS = 16             # looks in a row with no trustworthy move (2 seconds; a skill's flash is shorter): start again
+LINE_UP_OK = 10.0           # difference left between two looks once lined up, at most, to trust the move, over the 70%
+                            # of the picture that fits best. The rest can be anything: far layers that scroll at other
+                            # speeds, drifting fog, and windows left open, which don't move with the world
+LINE_UP_KEEP = 0.7
+STILL_LOOKS = 5             # looks with no move before the picture to compare with is renewed
+SHIFT_PEAKS = 6             # how many of the likeliest moves to try. Open windows make "nothing moved" a likely one
+LOST_S = 5.0                # seconds with no trustworthy move (a skill's flash is shorter): start again
+SLOW_EVERY = 0.25           # seconds between the looks that find what's new. Everything in the "finding" part counts
+                            # these looks, not seconds: LEARN_STEP, SEEN_MIN, WARM_UP, CALM_LOOKS, flicker
 MATCH_OK = 0.62             # how alike a followed monster must look to its sprite
 MATCH_NEW = 0.72            # ...to start following one
 MATCH_MARGIN = 0.05         # ...and how much more like it than any other monster here (a near tie is nobody)
@@ -52,15 +60,21 @@ ICON_DIFF = 55.0            # ...how far its colours can be from the picture's, 
 ICON_FLAT = 0.55            # ...and how much of the picture's contrast it must have (a plain wall can fit a pale item)
 ICON_STILL = 0.5            # ...and to still be there, once it's being watched (coins spin, others walk over it)
 DROP_BEFORE = 1.3           # a drop can land this long before its monster's last seen
-SCAN_BUDGET = 0.1           # seconds per look for looking for drops, and again for new monsters
+SCAN_BUDGET = 0.03          # seconds per finding look for looking for drops, and again for new monsters
+FOLLOW_BUDGET = 0.03        # seconds per look for following monsters. One not reached is reached next look
+WHOLE_BUDGET = 0.012        # seconds per finding look for searching the whole view (more at first: WARM_UP)
+WHOLE_HINT = 0.6            # how alike a sprite must look at half size to be worth checking at full size
+WHOLE_MOST = 2              # places to check for one sprite, in one look
+FOLLOW_SAME = 0.74          # as alike as this to the picture it last matched: that's it, no need to try the others
+PAD_FAR, PAD_NEAR = 28, 24  # how far from where a monster was to look: after a long gap, after a tenth of a second
+LOOT_GONE_S = 0.3           # seconds not there before a drop's lost (a spinning coin is edge-on for a moment)
 STAY_S = 0.3                # seconds something must stay put to be a drop
 STAY_X, STAY_Y = 3, 7       # how far it can wander meanwhile (drops bob up and down), working px
 DROP_ZONE = 110.0            # how far from a vanished monster to look for its drop (sprite pixels)
 DROP_ZONE_Y = 90.0
 DROP_ZONE_S = 3.5           # ...and for how long
-LOST_LOOKS_LOOT = 2         # looks in a row not there before it's lost
+LOST_LOOKS_LOOT = 2         # ...and at least this many looks in a row
 FORGET_LOOT = 8.0           # seconds lost before it's no longer watched
-FULL_SEARCH_EVERY = 8       # looks between searching the whole view for one monster's sprites
 MOST_TRIES = 6              # places to try for a new monster in one look, biggest first (each costs tens of ms)
 SCENERY_SHIFT = 4           # how far off the view's position can be, in working pixels
 SCENERY_DIFF = 16.0         # a picture this close to the scenery, once lined up by itself, is the scenery
@@ -72,6 +86,10 @@ VIEW_BOX = (0.17, 0.02, 0.95, 0.84)     # the part of the picture used to measur
 
 def _to_gray(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+
+def _half(img):
+    return cv2.resize(img, (img.shape[1] // 2, img.shape[0] // 2), interpolation=cv2.INTER_AREA)
 
 
 def sprite_frames(path, most=6):
@@ -125,6 +143,13 @@ class SpriteBank:
         key = (species, self.scale, "following")
         if key not in self._at:
             self._at[key] = self.templates(species) + self._sized(self.poses.get(species, []), self.scale)
+        return self._at[key]
+
+    def half_size(self, species):
+        """Its sprites at half the size they show, for a quick search. Tiny ones are left out: they'd fit anything."""
+        key = (species, self.scale, "half")
+        if key not in self._at:
+            self._at[key] = [(t, m) for t, m in self._sized(self.raw.get(species, []), self.scale / 2) if min(t.shape[:2]) >= 8]
         return self._at[key]
 
     def templates(self, species, scale=None):
@@ -216,10 +241,11 @@ def _looks_like(patch, picture, mask):
     return float(np.sqrt(((a - b) ** 2).mean())) <= ICON_DIFF and float(a.mean(axis=1).std()) >= ICON_FLAT * float(b.mean(axis=1).std())
 
 
-def best_match(area, templates):
-    """The best any of these templates fits in area: (score, x, y, w, h), or None."""
-    best = None
-    for t, m in templates:
+def best_match(area, templates, say_which=False, enough=None):
+    """The best any of these templates fits in area: (score, x, y, w, h), or None. say_which: (that, which template).
+    enough: one that fits this well will do, no need to try the rest."""
+    best, which = None, None
+    for k, (t, m) in enumerate(templates):
         th, tw = t.shape[:2]
         if area.shape[0] < th or area.shape[1] < tw:
             continue
@@ -227,8 +253,10 @@ def best_match(area, templates):
         res = np.nan_to_num(res, nan=-1.0, posinf=-1.0, neginf=-1.0)
         _, score, _, at = cv2.minMaxLoc(res)
         if best is None or score > best[0]:
-            best = (float(score), at[0], at[1], tw, th)
-    return best
+            best, which = (float(score), at[0], at[1], tw, th), k
+            if enough is not None and score >= enough:
+                break
+    return (best, which) if say_which else best
 
 
 class ScaleFinder:
@@ -266,6 +294,8 @@ class Camera:
         self.prev = None
         self.window = None
         self.lost = 0
+        self.moved = (0, 0)
+        self.still = 0
 
     def _part(self, gray):
         h, w = gray.shape
@@ -273,40 +303,87 @@ class Camera:
         return np.float32(gray[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)])
 
     def reset(self):
-        self.x, self.y, self.prev, self.lost = 0.0, 0.0, None, 0
+        self.x, self.y, self.prev, self.lost, self.moved, self.still = 0.0, 0.0, None, 0, (0, 0), 0
 
     def update(self, gray):
         """A new look. Returns True if the move is known. If not, the next look is compared with the last
         good one, so a moment's flash doesn't throw the view's position off."""
         g = self._part(gray)
         if self.prev is None:
-            self.prev, self.window = g, cv2.createHanningWindow(g.shape[::-1], cv2.CV_32F)
+            self.prev = g
+            half = _half(g).shape
+            if self.window is None or self.window.shape != half:
+                self.window = cv2.createHanningWindow(half[::-1], cv2.CV_32F)
             return True
-        (dx, dy), _ = cv2.phaseCorrelate(self.prev, g, self.window)
-        ix, iy = int(round(dx)), int(round(dy))
         h, w = g.shape
-        ok = abs(ix) <= w * SHIFT_MAX and abs(iy) <= h * SHIFT_MAX
-        if ok:
-            moved = self._line_up(g, ix, iy)
-            still = self._line_up(g, 0, 0)
-            if still <= moved + 0.5:            # staying put explains it at least as well
-                ix, iy, moved = 0, 0, still
-            ok = moved <= LINE_UP_OK
-        if not ok:
+        best, ix, iy = self._difference(g, 0, 0), 0, 0
+        tried = {(0, 0)}
+        for x, y in self._likely_moves(g) + [self.moved]:
+            if (x, y) not in tried and abs(x) <= w * SHIFT_MAX and abs(y) <= h * SHIFT_MAX:
+                tried.add((x, y))
+                whole = self._difference(g, x, y)
+                if whole + 0.5 < best:          # (staying put explains it about as well: it stayed put)
+                    best, ix, iy = whole, x, y
+        # (The likely moves are found on a half-size picture: the best may be a pixel off.)
+        better = (ix, iy) != (0, 0)
+        best = self._difference(g, ix, iy, 1) if better else best
+        done = {(ix, iy)}
+        while better:
+            better = False
+            for x, y in ((ix - 1, iy), (ix + 1, iy), (ix, iy - 1), (ix, iy + 1)):
+                if (x, y) not in done:
+                    done.add((x, y))
+                    whole = self._difference(g, x, y, 1)
+                    if whole < best:
+                        best, ix, iy, better = whole, x, y, True
+        trust = self._line_up(g, ix, iy)[1]
+        if trust > LINE_UP_OK:
             self.lost += 1
             return False
-        self.prev = g
         self.lost = 0
+        self.moved = (ix, iy)
+        # (Looks only a tenth of a second apart: a slow move is too small to see from one to the next, and would be lost if
+        # each look were compared with the one before. So staying put keeps the old picture, for a few looks.)
+        self.still = self.still + 1 if (ix, iy) == (0, 0) else 0
+        if self.still == 0 or self.still >= STILL_LOOKS:
+            self.prev, self.still = g, 0
         # (The world stays put, so the picture moving right by dx means the view moved left by dx.)
         self.x -= ix
         self.y -= iy
         return True
 
-    def _line_up(self, g, dx, dy):
+    def _likely_moves(self, g):
+        """How far the picture may have moved since the last good look: (dx, dy), likeliest first. These are the peaks
+        of a phase correlation. Windows left open don't move with the world, so they make a peak of their own at no move,
+        and it can be the strongest while the view is really moving."""
+        p, q = _half(self.prev), _half(g)
+        a = np.fft.rfft2((p - p.mean()) * self.window)
+        b = np.fft.rfft2((q - q.mean()) * self.window)
+        cross = b * np.conj(a)
+        cross /= np.abs(cross) + 1e-6
+        r = np.fft.fftshift(np.fft.irfft2(cross, s=q.shape)).astype(np.float32)
+        r = cv2.GaussianBlur(r, (3, 3), 0)
+        ys, xs = np.nonzero((r == cv2.dilate(r, np.ones((5, 5), np.uint8))) & (r > 0))
+        h, w = q.shape
+        return [(2 * (int(xs[i]) - w // 2), 2 * (int(ys[i]) - h // 2)) for i in np.argsort(r[ys, xs])[::-1][:SHIFT_PEAKS]]
+
+    def _difference(self, g, dx, dy, step=2):
+        """How far apart the two looks are once lined up, on average, over every step'th pixel."""
         h, w = g.shape
-        a = self.prev[max(0, -dy):h - max(0, dy), max(0, -dx):w - max(0, dx)]
-        b = g[max(0, dy):h - max(0, -dy), max(0, dx):w - max(0, -dx)]
-        return float(np.abs(a - b).mean()) if a.size else 1e9
+        a = self.prev[max(0, -dy):h - max(0, dy), max(0, -dx):w - max(0, dx)][::step, ::step]
+        b = g[max(0, dy):h - max(0, -dy), max(0, dx):w - max(0, -dx)][::step, ::step]
+        return float(cv2.absdiff(a, b).mean()) if a.size else 1e9
+
+    def _line_up(self, g, dx, dy):
+        """How far apart the two looks are once lined up: on average, and over the part of the picture that fits best."""
+        h, w = g.shape
+        a = self.prev[max(0, -dy):h - max(0, dy), max(0, -dx):w - max(0, dx)][::2, ::2]
+        b = g[max(0, dy):h - max(0, -dy), max(0, dx):w - max(0, -dx)][::2, ::2]
+        if not a.size:
+            return 1e9, 1e9
+        d = np.abs(a - b).ravel()
+        keep = int(d.size * LINE_UP_KEEP)
+        return float(d.mean()), float(np.partition(d, keep)[:keep].mean())
 
 
 class Scenery:
@@ -397,6 +474,7 @@ class Track:
     reported: bool = False      # the ledger's been told it vanished
     in_view: bool = True
     edge: bool = False          # it was last seen close to the view's edge
+    pic: int = 0                # which of its pictures it last fitted
 
 
 @dataclass
@@ -437,6 +515,11 @@ class FieldWatch:
         self.last = {}                  # for the debug picture
         self.resets = 0
         self.ui_boxes = None            # share-of-picture boxes the game's own windows live in
+        self.known_at = None            # when the view's move was last known
+        self.slow_at = None             # when what's new was last looked for
+        self.look_at = None             # when the last look was
+        self.follow_from = 0            # who's followed first, this look
+        self.whole_at = 0               # how far the search of the whole view has got
 
     # ---------- setup ----------
 
@@ -454,6 +537,7 @@ class FieldWatch:
         self.scenery.reset()
         self.tracks, self.spots, self.drops, self.gone_spots = [], [], [], []
         self.resets += 1
+        self.known_at, self.slow_at = None, None
 
     def _sprite_scale(self):
         """Working pixels per sprite pixel, for sizes. (Until sprites are found: what 1080p shows.)"""
@@ -481,9 +565,12 @@ class FieldWatch:
         small = cv2.resize(frame, (round(frame.shape[1] * scale), WORK_H), interpolation=cv2.INTER_AREA)
         self.size = small.shape[1], small.shape[0]
         h, w = small.shape[:2]
-        ui = self._ui_mask(small.shape)
         known = self.camera.update(_to_gray(small))
-        if self.camera.lost >= LOST_LOOKS:
+        gap = now - self.look_at if self.look_at is not None else 1.0
+        self.look_at = now
+        if known or self.known_at is None:
+            self.known_at = now
+        if now - self.known_at >= LOST_S:
             self.ledger.close_all(now, "camera")
             self.start_again()
             return
@@ -496,7 +583,17 @@ class FieldWatch:
             return
         x0, y0 = where
         self.where = where
-        self._follow(small, now)                # (first: so the scenery knows where they are now)
+        finding = self.slow_at is None or now - self.slow_at >= SLOW_EVERY - 0.01
+        self._follow(small, now, gap, finding)  # (first: so the scenery knows where they are now)
+        if finding:
+            self.slow_at = now
+            self._find_new(small, x0, y0, now)
+        self._vanished(now)
+        self._watch_drops(small, now)
+
+    def _find_new(self, small, x0, y0, now):
+        """The part of a look that finds what's new: new monsters, and what's landed."""
+        ui = self._ui_mask(small.shape)
         keep = ui.copy()
         for t in self.tracks:
             if now - t.seen < RECENT:
@@ -512,9 +609,7 @@ class FieldWatch:
         on_top = self.scenery.compare(small, x0, y0, keep, hold, now)
         on_top[ui > 0] = 0
         self._search(small, on_top, now)
-        self._vanished(now)
         self._ground(small, on_top, ui, now)
-        self._watch_drops(small, now)
         self.last = {"on_top": on_top, "small": small, "x0": x0, "y0": y0}
 
     def _to_screen(self, x, y):
@@ -533,18 +628,27 @@ class FieldWatch:
 
     # ---------- monsters ----------
 
-    def _follow(self, small, now):
+    def _follow(self, small, now, gap=1.0, finding=True):
         h, w = small.shape[:2]
-        for t in self.tracks:
+        pad = PAD_NEAR if gap <= 0.11 else PAD_FAR
+        began = time.perf_counter()
+        n = len(self.tracks)
+        self.follow_from = (self.follow_from + 1) % max(1, n)
+        for k in range(n):
+            if time.perf_counter() - began > FOLLOW_BUDGET:
+                self.follow_from = (self.follow_from + k) % n
+                break
+            t = self.tracks[(self.follow_from + k) % n]
+            if not finding and now - t.seen > RECENT:
+                continue                        # (hidden, or dying: trying every picture of it, every look, is costly)
             sx, sy = self._to_screen(t.x, t.y)
-            pad = 28
             x0, y0 = int(sx - t.w / 2 - pad), int(sy - t.h / 2 - pad)
             x1, y1 = int(sx + t.w / 2 + pad), int(sy + t.h / 2 + pad)
             t.in_view = x0 + pad >= 0 and y0 + pad >= 0 and x1 - pad <= w and y1 - pad <= h
             area = small[max(0, y0):max(0, y1), max(0, x0):max(0, x1)]
             if area.size == 0:
                 continue
-            got = best_match(area, self.bank.following(t.species)) if self.bank.scale else None
+            got = self._match_track(area, t) if self.bank.scale else None
             if got and got[0] >= MATCH_OK:
                 nx, ny = max(0, x0) + got[1] + got[3] / 2, max(0, y0) + got[2] + got[4] / 2
                 t.x, t.y = self._to_world(nx, ny)
@@ -554,6 +658,14 @@ class FieldWatch:
                 if t.reported:
                     t.reported = False
                     self.ledger.mob_back(t.id, now)
+
+    def _match_track(self, area, t):
+        """How well this monster fits here. The picture it last fitted is tried first: it's usually still that one."""
+        pics = self.bank.following(t.species)
+        at = t.pic % len(pics) if pics else 0
+        got, which = best_match(area, pics[at:] + pics[:at], True, FOLLOW_SAME)
+        t.pic = at + (which or 0)
+        return got
 
     def _vanished(self, now):
         keep = []
@@ -580,7 +692,12 @@ class FieldWatch:
         n, _, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(on_top, np.ones((5, 5), np.uint8)))
         s = self._sprite_scale()
         tries, began = 0, time.perf_counter()
-        for k in sorted(range(1, n), key=lambda i: -stats[i][4]):
+        blobs = sorted(range(1, n), key=lambda i: -stats[i][4])
+        # (Biggest first, but not always the same ones first: there may only be time for a few.)
+        if blobs and self._turn % 2:
+            at = self._turn // 2 % len(blobs)
+            blobs = blobs[at:] + blobs[:at]
+        for k in blobs:
             x, y, bw, bh, area = stats[k]
             if bw < 14 * s or bh < 14 * s or bw > 260 * s or bh > 260 * s:
                 continue
@@ -592,9 +709,28 @@ class FieldWatch:
             tries += 1
             if tries >= MOST_TRIES or time.perf_counter() - began > SCAN_BUDGET:
                 break
-        if self._turn % FULL_SEARCH_EVERY == 0 or self.scenery.looks <= WARM_UP:     # (at first: before they're learned in)
-            self._search_at = (self._search_at + 1) % len(species)
-            self._try_start(small, [species[self._search_at]], 0, 0, small.shape[1], small.shape[0], now, whole=True)
+        self._search_whole(small, species, now)
+
+    def _search_whole(self, small, species, now):
+        """Looks for monsters that aren't moving (they'd never show as new on the scenery), through the whole view, one
+        sprite at a time. On a half-size picture: it costs a quarter as much, and what it finds is checked at full size."""
+        half = _half(small[:int(small.shape[0] * 0.9)])
+        pics = [(sp, t, m) for sp in species for t, m in self.bank.half_size(sp)]
+        began, s = time.perf_counter(), self._sprite_scale()
+        budget = WHOLE_BUDGET * (4 if self.scenery.looks <= WARM_UP else 1)     # (at first: before they're learned in)
+        for _ in pics:
+            self.whole_at = (self.whole_at + 1) % len(pics)
+            sp, t, m = pics[self.whole_at]
+            th, tw = t.shape[:2]
+            if half.shape[0] >= th and half.shape[1] >= tw:
+                res = np.nan_to_num(cv2.matchTemplate(half, t, cv2.TM_CCOEFF_NORMED, mask=m), nan=-1.0, posinf=-1.0, neginf=-1.0)
+                ys, xs = np.nonzero((res >= WHOLE_HINT) & (res == cv2.dilate(res, np.ones((9, 9), np.uint8))))
+                for i in np.argsort(res[ys, xs])[::-1][:WHOLE_MOST]:
+                    x, y, bw, bh = 2 * int(xs[i]), 2 * int(ys[i]), 2 * tw, 2 * th
+                    if not self._followed(x + bw / 2, y + bh / 2, bw, bh):
+                        self._try_start(small, species, x - 8, y - 8, x + bw + 8, y + bh + 8, now)
+            if time.perf_counter() - began > budget:
+                break
 
     def _followed(self, sx, sy, bw, bh, now=None):
         for t in self.tracks:
@@ -605,14 +741,19 @@ class FieldWatch:
                 return True
         return False
 
-    def _try_start(self, small, species, x0, y0, x1, y1, now, whole=False):
+    def _try_start(self, small, species, x0, y0, x1, y1, now):
         h, w = small.shape[:2]
         x0, y0, x1, y1 = max(0, int(x0)), max(0, int(y0)), min(w, int(x1)), min(int(h * 0.9), int(y1))
         area = small[y0:y1, x0:x1]
         if area.size == 0:
             return
         scores = []
+        half = _half(area)
         for sp in species:
+            # (A quick try at half the size says which kinds aren't worth trying at full size.)
+            quick = best_match(half, self.bank.half_size(sp))
+            if quick and quick[0] < WHOLE_HINT:
+                continue
             got = best_match(area, self.bank.templates(sp))
             if got:
                 scores.append((got[0], sp, got))
@@ -785,7 +926,7 @@ class FieldWatch:
                 keep.append(d)
                 continue
             d.missing += 1
-            if d.missing == LOST_LOOKS_LOOT and d.lost_at is None:
+            if d.missing >= LOST_LOOKS_LOOT and now - d.last >= LOOT_GONE_S and d.lost_at is None:
                 d.lost_at = d.last
                 self.ledger.loot_lost(d.ledger_id, d.last)
             if d.lost_at is None or now - d.lost_at < FORGET_LOOT:

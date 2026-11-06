@@ -171,6 +171,21 @@ class Platform(ABC):
         else:
             window.withdraw()
 
+    def tuck_window(self, root):
+        """Minimizes the main window to the taskbar, without leaving the game's keys going nowhere."""
+        root.iconify()
+
+    def bring_window_back(self, root):
+        """Shows the main window again where it was, without taking the keyboard away from the game."""
+        root.deiconify()
+
+    def window_tucked(self, root):
+        return root.state() == "iconic"
+
+    def own_window_in_front(self):
+        """Is one of this program's own windows the one in front? False where that can't be told."""
+        return False
+
     def game_in_front(self):
         """Is MapleStory (or this overlay) the window in front? True where that can't be told."""
         return True

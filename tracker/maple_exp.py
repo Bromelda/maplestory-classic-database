@@ -50,7 +50,10 @@ from hud import LAYOUTS as HUD_LAYOUTS, THEMES as HUD_THEMES, HudCard
 from msgwatch import GH0 as GH0_MSG, Font as MessageFont, MessageWatcher, stack_area, true_gh
 from itemwatch import ItemReader
 from daybook import DayBook
-from dropscan import DropScan, SCAN_POLL
+from dropscan import DropScan, SCAN_POLL, next_look
+
+cv2.setNumThreads(1)    # By default OpenCV spreads each small job over every core: on 24 threads, the same looks took 5.8
+                        # cores instead of 0.8, on the game's own PC, and no faster
 from vitals import VitalsReader
 import quickbar
 from scrollbody import scrolling_body
@@ -143,7 +146,9 @@ DEFAULTS = {"gap_seconds": 120, "transparency": 0, "topmost": True,
             "hud_tall": 0, "hud_repot": True, "hud_opacity": 1.0,
             "save_captures": False,     # save pictures of the potion popup and the pickup lines, for testing
             "drop_scanner": True,       # watch the field: which monster each drop came from (dropscan.py)
-            "drop_clips": True}         # keep short videos around kills, for finding the scanner's mistakes (clips.py)
+            "drop_clips": True,         # keep short videos around kills, for finding the scanner's mistakes (clips.py)
+            "auto_start": True,         # starts by itself once it can read the EXP bar, so no hunt goes unwatched
+            "auto_tuck": True}          # the window goes to the taskbar once you're in the game: the card shows the numbers
 SHAPE_LABELS = {"square": "Square", "wide": "Wide", "bar": "Bar"}
 SHAPE_BLURBS = {"square": "The narrow card: the big number, the level bar and Start/Pause.",
                 "wide": "Longer sideways: the level bar on top and four numbers in a row.",
@@ -239,6 +244,7 @@ def load_config():
     if cfg["hud_theme"] not in HUD_THEMES:
         cfg["hud_theme"] = DEFAULTS["hud_theme"]
     keys = cfg.get("hotkeys") if isinstance(cfg.get("hotkeys"), dict) else {}
+    keys = {a: k for a, k in keys.items() if OLD_DEFAULT_HOTKEYS.get(a) != k}      # (keys you chose yourself stay)
     cfg["hotkeys"] = {a: keys[a] if a in keys and (keys[a] == "" or parse_hotkey(keys[a])) else k
                       for a, k in DEFAULT_HOTKEYS.items()}            # "" is a hotkey turned off
     ints = lambda v, n: isinstance(v, list) and len(v) == n and all(type(x) is int for x in v)
@@ -311,11 +317,15 @@ def version_key(version):
 
 # --------------------------------------------------------------------------- hotkeys
 #
-# Shift+1 to 4 by default (changeable in Settings). How they're caught is up to the OS
-# (PLATFORM.create_hotkeys); they're only on while MapleStory or the overlay is in front.
+# Shift+F1 to F6 by default (changeable in Settings). How they're caught is up to the OS
+# (PLATFORM.create_hotkeys); they're only on while MapleStory or the overlay is in front. While they're on, the game
+# doesn't get those keys, so they can't be anything you'd type in chat: Shift+1 was "!" and Shift+2 was "@".
 
-HOTKEY_ACTIONS = {"start": "Start / Pause", "reset": "Reset", "repot": "Repot bell", "edit": "Move tracker card"}
-DEFAULT_HOTKEYS = {"start": "Shift+1", "reset": "Shift+2", "repot": "Shift+3", "edit": "Shift+5"}
+HOTKEY_ACTIONS = {"window": "Hide / show window", "card": "Hide / show card", "start": "Start / Pause",
+                  "repot": "Repot bell", "edit": "Move card", "reset": "Reset"}
+DEFAULT_HOTKEYS = {"window": "Shift+F1", "card": "Shift+F2", "start": "Shift+F3", "repot": "Shift+F4", "edit": "Shift+F5",
+                   "reset": "Shift+F6"}
+OLD_DEFAULT_HOTKEYS = {"start": "Shift+1", "reset": "Shift+2", "repot": "Shift+3", "edit": "Shift+5"}
 
 
 # --------------------------------------------------------------------------- screenshots
@@ -3071,6 +3081,8 @@ class App:
         self.hotkeys = PLATFORM.create_hotkeys(lambda action: self.q.put(("hotkey", action)))
         self.hotkeys.set(self.cfg["hotkeys"], self.cfg["hotkeys_on"])
         self.compact = False
+        self.card_off = False                   # hidden with its hotkey, for this run only
+        self.tucked_once = False                # the window goes out of the way by itself once a run
 
         root.title(WINDOW_TITLE)
         try:
@@ -3112,7 +3124,8 @@ class App:
         # The game's message stack (msgwatch.py): kills (the EXP lines: the slime hops on each, and they
         # keep the EXP going while the game hides the number), and mesos and items picked up.
         try:
-            self.messages = MessageWatcher(MessageFont(ASSETS))
+            self.messages = MessageWatcher(MessageFont(ASSETS), lambda band, right, s: bool(
+                self.items and self.items.is_line(band, right, s)))
         except Exception as e:
             self.messages = None
             log_error("loading the message font", e)
@@ -3306,7 +3319,7 @@ class App:
     def set_compact(self, on):
         """Compact mode: just EXP/hr, when you'll level, the last 5 minutes and mesos/hr on one
         line, and Start/Pause, in a much smaller window. The Compact button (it says Full in
-        compact mode), Shift+4, or double-clicking the big number switches it."""
+        compact mode) or double-clicking the big number switches it."""
         self.compact = self.cfg["compact"] = on
         if on and self.log_open:
             self.toggle_log(remember=False)                 # out of the way, but remembered
@@ -3363,6 +3376,8 @@ class App:
     def _check_screen(self):
         """Resizes the text when the window is moved to a screen with different Windows scaling
         (judged by its title bar, which stays put when the window changes size)."""
+        if PLATFORM.window_tucked(self.root):
+            return                                          # (its place on screen means nothing while it's tucked away)
         r = self._window_rect()
         dpi = PLATFORM.screen_dpi(r[0] + 40, r[1] + 15) if r else None
         if dpi and dpi != self._dpi:
@@ -3594,6 +3609,8 @@ class App:
                                        self.job, party_label(self.party)) if x)
         if self.drop_scan and self.cfg.get("drop_scanner") and self.session.started:
             where = f"{where}\n{self.drop_scan.status()}"
+        if self.drop_scan and self.cfg.get("drop_scanner"):
+            where = "\n".join([where, self.drop_scan.meter_line(now)] + self.drop_scan.learned())
         if self.daybook:
             where = "\n".join([where] + self.daybook.lines())
         if self.skip_log:
@@ -3778,6 +3795,12 @@ class App:
         nudge(0)
         topmost = tk.BooleanVar(value=bool(self.cfg["topmost"]))
         self._switch(body, "Always on top of other windows", topmost).pack(anchor="w", pady=(px(14), 0))
+        auto_start = tk.BooleanVar(value=bool(self.cfg["auto_start"]))
+        self._switch(body, "Start by itself once it can read the EXP bar", auto_start).pack(anchor="w", pady=(px(6), 0))
+        auto_tuck = tk.BooleanVar(value=bool(self.cfg["auto_tuck"]))
+        self._switch(body, "Tuck this window away when you go to the game", auto_tuck).pack(anchor="w", pady=(px(6), 0))
+        tk.Label(body, text="Tucked away, it keeps tracking and waits on the taskbar. Its hotkey, the taskbar, or the "
+                            "desktop shortcut brings it back.", wraplength=wrap, justify="left", **dim).pack(anchor="w", pady=(px(4), 0))
 
         self._section(body, "Tracker card over the game")
         hud = tk.BooleanVar(value=bool(self.cfg["hud"]))
@@ -3856,6 +3879,7 @@ class App:
                 self.cfg["gap_seconds"] = self.autolog.gap = self.session.gap = seconds
             self.cfg["transparency"] = min(MAX_TRANSPARENCY, max(0, int(float(transparency.get()))))
             self.cfg["topmost"] = bool(topmost.get())
+            self.cfg["auto_start"], self.cfg["auto_tuck"] = bool(auto_start.get()), bool(auto_tuck.get())
             self.cfg["hud"] = bool(hud.get())
             if bool(repot.get()) != self.hud.repot:
                 self.hud.set_repot(repot.get())
@@ -3868,7 +3892,7 @@ class App:
                 self.root.after(60, self._reopen_settings)        # (drawn again at the new size)
             save_config(self.cfg)
 
-        for var in (gap, transparency, topmost, hud, repot, size):
+        for var in (gap, transparency, topmost, auto_start, auto_tuck, hud, repot, size):
             var.trace_add("write", apply)
         self._hotkey_settings(body)
         buttons = tk.Frame(foot, bg=BG)
@@ -3981,7 +4005,7 @@ class App:
             return "break"
 
         for i, (action, name) in enumerate(HOTKEY_ACTIONS.items()):
-            tk.Label(grid, text=name, bg=BG, fg=FG, font=th.font("regular", 12), width=14, anchor="w").grid(
+            tk.Label(grid, text=name, bg=BG, fg=FG, font=th.font("regular", 12), width=18, anchor="w").grid(
                 row=i, column=0, sticky="w", pady=px(3))
             buttons[action] = Button(grid, th, text="", kind="secondary", width=124, height=34, radius=10, size=12,
                                      command=lambda a=action: choose(a), bg=BG)
@@ -4048,6 +4072,7 @@ class App:
         EXP lines) and pickups (the white lines; an item's name is read by Tesseract). Every few looks,
         the controller's potion popup too."""
         turn = 0
+        due = time.monotonic()
         with mss.mss() as sct:
             while not self.stop_evt.is_set():
                 t0 = time.monotonic()
@@ -4084,31 +4109,39 @@ class App:
                         self.messages.reset()
                 except Exception as e:
                     log_error("watching the messages", e)
-                self.stop_evt.wait(max(0.02, MESSAGE_POLL - (time.monotonic() - t0)))
+                now = time.monotonic()
+                due = next_look(due, now, MESSAGE_POLL)
+                self.stop_evt.wait(max(0.001, due - now))
 
     def _scan_worker(self):
-        """Looks at the whole game window a few times a second for the drop scanner (fieldwatch.py):
-        monsters vanishing, and what lands on the ground. Only while tracking, and only in the game's window."""
+        """Looks at the whole game window 10 times a second for the drop scanner (fieldwatch.py):
+        monsters vanishing, and what lands on the ground. Only while tracking, and only in the game's window, while it's
+        in front: with another program over it, there's nothing to see, and no clip should show that program."""
+        due = time.monotonic()
         with mss.mss() as sct:
             while not self.stop_evt.is_set():
                 t0 = time.monotonic()
                 try:
                     rect = self.reader.last_rect
-                    if (self.drop_scan and self.cfg.get("drop_scanner") and self.session.started and rect
-                            and self.reader.hwnd and self.reader.mode == "window"):
-                        self.drop_scan.map_seen(self.map_name, t0)
-                        shot = self.reader._hide_own(grab(sct, *rect))
-                        if shot:
-                            self.drop_scan.look(shot[0], t0)
+                    if self.drop_scan and self.cfg.get("drop_scanner") and self.session.started and rect and self.reader.hwnd and self.reader.mode == "window":
+                        if PLATFORM.game_in_front():
+                            self.drop_scan.map_seen(self.map_name, t0)
+                            shot = self.reader._hide_own(grab(sct, *rect))
+                            if shot:
+                                self.drop_scan.look(shot[0], t0)
+                        else:
+                            self.drop_scan.away(t0)
                 except Exception as e:
                     log_error("watching the field", e)
-                self.stop_evt.wait(max(0.02, SCAN_POLL - (time.monotonic() - t0)))
+                now = time.monotonic()
+                due = next_look(due, now)
+                self.stop_evt.wait(max(0.001, due - now))
 
     def _said(self, lines, gh):
         """New message lines (msgwatch.Line) as what they say: ("exp", amount) for an EXP or party bonus
         line, ("mesos", amount), ("item", name, how many, tab). A white line with no amount is an item,
         mostly: read by the item reader (itemwatch.py), with Tesseract for a name it doesn't know by
-        sight yet. Lines that can't be read are left out."""
+        sight yet. A white line that can't be read shows as ("unread",), so that the misses can be counted."""
         out = []
         for line in lines:
             if line.kind in ("exp", "bonus"):
@@ -4117,8 +4150,7 @@ class App:
                 out.append(("mesos", line.amount))
             elif line.kind == "text" and line.colour == "white" and self.items and line.band is not None:
                 got = self.items.read(line.band, line.span, gh / GH0_MSG, TESS.read_lines if tesseract_ok else None)
-                if got:
-                    out.append(got)
+                out.append(got or ("unread",))
         return out
 
     def _save_capture(self, kind, img, what):
@@ -4281,7 +4313,7 @@ class App:
         th = self.theme
         w = self._small_window("Choose a compact look", then)
         tk.Label(w, text="Pick a compact look", bg=BG, fg=ACCENT, font=th.font("extra", 20)).pack(anchor="w")
-        tk.Label(w, text="Compact mode is the small version of the overlay (the compact icon, or Shift+4). "
+        tk.Label(w, text="Compact mode is the small version of the overlay (the compact icon). "
                          "Choose how it looks. You can change it any time in Settings.", bg=BG, fg=DIM,
                  font=th.font("regular", 12), wraplength=th.px(500), justify="left").pack(anchor="w", pady=(2, th.px(14)))
         widths = {"square": 150, "wide": 250, "bar": 300}
@@ -4364,7 +4396,10 @@ class App:
             self.reader.saved_mesos = tuple(r.mesos_at)
             save_config(self.cfg)
         if r.mesos is not None:
+            earned = self.meso.earned
             self.meso.observe(r.mesos, now, t.elapsed(), self.session.started)   # (through pauses: shop trips)
+            if self.drop_scan and self.meso.earned > earned and not self.in_town:   # (selling to a shop has no line)
+                self.drop_scan.mesos_box(self.meso.earned - earned, now)
             if self.daybook and self.meso.value is not None:
                 self.daybook.mesos(self.meso.value)
         if r.party is not None:                         # believe a new party size once seen twice
@@ -4421,6 +4456,8 @@ class App:
                 self.reader.box, self.rejected = None, 0
             if t.running and t.gained != before and not self.skip_log:
                 self.autolog.gain(now, t.gained - before)
+            if self.drop_scan and t.gained > before:
+                self.drop_scan.exp_bar(t.gained - before, now)
             if note == "died":
                 self.died_at = now
             if note == "LEVEL UP!":
@@ -4505,12 +4542,28 @@ class App:
         try:
             self._check_screen()
             self._fit_settings()
+            self._settle_in()
             self._update_display()
         except Exception as e:
             self._oops("updating the window", e)
         finally:
             if not self.stop_evt.is_set():
                 self.root.after(500, self._refresh)
+
+    def _settle_in(self):
+        """Once the game's readable: tracking starts by itself (not after you've pressed Pause), and when you go to the
+        game, the window goes out of the way, once a run. If you bring it back, it stays."""
+        if self.reader.mode != "window" or not self.reader.hwnd or self.tracker.req is None:
+            return
+        if self.cfg["auto_start"] and not self.session.started:
+            self.recent.add("Started by itself")
+            self._begin()
+        settings = self.settings_win and self.settings_win.winfo_exists()
+        if (self.cfg["auto_tuck"] and not self.tucked_once and not settings and not self.hud.editing
+                and PLATFORM.game_in_front() and not PLATFORM.own_window_in_front()):
+            self.tucked_once = True
+            self.recent.add("Tucked the window away by itself")
+            self.toggle_window()
 
     def _state(self):
         """A word for the status pill: where things stand."""
@@ -4602,7 +4655,7 @@ class App:
             self._hud_pending = None
             self._hud_seen, self._hud_seen_exp = (t.gained, self.level_up_at), (t.exp, t.req)
         rect = self.reader.last_rect if self.reader.hwnd else None
-        if not (rect and (self.hud.editing or (self.cfg["hud"] and PLATFORM.game_in_front()))):
+        if not (rect and (self.hud.editing or (self.cfg["hud"] and not self.card_off and PLATFORM.game_in_front()))):
             self.hud.hide()
             self.reader.hud_rects = ()
             return
@@ -4668,7 +4721,7 @@ class App:
 
     # ---- the repot bell
     #
-    # Ring it (Shift+3, or the bell button) when a shop trip is done: potions bought, loot sold. It
+    # Ring it (its hotkey, or the bell button) when a shop trip is done: potions bought, loot sold. It
     # remembers the mesos you have then; the card shows how many mesos you've made since (live), and
     # what the last trip made: the mesos from one ring to the next, buying and selling included. It's
     # worked out from the mesos you have, not from the gains and losses seen on the way, so big shop
@@ -4742,7 +4795,7 @@ class App:
         return ("~" if stale else "") + (f"-{fmt_num(cost)}" if cost > 0 else f"+{fmt_num(-cost)}" if cost < 0 else "0")
 
     def toggle_hud_editing(self):
-        """Edit mode for the tracker card: drag it, resize it, pick its layout and theme (Shift+5 by default)."""
+        """Edit mode for the tracker card: drag it, resize it, pick its layout and theme (Shift+F5 by default)."""
         if not self.reader.last_rect or not self.reader.hwnd:
             self.status.set("Start MapleStory first: the tracker card is placed over the game.")
             return
@@ -4754,7 +4807,23 @@ class App:
         self._update_display()
 
     # ---- buttons
+    def toggle_window(self):
+        """Tucks the main window away on the taskbar, or brings it back, and the game keeps the keyboard either way."""
+        tucked = PLATFORM.window_tucked(self.root)
+        (PLATFORM.bring_window_back if tucked else PLATFORM.tuck_window)(self.root)
+        if tucked:
+            self._style_frame()
+
     def _hotkey(self, action):
+        if action == "window":
+            self.toggle_window()
+            return
+        if action == "card":
+            self.card_off = not self.card_off
+            self.recent.add("Card hidden" if self.card_off else "Card shown")
+            self.hotkey_note = (f"{self.cfg['hotkeys'][action]}: card {'hidden' if self.card_off else 'shown'}.", time.monotonic())
+            self.status.set(self.hotkey_note[0])
+            return
         if action == "start":
             self.toggle()
             done = "started" if self.session.on else "paused"
@@ -4779,9 +4848,16 @@ class App:
             self._set_start("Resume")
         else:
             self.recent.add("You pressed Start")
-            self.session.start(time.monotonic())
-            self.reader.request_map()           # read the map name now
-            self._set_start("Pause")
+            self._begin()
+            return
+        self.autolog.reset_clock()
+        if self.tracker.exp is not None:
+            self.status.set(self._status_for(""))   # right away, not at the next read
+
+    def _begin(self):
+        self.session.start(time.monotonic())
+        self.reader.request_map()               # read the map name now
+        self._set_start("Pause")
         self.autolog.reset_clock()
         if self.tracker.exp is not None:
             self.status.set(self._status_for(""))   # right away, not at the next read
@@ -5139,7 +5215,8 @@ class App:
             self._remember_log_size()
         except Exception as e:
             log_error("saving the log size", e)
-        self.cfg["pos"] = [self.root.winfo_x(), self.root.winfo_y()]
+        if not PLATFORM.window_tucked(self.root):       # (tucked away, its place is off the screen)
+            self.cfg["pos"] = [self.root.winfo_x(), self.root.winfo_y()]
         save_config(self.cfg)
         self.root.destroy()
 

@@ -40,6 +40,12 @@ MATCH_OK, MATCH_MARGIN = 0.75, 0.05  # Tesseract's reading against the item list
 KEEP = 3                    # pictures kept of each name (from different lines)
 
 
+def _white(band):
+    """Only what's white: the lowest of blue, green and red. Orange rock behind the line, and yellow letters, go dark."""
+    least = band.min(axis=2)
+    return cv2.merge([least, least, least])
+
+
 def norm(name):
     """A name for comparing: lower case, letters, digits and apostrophes, single spaces."""
     return " ".join(re.sub(r"[^a-z0-9' ]", " ", name.lower()).split())
@@ -141,6 +147,10 @@ class ItemReader:
         _, score, _, at = cv2.minMaxLoc(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED))
         return float(score), x0 + at[0]
 
+    def is_line(self, band, right, s):
+        """Does this row, ending at right, look like an item line?"""
+        return self.tail(mw.feature(_white(band), s), right, s) is not None
+
     def tail(self, F, right, s):
         """The end of an item line (F: its feature picture, right: where it ends): (tab, count, where
         the name ends, whether it's cut short), or None if it isn't an item line or isn't clear."""
@@ -237,7 +247,7 @@ class ItemReader:
         (msgwatch's band: its middle half way down); span: where the line starts and ends in it (x).
         read_lines: Tesseract, for a name not known by sight yet (left out without it), and for a
         line whose end isn't clear (a tab with no shape here yet, like "(Setup)")."""
-        F = mw.feature(band, s)
+        F = mw.feature(_white(band), s)
         end = self.tail(F, span[1], s)
         if end is None:
             got = tesseract_line(band, span, GH0 * s, read_lines) if read_lines is not None else None

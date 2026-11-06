@@ -36,9 +36,36 @@ drop results are kept. While it's open, the account is saved in `daybook.json` i
 A drop the database doesn't list has no picture to look for, so it isn't seen landing. On a map with one kind of monster it
 still goes on the drop list from the pickup line, but not in the rate.
 
+## Counting from the lines
+
+The message lines come first now, and the pictures above are the backup (`linecount.py`). Hunting alone, each kind of
+monster gives its own amount of EXP, so the line alone names it: on a map with Wild Boars (46) and Dark Axe Stumps (43),
+46 means a Wild Boar. Two ways of being sure which kind a drop came from:
+
+- **Stretches.** A span of time when only one kind was killed. Everything picked up in it came from that kind, mesos too.
+  It ends at another kind's kill, an EXP amount that fits nothing here, a party line, a new map, the game going out of front,
+  or the pictures seeing another kind die with no EXP line. Its first 20 seconds aren't counted, as what's picked up then may
+  be left over from before. Nothing after its last kill is counted either.
+- **Listed items.** Real hunting mixes kinds. But if only one kind on this map is known to drop an item, it can only have
+  come from that kind, however mixed the kills: Fire Boar's Tooth against Fire Boar kills. Mesos and anything several
+  kinds drop can't count this way.
+
+Whether any of it counts is decided from the kills and how well they were read, never from what dropped. These numbers are
+kept apart from the ones from the pictures, show on the Log page and in `report.html`, and **don't go on the website**:
+that waits until they've been checked on a monster with counted rates.
+
+Party kills aren't counted, for now. A party's EXP lines don't name the monster.
+
+### The Reading line
+
+The Log page's "Reading" line says how much of the last 5 minutes it caught. The game's own numbers are the check: the EXP
+lines against what the EXP bar gained, the mesos lines against what your mesos count gained (with the inventory open), and
+item lines read against those that couldn't be. A span of play where the EXP lines add up to under 90% of the bar is left
+out, in pieces of 5 minutes, so a bad minute only costs its own piece.
+
 ## What counts
 
-There are two records, kept apart.
+For the pictures, there are two records, kept apart.
 
 | | Drop list ("this monster drops this") | Drop rate ("how often") |
 | --- | --- | --- |
@@ -66,7 +93,23 @@ py -3 -m pip install -r requirements.txt
 py -3 maple_exp.py
 ```
 
-Press Start and play. Settings has a Drop scanner section with a switch and a button that opens the drops folder.
+It starts by itself once it can read your EXP bar, and when you go to the game, the window tucks itself away on the
+taskbar. The numbers stay on the card over the game. Both are switches in Settings, which also has a Drop scanner section
+with a switch and a button that opens the drops folder.
+
+| Keys | What they do |
+| --- | --- |
+| Shift+F1 | Tuck the window away, or bring it back |
+| Shift+F2 | Hide or show the card, until the tracker next opens |
+| Shift+F3 | Pause or carry on |
+| Shift+F4 | Repot bell |
+| Shift+F5 | Move the card |
+| Shift+F6 | Reset |
+
+They work while the game or the tracker is in front, and bringing the window back leaves the keyboard with the game. You
+can change them in Settings. With another program in front, click the taskbar button or double-click the desktop shortcut.
+
+The tracker runs at below-normal priority, so the game comes first.
 
 ## What it leaves behind
 
@@ -78,8 +121,12 @@ Everything stays in `%APPDATA%\MapleEXP\drops`:
 - `log.jsonl` and `session-*.json`: the raw results
 - `clips/`: short videos around kills and pickups, for finding out why it got something wrong. They show the whole game
   window, chat included. They use up to 5 GB, the oldest are deleted first, and Settings has a switch to turn them off.
+  Nothing is recorded while you're in a party, since party kills don't count towards rates.
 
 Check new drops against their pictures before copying them to the database.
+
+The Log page shows what all your sessions add up to: kills counted, why others were skipped, and how far each monster
+is from the 200 kills it needs.
 
 ## Getting rates onto the website
 
@@ -149,6 +196,21 @@ py -3 tools/replay.py other.mp4 --map "The Land of Wild Boar II" --gh 10 --out s
 
 The first time it sees a given window size, it takes a few seconds to learn how big sprites show, and it can miss the
 drops of kills made around then. It remembers the size afterwards.
+
+On 18 real clips of Land of Wild Boar with the inventory open: the scanner lost its place 14 times in six clips, because
+windows left open don't move with the world. It now follows the view through them, and a picture stitched from where it
+says the view went comes out sharp. In four clips, the message readers went from 2 item lines read to 16, of at least 35
+showing. That's on clips at about 3 looks a second, and the live tracker takes about 10, so it hasn't been measured live.
+
+It looks at the field and the messages 10 times a second, and shows how often it really managed on the Log page. Following
+what's known happens every look, and finding what's new about 3 times a second. Run together in real time on the real
+clips (no game running, so not the real load): 9.5 looks a second each, at under one core (4% of a 24-thread PC). OpenCV
+was spreading each job over every core: the same work took 5.8 cores before it was limited to one.
+
+The first real check of the Reading line, with the real bar and mesos readers on six party clips at about 3 looks a second:
+the lines caught under half of what the bar gained. Reading rows over pale rock, and allowing for a line having dimmed between
+looks, took that to about 60%, with no sign of counting lines twice. A solo session, at 10 looks a second, is still to be
+measured. Real lines saved on 5 Nov name every kill kind they could on a map of five kinds.
 
 Tried on real clips of a busy party map: it read HP and MP in all 832 frames, it found coins and items by their pictures
 with few false fits, and it no longer loses its place. But party members' pets took most drops as they landed, so it saw few

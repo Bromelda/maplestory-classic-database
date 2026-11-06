@@ -13,36 +13,108 @@ import json
 import re
 import threading
 import time
+from collections import Counter, deque
 from pathlib import Path
 
 import cv2
 
 from clips import ClipKeeper
 from fieldwatch import FieldWatch
-from lootwatch import DropLedger
+from linecount import SKIPPED as LINE_SKIPPED, LineCounter
+from lootwatch import WHY, DropLedger
 from scandata import SCANNER_VERSION, GameData
 
 SAVE_EVERY = 30.0           # seconds
-SCAN_POLL = 0.125           # how often to look at the field
+SCAN_POLL = 0.1             # how often to look at the field
+CLIP_EVERY = 0.2            # how often a look goes in a clip. Each is over a megabyte, and clips don't need them all
+NEED_KILLS = 200            # kills of a monster before its rates can go on the site (as in tools/publish_drops.py)
+LEARNED_SECONDS = 30.0      # how often the "learned so far" lines are added up again
+
+
+def next_look(due, now, every=SCAN_POLL):
+    """When the next look is due: on a steady beat, so a slow look's made up for by the quick ones after it, unless it's
+    fallen far behind (the PC's busy): then it starts again from now, rather than rushing to catch up."""
+    due += every
+    return due if due >= now - 3 * every else now
+
+
+def line_lines(sessions, need=NEED_KILLS, kept=3):
+    """What the message lines have added up to, every session so far: lines for the Log page."""
+    solo, kills, listed, skipped = Counter(), Counter(), {}, Counter()
+    for s in sessions:
+        line = s.get("line") or {}
+        solo.update(line.get("solo_kills") or {})
+        kills.update(line.get("kills") or {})
+        skipped.update(line.get("skipped") or {})
+        for mob, items in (line.get("listed") or {}).items():
+            for item, (got, n) in items.items():
+                have = listed.setdefault(mob, {}).setdefault(item, [0, 0])
+                have[0] += got
+                have[1] += n
+    if not solo and not skipped:
+        return []
+    out = [f"From the lines, alone: {sum(solo.values()):,} kills named"]
+    if solo:
+        out[0] += " (" + " · ".join(f"{mob} {n:,} of {need}" for mob, n in solo.most_common(kept)) + ")"
+    found = [(mob, item, *m) for mob, items in listed.items() for item, m in items.items() if m[0]]
+    found.sort(key=lambda f: -f[3])
+    if found:
+        out.append("Items only one kind here drops: " + " · ".join(f"{item} {got:,} in {n:,} {mob}" for mob, item, got, n in found[:kept]))
+    if kills:
+        out.append(f"In stretches of one kind: {sum(kills.values()):,} kills, with mesos and everything else counted too")
+    return out
+
+
+def learned_lines(sessions, reasons, need=NEED_KILLS, kept=3):
+    """What every session so far adds up to, as lines for the Log page. sessions: their saved results. reasons: what
+    each reason for skipping a kill means."""
+    kills, skipped = Counter(), Counter()
+    for s in sessions:
+        kills.update(s.get("kills") or {})
+        skipped.update(s.get("skipped") or {})
+    from_lines = line_lines(sessions, need, kept)
+    if not kills and not skipped:
+        return from_lines or ["Learned so far: nothing yet"]
+    out = from_lines + [f"Seen in the pictures: {sum(kills.values()):,} kills counted"]
+    if skipped:
+        top = ", ".join(f"{reasons.get(k, k)} ({n:,})" for k, n in skipped.most_common(kept))
+        out[0] += f". Most often skipped: {top}"
+    if kills:
+        out.append(" · ".join(f"{name} {n:,} of {need}" for name, n in kills.most_common(kept)))
+    if skipped and skipped.most_common(1)[0][0] == "party":
+        out.append("Party kills don't count towards rates yet. Hunting alone is what teaches it the most.")
+    return out
 
 
 def _safe(text):
     return re.sub(r"[^A-Za-z0-9_-]+", "_", str(text))[:60]
 
 
-def feed(ledger, lines, found, now):
-    """Tells the rules what the message stack said. The live tracker and a replay of a clip both use this."""
+def feed(ledger, lines, found, now, counter=None):
+    """Tells the rules what the message stack said, and the line counter (linecount.py), if there is one. The live
+    tracker and a replay of a clip both use this."""
     for line in lines:                  # (first, so a kill's own line knows it's a party)
         if line.kind == "bonus":
             ledger.party_exp(line.born)
+            if counter:
+                counter.party(line.born)
+                counter.bonus_amount(line.amount, line.born)
     for line in lines:
         if line.kind == "exp" and line.amount is not None:
             ledger.exp(line.amount, line.born)
+            if counter:
+                counter.kill(line.amount, line.born)
     for p in found:
         if p[0] == "mesos":
             ledger.pickup("mesos", p[1], "", now)
+            if counter:
+                counter.pickup("mesos", p[1], now)
         elif p[0] == "item":
             ledger.pickup(p[1], p[2], p[3], now)
+            if counter:
+                counter.pickup(p[1], p[2], now)
+        elif p[0] == "unread" and counter:
+            counter.unread(now)
 
 
 class DropScan:
@@ -50,7 +122,8 @@ class DropScan:
         self.assets, self.folder = Path(assets), Path(folder)
         self.data = GameData(self.assets / "scan_data.json")
         self.lock = threading.Lock()
-        self.ledger = DropLedger(self.data, on_credit=self._credited)
+        self.lines = LineCounter(self.data)
+        self.ledger = DropLedger(self.data, on_credit=self._credited, on_other=self.lines.other_kill)
         self.field = FieldWatch(self.ledger, self.assets / "mob", self.data)
         self.map = None
         self.started = time.strftime("%Y%m%d-%H%M%S")
@@ -62,6 +135,9 @@ class DropScan:
         self.happened = 0               # monsters seen to vanish and drops seen landing, at the last look
         self.gh_measured = None         # (for the clips: what the tracker measured the game's UI size as)
         self.lines_heard = 0
+        self.learned_text, self.learned_at = None, 0.0
+        self.clip_at = 0.0
+        self.looks = deque(maxlen=50)   # when the latest looks were
 
     # ---------- what comes in ----------
 
@@ -74,6 +150,7 @@ class DropScan:
             self.clips.cut()
             self.map = found
             self.ledger.set_map(found, now)
+            self.lines.set_map(found, now)
             self.field.set_species(self.data.species_on(found) if found else [])
 
     def heard(self, lines, found, now):
@@ -81,18 +158,66 @@ class DropScan:
         or ("item", name, qty, tab)."""
         with self.lock:
             self.lines_heard += len(lines)
-            feed(self.ledger, lines, found, now)
+            feed(self.ledger, lines, found, now, self.lines)
             said = [{"kind": x.kind, "amount": x.amount, "born": x.born} for x in lines if x.kind in ("exp", "bonus")]
             if said or found:
                 self.clips.event({"lines": said, "found": [list(p) for p in found]}, now)
-                self.clips.mark(now)
+                if not self.ledger.in_party(now):
+                    self.clips.mark(now)
+
+    def exp_bar(self, gained, now):
+        """The EXP bar's gone up: what the lines ought to add up to."""
+        with self.lock:
+            self.lines.exp_bar(gained, now)
+
+    def mesos_box(self, gained, now):
+        """The mesos count's gone up: what the lines ought to add up to."""
+        with self.lock:
+            self.lines.mesos_box(gained, now)
+
+    def away(self, now):
+        """The game's not in front: nothing's being read."""
+        with self.lock:
+            self.lines.away(now)
+
+    def meter_line(self, now):
+        """How much of the lines are being read, and how often the field's being looked at, for the Log page."""
+        with self.lock:
+            text = self.lines.meter.line(now)
+            looks = list(self.looks)
+        if len(looks) >= 2 and now - looks[-1] < 2.0:
+            text += f" · looking at the field {(len(looks) - 1) / (looks[-1] - looks[0]):.1f} times a second"
+        return text
+
+    def learned(self):
+        """Every session so far, as lines of text."""
+        now = time.monotonic()
+        if self.learned_text is None or now - self.learned_at >= LEARNED_SECONDS:
+            self.learned_at = now
+            with self.lock:
+                current = self.results()
+            sessions = [current]
+            for path in self.folder.glob("session-*.json"):
+                if path.stem == f"session-{self.started}":
+                    continue
+                try:
+                    s = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                if isinstance(s, dict) and s.get("version") == SCANNER_VERSION:
+                    sessions.append(s)
+            self.learned_text = learned_lines(sessions, WHY)
+        return self.learned_text
 
     def look(self, frame, now):
         """A picture of the game window."""
         with self.lock:
+            self.looks.append(now)
             self._sprite_size(frame.shape[0], now)
             if self.field.species:
-                self.clips.frame(frame, now)
+                if not self.ledger.in_party(now) and now - self.clip_at >= CLIP_EVERY - 0.01:
+                    self.clip_at = now
+                    self.clips.frame(frame, now)        # (party play can't teach the rates: no clips of it, so they last)
                 self.field.look(frame, now)
                 self._remember_size(frame.shape[0])
                 happened = self.ledger.vanished_seen + self.ledger.drops_seen
@@ -179,12 +304,13 @@ class DropScan:
                 "new_drops": {name(s): items for s, items in led.new_drops().items()},
                 "kills": {name(s): n for s, n in led.kills_counted.items()},
                 "rate_drops": {name(s): dict(c) for s, c in led.rate_drops.items()},
-                "rate_mesos": {name(s): list(m) for s, m in led.rate_mesos.items()}}
+                "rate_mesos": {name(s): list(m) for s, m in led.rate_mesos.items()},
+                "line": self.lines.results(time.monotonic())}
 
     def save(self):
         with self.lock:
             out = self.results()
-        if not (out["counted"] or out["drop_list"] or out["skipped"]):
+        if not (out["counted"] or out["drop_list"] or out["skipped"] or out["line"]["skipped"] or out["line"]["solo_kills"]):
             return
         try:
             self.folder.mkdir(parents=True, exist_ok=True)
