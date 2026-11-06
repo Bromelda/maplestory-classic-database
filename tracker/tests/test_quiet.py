@@ -107,7 +107,14 @@ check("every action has a name and a key", set(maple_exp.HOTKEY_ACTIONS) == set(
 for key in maple_exp.DEFAULT_HOTKEYS.values():
     check(f"{key} can't be typed in chat", maple_exp.parse_hotkey(key) and "+F" in key)
 
-from platforms import hotkey_text, to_register, typing_key  # noqa: E402
+from platforms import hotkey_text, presses, to_register, typing_key  # noqa: E402
+if sys.platform == "win32":
+    from unittest import mock
+    from platforms.windows import WindowsPlatform
+    seen = []
+    with mock.patch("os.startfile", seen.append, create=True), mock.patch("os.path.realpath", lambda p: "REAL:" + str(p)):
+        WindowsPlatform.open_folder(None, "C:/folder")
+    check("the folder's opened at its real path, not the Store Python's view of it", seen == ["REAL:C:/folder"], seen)
 SHIFT = 0x4
 for key, vk in (("0", 0x30), ("9", 0x39), ("7", 0x37), ("Z", 0x5A), ("F8", 0x77), ("Num0", 0x60), ("-", 0xBD), ("\\", 0xDC), ("Home", 0x24)):
     check(f"{key} can be a hotkey with no Shift", maple_exp.parse_hotkey(key) == (0, vk), maple_exp.parse_hotkey(key))
@@ -122,6 +129,62 @@ got = to_register({"start": (0, 0x30), "reset": (SHIFT, 0x30)})
 check("a plain key doesn't take another hotkey's Shift version", [g for g in got if g[0] == "start"] == [("start", 0, 0x30, True)], got)
 got = to_register({"start": (0, 0x30), "repot": (0, 0x77), "reset": (SHIFT, 0x71)}, held=True)
 check("a shop's box gets its numbers, and other keys stay", {g[0] for g in got} == {"repot", "reset"}, got)
+# Noticing a press. (The top bit: down now. The low bit: pressed since last asked.)
+DOWN, TAPPED, UP = -32768, 1, 0
+keys = to_register({"window": (0, 0x7A), "start": (SHIFT, 0x72), "reset": (0, 0xBB)})
+down = set()
+check("nothing pressed", presses(keys, {0x7A: UP, 0x72: UP, 0xBB: UP}, 0, down) == [])
+check("a press fires", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0, down) == ["window"])
+check("held down, only the once", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0, down) == [])
+check("let go", presses(keys, {0x7A: UP, 0x72: UP, 0xBB: UP}, 0, down) == [])
+check("pressed again, it fires again", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0, down) == ["window"])
+presses(keys, {0x7A: UP, 0x72: UP, 0xBB: UP}, 0, down)
+check("a tap between checks isn't lost", presses(keys, {0x7A: TAPPED, 0x72: UP, 0xBB: UP}, 0, down) == ["window"])
+check("a plain key with Shift held, attacking", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, SHIFT, set()) == ["window"])
+check("not with Ctrl", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0x2, set()) == [])
+check("Shift+F3 needs Shift", presses(keys, {0x7A: UP, 0x72: DOWN, 0xBB: UP}, 0, set()) == [])
+check("and has it", presses(keys, {0x7A: UP, 0x72: DOWN, 0xBB: UP}, SHIFT, set()) == ["start"])
+if sys.platform == "win32":
+    import time as _time
+    import platforms.windows as pw
+    pressed, script = [], {"keys": {}}
+    with mock.patch.object(pw, "_GetAsyncKeyState", lambda vk: script["keys"].get(vk, 0)), mock.patch.object(pw.WindowsHotkeys, "in_front", lambda self: script.get("front", True)):
+        hk = pw.WindowsHotkeys(pressed.append)
+        changes = []
+        hk.on_change = lambda on, n: changes.append((on, n))
+        hk.set({"window": "F11", "reset": "="})
+        _time.sleep(0.1)
+        script["keys"] = {0x7A: DOWN}
+        _time.sleep(0.1)
+        script["keys"] = {}
+        _time.sleep(0.1)
+        check("for real: a press comes through once", pressed == ["window"], pressed)
+        check("it says the keys are on", (True, 2) in changes, changes)
+        hk.pause(True)
+        _time.sleep(0.05)
+        script["keys"] = {0x7A: DOWN}
+        _time.sleep(0.1)
+        check("paused, nothing", pressed == ["window"], pressed)
+        script["keys"] = {}
+        hk.pause(False)
+        hk.hold(True)
+        _time.sleep(0.05)
+        script["keys"] = {0xBB: DOWN}
+        _time.sleep(0.1)
+        check("a shop's box waiting: not a plain typing key", pressed == ["window"], pressed)
+        script["keys"] = {}
+        hk.hold(False)
+        _time.sleep(0.05)
+        script["front"] = False
+        _time.sleep(0.35)
+        script["keys"] = {0x7A: DOWN}
+        _time.sleep(0.1)
+        check("another program in front: nothing", pressed == ["window"], pressed)
+        script["keys"], script["front"] = {}, True
+        _time.sleep(0.35)
+        hk.set({})
+        _time.sleep(0.05)
+
 check("what counts as typing", typing_key(0x30) and typing_key(0x60) and typing_key(0xBD) and not typing_key(0x77) and not typing_key(0x24))
 
 with tempfile.TemporaryDirectory() as folder:

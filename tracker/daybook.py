@@ -36,10 +36,13 @@ LOOKS_DROP, LOOKS_RISE, LOOKS_ODD = 2, 3, 8     # how many looks in a row have t
 PICKED_RISE = 3                 # a rise this small with no pickup line is a pickup whose line wasn't read, not a purchase
 LOOKS_LOST = 1200               # a number with digits lost (216 and 21) is nearly always a misread: about 5 minutes of looks
 SHOP_WAIT = 20                  # seconds a count waits to show what a shop said was bought or sold
+HOLD_SHARE, HOLD_LEAST = 0.25, 2000     # mesos changing by this share of what's expected, and this much, nothing explains: it might be a misread
+HOLD_SECONDS = 20               # ...so it has to go on saying about the same for this long
+HOLD_CLOSE = 0.05               # how close later readings have to be, to be saying the same
 
 
 def _blank():
-    return {"start": None, "now": None, "picked_mesos": 0, "spent": 0, "sold": 0, "pending_mesos": 0, "cost_seen": 0, "items": {}, "jumps": {}, "shop": {}}
+    return {"start": None, "now": None, "picked_mesos": 0, "spent": 0, "sold": 0, "pending_mesos": 0, "cost_seen": 0, "items": {}, "jumps": {}, "shop": {}, "quests": {"count": 0, "exp": 0, "mesos": 0, "items": {}}}
 
 
 def _item(day, name):
@@ -76,6 +79,7 @@ class DayBook:
         self.count_at = {}              # item name: when its count was last in view
         self.moved_at = {}              # item name: when its count or its pickups last changed
         self.shop_at = {}               # item name: when a shop last said some were bought or sold
+        self.held = None                # a big change in the mesos not believed yet: (the reading, when it was first seen)
 
     def _day(self):
         return self.days.setdefault(self.run, _blank())
@@ -98,6 +102,9 @@ class DayBook:
             d = self._day()
             cost = sum(i.get("cost", 0) for i in d["items"].values())
             new_cost, d["cost_seen"] = cost - d["cost_seen"], cost
+            if d["start"] is not None and self._on_hold(d, value, now):
+                d["cost_seen"] = cost - new_cost        # (still to be put down to something, when this settles)
+                return
             if d["start"] is None:
                 d["start"], d["now"], d["pending_mesos"] = value, value, 0
             elif d["now"] != value:
@@ -118,6 +125,21 @@ class DayBook:
                 d["spent"] += new_cost - matched
                 d["sold"] += new_cost - matched
             self._save()
+
+    def _on_hold(self, d, value, now):
+        """Is this reading too big a change to believe yet? One real reading of 5,622 for 74,865 once made it 98,790 spent. A real
+        change goes on reading about the same, for a while or the next time the inventory's opened. A misread doesn't."""
+        expected = d["now"] + d["pending_mesos"]
+        if abs(value - expected) < max(HOLD_LEAST, HOLD_SHARE * expected):
+            self.held = None
+            return False
+        if self.held is None or abs(value - self.held[0]) > HOLD_CLOSE * max(self.held[0], 1):
+            self.held = (value, now)
+            return True
+        if now - self.held[1] < HOLD_SECONDS:
+            return True
+        self.held = None
+        return False
 
     def shop_trade(self, kind, name, qty, total, mesos, now=None):
         """What shopwatch.py saw: "bought" or "sold", the item, how many, for how much, and the mesos after."""
@@ -146,11 +168,35 @@ class DayBook:
             self._save()
         self.mesos(mesos, now)
 
-    def traded(self):
-        """What shops have seen this run: ({item: how many sold}, {item: how many bought})."""
+    def quest_reward(self, items, exp, mesos, now=None):
+        """What questwatch.py saw a quest give. Not picked up, bought or sold."""
+        now = time.monotonic() if now is None else now
         with self.lock:
-            shop = self._day().get("shop", {})
-            return tuple({n: v[0] for n, v in shop.get(k, {}).items()} for k in ("sold", "bought"))
+            d = self._day()
+            q = d.setdefault("quests", {"count": 0, "exp": 0, "mesos": 0, "items": {}})
+            q["count"] += 1
+            q["exp"] += exp
+            q["mesos"] += mesos
+            if d["start"] is not None:
+                d["pending_mesos"] += mesos         # (it's expected, then: the next reading won't call it sold)
+            for name, qty in items.items():
+                q["items"][name] = q["items"].get(name, 0) + qty
+                if name in self.heals or name in d["items"]:
+                    it = _item(d, name)
+                    if it["count"] is not None:
+                        it["shop"] += qty           # (the count will rise, and that's why)
+                        self.shop_at[name] = now
+            self._save()
+
+    def traded(self):
+        """What came or went by other than pickup lines: ({item: how many sold}, {item: how many bought or from quests})."""
+        with self.lock:
+            d = self._day()
+            shop = d.get("shop", {})
+            sold, bought = ({n: v[0] for n, v in shop.get(k, {}).items()} for k in ("sold", "bought"))
+            for name, qty in d.get("quests", {}).get("items", {}).items():
+                bought[name] = bought.get(name, 0) + qty
+            return sold, bought
 
     def picked_mesos(self, amount):
         with self.lock:
@@ -342,6 +388,12 @@ class DayBook:
                 got = d.get("shop", {}).get(kind)
                 if got:
                     out.append(f"{title}: " + " · ".join(f"{n} ×{q:,} for {t:,}" for n, (q, t) in sorted(got.items())))
+            q = d.get("quests") or {}
+            if q.get("count"):
+                parts = [f"{n} ×{c:,}" for n, c in sorted(q["items"].items())]
+                parts += [f"{q['exp']:,} EXP"] if q["exp"] else []
+                parts += [f"{q['mesos']:,} mesos"] if q["mesos"] else []
+                out.append(f"From quests ({q['count']}): " + " · ".join(parts))
             return out
 
     @staticmethod

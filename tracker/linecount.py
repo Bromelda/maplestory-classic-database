@@ -32,6 +32,7 @@ PARTY_S = 30.0              # a party bonus line means a party for this long
 CHUNK_S = 300.0             # a long stretch is checked in pieces this long, so a bad minute costs only its own piece
 MIN_READ = 0.9              # share of what the EXP bar gained that the lines must add up to
 METER_S = 300.0             # how far back the live meter looks
+LUMP_LEAST, LUMP_TIMES = 500, 6     # EXP going up by this much at once, and this many times the biggest line read: a quest's reward, not kills
 
 SKIPPED = {"lead": "the start of a stretch", "party": "in a party", "exp": "the EXP fit no monster here (or more than one)",
            "unread": "EXP lines were going unread", "nomap": "the map wasn't known yet", "others": "another kind was killed by someone else",
@@ -77,8 +78,11 @@ class Meter:
         self.since_seen = 0             # mesos lines since then
         self.visited_town = False       # been in a town since then
         self.last_check = None          # (the lines' mesos, what the count gained) at the last comparison
+        self.biggest = 0                # the biggest EXP line read
 
     def add(self, what, amount, t):
+        if what == "exp_lines":
+            self.biggest = max(self.biggest, amount)
         self.recent.append((t, what, amount))
         self.total[what] += amount
         self.forget(t)
@@ -114,6 +118,8 @@ class Meter:
         if self.total["exp_bar"] > 0:
             text += (f"\nEXP since it opened: lines read {self.total['exp_lines']:,}, and the number by your MP went up "
                      f"{self.total['exp_bar']:,} ({self.total['exp_lines'] / self.total['exp_bar']:.0%}). Over 100% is lines counted twice.")
+        if self.total["exp_lump"] > 0:
+            text += f"\nLeft out of that: {self.total['exp_lump']:,} EXP that came all at once, most likely from a quest."
         if self.last_check:
             counted, gained = self.last_check
             text += f"\nLast check against your inventory: counted {counted:,} mesos picked up, and it went up by {gained:,}"
@@ -153,6 +159,8 @@ class Stretch:
 
 
 class LineCounter:
+    quest_exp = 0                       # a quest's EXP read off the screen, that the number hasn't shown yet
+
     """Feed it what the lines say. All times from the same clock."""
 
     def __init__(self, data):
@@ -235,8 +243,30 @@ class LineCounter:
         """A white line that couldn't be read."""
         self.meter.add("items_unread", 1, t)
 
+    def quest_reward(self, exp, mesos, t):
+        """A quest's reward was read off the screen: EXP and mesos no line will say."""
+        self.quest_exp += exp
+        if mesos:
+            self.meter.visited_town = True      # (so the mesos start again from here, as after a shop)
+
+    def exp_number(self, gained, t):
+        """The EXP number's gone up by this much since the last reading. A quest's reward has no line to read: a big jump is one,
+        even if its reward wasn't seen, and its mesos come with it."""
+        taken = min(gained, self.quest_exp)
+        if taken:
+            self.quest_exp -= taken
+            self.meter.add("exp_lump", taken, t)
+            gained -= taken
+        if not gained:
+            return
+        if gained >= max(LUMP_LEAST, LUMP_TIMES * self.meter.biggest):
+            self.meter.add("exp_lump", gained, t)
+            self.meter.visited_town = True      # (so the mesos start again from here, as after a shop)
+        else:
+            self.exp_bar(gained, t)
+
     def exp_bar(self, gained, t):
-        """The EXP bar's gone up by this much."""
+        """The EXP bar's gone up by this much, from kills."""
         self.meter.add("exp_bar", gained, t)
         for s in (self.open, self.span):
             if s and t > s.counts_from:

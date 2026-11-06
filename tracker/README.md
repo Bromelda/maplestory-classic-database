@@ -8,7 +8,7 @@ Status: **not tested on the real game yet.** See [What's been checked](#whats-be
 ## Your run
 
 The **Items and reading** button (or Shift+F7) opens a window with two tabs. **Items** lists everything you've picked up this
-run, the latest first, with how many and which inventory tab, potions included. **Reading** has the rest of this section,
+run, the latest first, with how many and which inventory tab, potions included, and can show just Equip, Use, Etc, Set-up or Other. **Reading** has the rest of this section,
 how much it's reading, and what's been learned so far. Reset clears the list, and so does closing the tracker.
 
 The Reading tab keeps a running account from when the tracker opens until it closes. Each time it opens, this account and
@@ -67,6 +67,13 @@ first count is where it starts, and the **Inventory** tab of the Items window se
 lines read for it, so it says plainly how many it really caught. Selling and buying count, as shops are watched. Handing items in
 for a quest doesn't, yet, and reads as lines too many. So open each tab you care about before you hunt, and again after.
 Only tabs you open are read, and only the rows showing. An item whose picture the tracker doesn't have can't be named, so it's left out.
+
+### Quests
+
+When you hand in a quest, the chat window shows a red OBTAINED! and what you got: items, EXP and mesos. It reads that, so a quest's
+potions don't look bought, its mesos don't look sold, and its EXP isn't blamed on lines missed. It's in the run's account on the
+Reading tab. EXP that jumps by a lot at once with no reward seen is left out of the reading too, as most likely a quest. What you
+hand in for a quest isn't read yet, so it shows as a fall on the Inventory tab.
 
 ### Shops
 
@@ -139,8 +146,15 @@ They work while the game or the tracker is in front, and bringing the window bac
 another program in front, click the taskbar button or double-click the desktop shortcut.
 
 You can change them in Settings to nearly any key, such as plain 0, 9, 8 and 7, with no Shift. A plain key also works while
-Shift's held down to attack. While the game's in front, the game doesn't get a key you've chosen, so a plain 0 can't be typed in
-chat or used by the game. A shop's "how many" box still gets its numbers.
+Shift's held down to attack. The game gets those keys too, so typing a plain key in chat sets it off as well, which matters most
+for Reset. It's ignored while a shop's "how many" box is up. `hotkeys.log` in the data folder says which presses came through.
+
+**To use them in the game, start the tracker with `run_as_admin.bat`** and say yes when Windows asks. The game runs as administrator,
+and Windows doesn't show a normal program any keys pressed while an administrator program is in front. Started the usual way,
+everything else works, but the hotkeys only work with the tracker's own window in front.
+
+The tracker notices these by checking whether the keys you chose are down: only those keys, only while the game or the tracker is in
+front. It sends nothing to the game.
 
 The tracker runs at below-normal priority, so the game comes first.
 

@@ -212,7 +212,12 @@ class DropScan:
     def exp_bar(self, gained, now):
         """The EXP bar's gone up: what the lines ought to add up to."""
         with self.lock:
-            self.lines.exp_bar(gained, now)
+            self.lines.exp_number(gained, now)
+
+    def quest_reward(self, exp, mesos, now):
+        """A quest's reward, read off the screen."""
+        with self.lock:
+            self.lines.quest_reward(exp, mesos, now)
 
     def mesos_seen(self, value, now, in_town=False):
         """The mesos count as read off the inventory, whenever it's open: the lines since it was last seen ought to add up

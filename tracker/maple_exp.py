@@ -52,6 +52,7 @@ from invwatch import InventoryCheck, InventoryReader
 from linecount import ExpText
 from itemwatch import ItemReader, load_items
 from daybook import DayBook
+from questwatch import QuestWatch
 from shopwatch import LOOK_CLOSED, LOOK_OPEN, ShopWatch
 from dropscan import DropScan, SCAN_POLL, next_look
 from ui_items import ItemsWindow, RunItems
@@ -322,9 +323,18 @@ def version_key(version):
 # --------------------------------------------------------------------------- hotkeys
 #
 # Shift+F1 to F7 by default, any of them changeable in Settings to nearly any key, with or without Ctrl, Alt or Shift. How
-# they're caught is up to the OS (PLATFORM.create_hotkeys); they're only on while MapleStory or the overlay is in front. While
-# they're on, the game doesn't get those keys, so the defaults aren't anything you'd type in chat. A plain key is your choice to
-# make: Settings says what it costs, and it's let go while a shop's "how many" box is waiting for numbers.
+# they're noticed is up to the OS (PLATFORM.create_hotkeys); they're only on while MapleStory or the overlay is in front. The game
+# gets those keys as well, so the defaults aren't anything you'd type in chat. A plain key is your choice to make: Settings says
+# what it costs, and it's left alone while a shop's "how many" box is waiting for numbers.
+
+def note_hotkey(text):
+    """A line in hotkeys.log in the data folder: which keys were on, and which presses came through. It starts again each run."""
+    try:
+        with open(DATA_DIR / "hotkeys.log", "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} {text}\n")
+    except OSError:
+        pass
+
 
 HOTKEY_ACTIONS = {"window": "Hide / show window", "card": "Hide / show card", "start": "Start / Pause",
                   "repot": "Repot bell", "edit": "Move card", "reset": "Reset", "items": "Items window"}
@@ -3146,7 +3156,16 @@ class App:
         self._dpi = (PLATFORM.screen_dpi(pos[0] + 40, pos[1] + 15) if pos else None) or root.winfo_fpixels("1i")
         self._apply_ui_scale()
         self.hotkey_note = None
-        self.hotkeys = PLATFORM.create_hotkeys(lambda action: self.q.put(("hotkey", action)))
+        try:
+            (DATA_DIR / "hotkeys.log").unlink()
+        except OSError:
+            pass
+
+        def heard(action):
+            note_hotkey(f"pressed: {action} ({self.cfg['hotkeys'].get(action)}), game in front: {PLATFORM.game_in_front()}")
+            self.q.put(("hotkey", action))
+        self.hotkeys = PLATFORM.create_hotkeys(heard)
+        self.hotkeys.on_change = lambda on, keys: note_hotkey(f"keys {'on' if on else 'off'}: {keys} watched, game in front: {PLATFORM.game_in_front()}")
         self.hotkeys.set(self.cfg["hotkeys"], self.cfg["hotkeys_on"])
         self.compact = False
         self.card_off = False                   # hidden with its hotkey, for this run only
@@ -4028,7 +4047,7 @@ class App:
         grid.pack(anchor="w", padx=(px(2), 0))
         buttons, notes, choosing = {}, {}, {"action": None}
         idle_hint = ("Click one, then press the key you want, with or without Ctrl, Alt or Shift. Backspace turns it off.\n"
-                     "While the game's in front, it won't get that key: a plain 0 won't work in game or type in chat.")
+                     "The game gets that key too, so typing a plain key in chat sets it off as well.")
         hint = tk.StringVar(value=idle_hint)
 
         def show():
@@ -4238,7 +4257,7 @@ class App:
         """Watches for an NPC shop (shopwatch.py): once a second until one opens, four times a second while it is. What's bought
         and sold goes in the run's account. While it's open, plain keys chosen as hotkeys are let go, for its "how many" box.
         Otherwise, with the inventory open and solid, reads the items in the tab that's showing (invwatch.py)."""
-        watch = None
+        watch = quests = None
         try:
             slots = InventoryReader(ASSETS, json.loads((ASSETS / "scan_data.json").read_text(encoding="utf-8")).get("item_gids", {}))
         except Exception as e:
@@ -4252,6 +4271,7 @@ class App:
                     if watch is None and TESS and self.daybook:
                         names = [n for tab in load_items(ASSETS / "items.txt").values() for n in tab]
                         watch = ShopWatch(TESS.read_lines, names, _load_prices())
+                        quests = QuestWatch(TESS.read_lines, names)
                     if rect and self.reader.hwnd and self.reader.mode == "window" and PLATFORM.game_in_front():
                         shot = self.reader._hide_own(grab(sct, *rect))
                         if shot:
@@ -4260,6 +4280,11 @@ class App:
                                     self.daybook.mesos(e["mesos"])
                                 else:
                                     self.daybook.shop_trade(e["kind"], e["name"], e["qty"], e["total"], e["mesos"])
+                            reward = quests.look(shot[0]) if quests and not watch.open else None
+                            if reward:
+                                self.daybook.quest_reward(reward["items"], reward["exp"], reward["mesos"])
+                                if self.drop_scan:
+                                    self.drop_scan.quest_reward(reward["exp"], reward["mesos"], time.monotonic())
                             g = self.reader.gh
                             fields = find_mesos_fields(shot[0], g) if slots and g and not (watch and watch.open) else None
                             if fields:
@@ -4956,6 +4981,7 @@ class App:
         (PLATFORM.bring_window_back if tucked else PLATFORM.tuck_window)(self.root)
         if tucked:
             self._style_frame()
+        note_hotkey(f"window: was {'tucked' if tucked else 'showing'}, now {'tucked' if PLATFORM.window_tucked(self.root) else 'showing'}")
 
     def _hotkey(self, action):
         if action == "window":

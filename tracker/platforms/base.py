@@ -35,8 +35,8 @@ def _key_name(vk):
 
 def parse_hotkey(text):
     """'Shift+1' or '0' -> (modifiers, virtual key), or None if it isn't a hotkey the overlay takes: a number, letter, F key,
-    number pad key, punctuation, or Insert, Home, End, PageUp or PageDown, with or without Ctrl, Alt or Shift. The game doesn't
-    get a hotkey while it's on, so a plain key can't be typed in chat: that's for whoever chooses it to weigh up."""
+    number pad key, punctuation, or Insert, Home, End, PageUp or PageDown, with or without Ctrl, Alt or Shift. The game
+    still gets a hotkey, so a plain key typed in chat sets it off too: that's for whoever chooses it to weigh up."""
     if not isinstance(text, str) or not text:
         return None
     *mods, key = text.split("+")
@@ -54,13 +54,28 @@ def typing_key(vk):
 
 
 def to_register(wanted, held=False):
-    """What to ask the OS for, from {action: (modifiers, key)}: [(action, modifiers, key, must have)]. A plain key is also
-    asked for with Shift, or it wouldn't fire while Shift's held down to attack. held: a box in the game is waiting for typing,
-    so plain typing keys are left alone."""
+    """What to watch for, from {action: (modifiers, key)}: [(action, modifiers, key, chosen as that)]. A plain key also counts with
+    Shift, or it wouldn't fire while Shift's held down to attack. held: a box in the game is waiting for typing, so plain typing keys are
+    left alone."""
     keys = {a: k for a, k in wanted.items() if not (held and not k[0] and typing_key(k[1]))}
     out = [(a, m, vk, True) for a, (m, vk) in keys.items()]
     taken = set(wanted.values())
     out += [(a, HOTKEY_MODS["Shift"], vk, False) for a, (m, vk) in keys.items() if not m and (HOTKEY_MODS["Shift"], vk) not in taken]
+    return out
+
+
+def presses(keys, states, mods, down):
+    """Which actions have just been pressed. keys: from to_register. states: {key: what GetAsyncKeyState said} (its top bit: down now. Its
+    low bit: pressed since last asked, so a quick tap between checks isn't lost). mods: the modifiers held. down: the keys that were down
+    at the last check, kept up to date. A key held down only fires the once."""
+    out = []
+    now_down = {vk for vk, s in states.items() if s & 0x8000}
+    for action, m, vk, _ in keys:
+        tapped = states[vk] & 1 and not states[vk] & 0x8000
+        if m == mods and ((vk in now_down and vk not in down) or (tapped and vk not in down)):
+            out.append(action)
+    down.clear()
+    down.update(now_down)
     return out
 
 
@@ -82,6 +97,7 @@ class Hotkeys(ABC):
     def __init__(self, on_press):
         self.on_press = on_press
         self.problems = {}                  # action -> why it couldn't be used (e.g. taken)
+        self.on_change = None               # told (on or off, how many keys are held) when that changes
 
     @abstractmethod
     def set(self, keys, on=True):

@@ -9,6 +9,17 @@ import tkinter as tk
 from tkinter import ttk
 
 REFRESH_MS = 1000
+KINDS = (("All", "All"), ("Equip", "Equip"), ("Use", "Use"), ("Etc", "Etc"), ("Setup", "Set-up"), ("Other", "Other"))     # (what a line says, what's shown)
+
+
+def kind_of(tab):
+    """Which group of the Items list an inventory tab goes in. Anything else a line says is Other."""
+    return tab if tab in ("Equip", "Use", "Etc", "Setup") else "Other"
+
+
+def of_kind(rows, kind):
+    """The rows [(name, how many, tab)] in that group."""
+    return list(rows) if kind == "All" else [r for r in rows if kind_of(r[2]) == kind]
 
 
 class RunItems:
@@ -82,6 +93,15 @@ class ItemsWindow:
         self.summary_label = tk.Label(page, textvariable=self.summary, bg=c["bg"], fg=c["dim"], font=small, justify="left", anchor="w")
         self.summary_label.pack(fill="x", pady=(0, px(6)))
         page.bind("<Configure>", lambda e: self.summary_label.configure(wraplength=max(120, e.width - 8)))
+        self.kind = "All"
+        self.kind_buttons = {}
+        kinds = tk.Frame(page, bg=c["bg"])
+        kinds.pack(fill="x", pady=(0, px(6)))
+        for kind, shown in KINDS:
+            b = tk.Label(kinds, text=shown, bg=c["bg"], fg=c["dim"], font=small, padx=px(7), pady=px(3), cursor="hand2")
+            b.pack(side="left", padx=(0, px(2)))
+            b.bind("<Button-1>", lambda e, k=kind: self.show_kind(k))
+            self.kind_buttons[kind] = (b, shown)
         style = ttk.Style(w)
         style.theme_use("clam")         # (the only one that takes these colours everywhere: the log's table uses it too)
         style.layout("Items.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
@@ -150,17 +170,34 @@ class ItemsWindow:
             on = n == name
             b.configure(fg=self.colours["accent"] if on else self.colours["dim"], bg=self.colours["list_bg"] if on else self.colours["bg"])
 
+    def show_kind(self, kind):
+        """One group of the Items list: Equip, Use, Etc and so on."""
+        self.kind = kind
+        self.shown_rows = None
+        self.draw_items()
+
+    def draw_items(self):
+        items = self.get_items()
+        all_rows = items.rows()
+        for kind, (b, shown) in self.kind_buttons.items():
+            n = len(of_kind(all_rows, kind))
+            on = kind == self.kind
+            b.configure(text=f"{shown} {n}" if n else shown, fg=self.colours["accent"] if on else self.colours["dim"] if n else self.colours["select"],
+                        bg=self.colours["list_bg"] if on else self.colours["bg"])
+        rows = of_kind(all_rows, self.kind)
+        if rows != self.shown_rows:
+            self.shown_rows = rows
+            self.tree.delete(*self.tree.get_children())
+            for name, qty, tab in rows:
+                self.tree.insert("", "end", values=(name, f"{qty:,}", tab))
+
     def refresh(self):
         if not self.win.winfo_exists():
             return
         items = self.get_items()
         rows = items.rows()
         self.summary.set(items.summary() if rows or items.mesos or items.unread else "Nothing yet. What you pick up shows here as you play.")
-        if rows != self.shown_rows:
-            self.shown_rows = rows
-            self.tree.delete(*self.tree.get_children())
-            for name, qty, tab in rows:
-                self.tree.insert("", "end", values=(name, f"{qty:,}", tab))
+        self.draw_items()
         if self.get_check:
             summary, check = self.get_check()
             self.check_summary.set(summary)

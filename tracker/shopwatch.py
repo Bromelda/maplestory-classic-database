@@ -24,7 +24,7 @@ MESOS_BOX = (392, 95, 164, 25)  # the digits of your mesos: x, y, w, h from LEAV
 NAME_LINE = (6, 3, 297, 29)     # within a row: x, y, w, h
 PRICE_LINE = (36, 32, 267, 31)  # (past the coin)
 SNAP = 0.6                      # how alike a read name has to be to a known one
-LOOK_OPEN, LOOK_CLOSED = 0.25, 1.0      # seconds between looks
+LOOK_OPEN, LOOK_CLOSED = 0.25, 0.5      # seconds between looks (not too long: a quest's reward can be clicked through quickly)
 
 
 def _green(hsv):

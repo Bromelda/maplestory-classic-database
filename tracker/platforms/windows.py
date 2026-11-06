@@ -5,12 +5,13 @@ import os
 import platform
 import subprocess
 import threading
+import time
 from ctypes import wintypes
 from pathlib import Path
 
 import numpy as np
 
-from .base import Hotkeys, Platform, parse_hotkey, to_register
+from .base import Hotkeys, Platform, parse_hotkey, presses, to_register
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -43,12 +44,8 @@ _SetForegroundWindow = _api(_user32.SetForegroundWindow, wintypes.BOOL, wintypes
 _CreateMutex = _api(_kernel32.CreateMutexW, wintypes.HANDLE, wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
 _MonitorFromPoint = _api(_user32.MonitorFromPoint, wintypes.HANDLE, wintypes.POINT, wintypes.DWORD)
 _GetForegroundWindow = _api(_user32.GetForegroundWindow, wintypes.HWND)
-_RegisterHotKey = _api(_user32.RegisterHotKey, wintypes.BOOL, wintypes.HWND, ctypes.c_int, wintypes.UINT,
-                       wintypes.UINT)
-_UnregisterHotKey = _api(_user32.UnregisterHotKey, wintypes.BOOL, wintypes.HWND, ctypes.c_int)
-_SetTimer = _api(_user32.SetTimer, ctypes.c_size_t, wintypes.HWND, ctypes.c_size_t, wintypes.UINT, ctypes.c_void_p)
-_GetMessage = _api(_user32.GetMessageW, wintypes.BOOL, ctypes.POINTER(wintypes.MSG), wintypes.HWND,
-                   wintypes.UINT, wintypes.UINT)
+_GetAsyncKeyState = _api(_user32.GetAsyncKeyState, ctypes.c_short, ctypes.c_int)
+KEY_POLL = 0.02                 # seconds between checks of the chosen keys
 
 # For drawing the see-through panels over the game (paint_overlay).
 _gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
@@ -110,10 +107,10 @@ def _windows_titled(*prefixes):
 
 
 class WindowsHotkeys(Hotkeys):
-    """Windows hotkeys, as Discord and OBS use, on their own thread: they work while you play
-    even though the game runs as administrator, and they never touch the game. They're
-    registered only while MapleStory or the overlay is the window in front, so other
-    programs can still use those keys (e.g. to type "!")."""
+    """Hotkeys, on their own thread, by checking whether the chosen keys are down: only those keys, and only while MapleStory or the
+    overlay is the window in front. Nothing is sent, and the game still gets the keys. The game runs as administrator, and Windows shows
+    a normal program no keys pressed while an administrator program's in front, so with the game in front, this only works if the tracker
+    is running as administrator too (run_as_admin.bat)."""
 
     def __init__(self, on_press):
         super().__init__(on_press)
@@ -148,35 +145,35 @@ class WindowsHotkeys(Hotkeys):
         return cls.value == "MapleStoryClass" or _process_name(hwnd) == "maplestory.exe"
 
     def _run(self):
-        msg, active, was_on = wintypes.MSG(), {}, None    # active: hotkey id -> action
-        self.thread_id = _kernel32.GetCurrentThreadId()
-        _SetTimer(None, 0, 250, None)                     # a WM_TIMER every 250 ms, to check what's in front
-        while _GetMessage(ctypes.byref(msg), None, 0, 0) > 0:
-            if msg.message == 0x0312:                     # WM_HOTKEY
-                action = active.get(msg.wParam)
-                if action:
-                    self.on_press(action)
-            elif msg.message == 0x0113:                   # WM_TIMER
+        last_look, on, was_on = 0.0, False, None
+        keys, down = [], set()
+        while True:
+            time.sleep(KEY_POLL)
+            now = time.monotonic()
+            if now - last_look >= 0.25:                     # (what's in front doesn't need looking at so often)
+                last_look = now
                 try:
                     on = self.in_front()
                 except Exception:
                     on = False
-                with self._lock:
-                    changed, wanted, paused, held, self._changed = self._changed, dict(self._wanted), self._paused, self._held, False
-                on = on and not paused
-                if not changed and on == was_on:
-                    continue
-                for hid in active:
-                    _UnregisterHotKey(None, hid)
-                active, was_on = {}, on
-                if on:
-                    for hid, (action, mods, vk, must) in enumerate(to_register(wanted, held), start=1):
-                        if _RegisterHotKey(None, hid, mods | 0x4000, vk):     # MOD_NOREPEAT
-                            active[hid] = action
-                            if must:
-                                self.problems.pop(action, None)
-                        elif must:
-                            self.problems[action] = "used by another program"
+            with self._lock:
+                changed, wanted, paused, held, self._changed = self._changed, dict(self._wanted), self._paused, self._held, False
+            active = on and not paused
+            if changed or active != was_on:
+                keys = to_register(wanted, held) if active else []
+                vks = {vk for _, _, vk, _ in keys}
+                for vk in vks:
+                    _GetAsyncKeyState(vk)                   # (forget any press from before these were being watched)
+                down = {vk for vk in vks if _GetAsyncKeyState(vk) & 0x8000}     # (held down already: wait for it to be let go)
+                was_on = active
+                if self.on_change:
+                    self.on_change(active, len(wanted) if active else 0)
+            if not keys:
+                continue
+            states = {vk: _GetAsyncKeyState(vk) for vk in {k[2] for k in keys}}
+            mods = sum(m for m, vk in ((0x2, 0x11), (0x1, 0x12), (0x4, 0x10)) if _GetAsyncKeyState(vk) & 0x8000)
+            for action in presses(keys, states, mods, down):
+                self.on_press(action)
 
 
 class WindowsPlatform(Platform):
@@ -412,7 +409,8 @@ class WindowsPlatform(Platform):
         return cls.value == "MapleStoryClass" or _process_name(hwnd) == "maplestory.exe"
 
     def open_folder(self, path):
-        os.startfile(path)
+        # (The Microsoft Store's Python keeps AppData elsewhere, and only it sees the usual path. Explorer needs the real one.)
+        os.startfile(os.path.realpath(path))
 
     def show_file(self, path):
-        subprocess.Popen(["explorer", f"/select,{path}"])
+        subprocess.Popen(["explorer", f"/select,{os.path.realpath(path)}"])

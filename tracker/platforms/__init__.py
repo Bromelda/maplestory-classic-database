@@ -3,9 +3,9 @@ per OS. create_platform() builds the one for the OS it's running on; only that O
 imported, so Windows' DLLs are never loaded on macOS and the other way round."""
 import sys
 
-from .base import Hotkeys, Platform, hotkey_text, parse_hotkey, to_register, typing_key
+from .base import Hotkeys, Platform, hotkey_text, parse_hotkey, presses, to_register, typing_key
 
-__all__ = ["Hotkeys", "Platform", "create_platform", "hotkey_text", "parse_hotkey", "to_register", "typing_key"]
+__all__ = ["Hotkeys", "Platform", "create_platform", "hotkey_text", "parse_hotkey", "presses", "to_register", "typing_key"]
 
 
 def create_platform(name=sys.platform):
