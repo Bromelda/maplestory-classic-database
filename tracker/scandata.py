@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Raise this after any fix that changes what gets counted. tools/publish_drops.py only uses sessions from
 # the current version, so results from before a fix can't mix in with the good ones.
-SCANNER_VERSION = 4
+SCANNER_VERSION = 5
 
 
 def _key(text):
@@ -41,6 +41,11 @@ class GameData:
         """The monsters that live on this map (their ids)."""
         found = self.find_map(map_name)
         return list(self.maps[found]["spawns"]) if found else []
+
+    def counts_on(self, map_name):
+        """How many of each monster live on this map: {id: how many}."""
+        found = self.find_map(map_name)
+        return dict(self.maps[found].get("counts") or {}) if found else {}
 
     def exp_of(self, species):
         m = self.monsters.get(species)

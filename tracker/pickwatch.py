@@ -59,13 +59,18 @@ def line_pictures(bgr, line, text_h):
     crop = bgr[max(0, int(y - pad)):int(y + pad), max(0, x0 - int(0.3 * text_h)):x1 + int(0.3 * text_h)]
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
     whiteness = np.clip((hsv[..., 2].astype(np.float32) - 120) / 110, 0, 1) * (hsv[..., 1] <= 70)
+    # (Over pale scenery that loses the letters: what's lighter than what's around it, in the least of the three colours.)
+    least = crop.min(axis=2).astype(np.float32)
+    k = max(3, int(round(0.7 * text_h)) | 1)
+    standout = np.clip((least - cv2.blur(least, (k, k))) / max(8.0, float(np.percentile(least - cv2.blur(least, (k, k)), 98))), 0, 1)
     pictures = []
-    for target in (36, 48):
-        s = target / text_h
-        big = cv2.resize(whiteness, None, fx=s, fy=s, interpolation=cv2.INTER_CUBIC)
-        for img in ((big > 0.5) * 255.0, np.clip(big, 0, 1) * 255):
-            pictures.append(cv2.copyMakeBorder((255 - img).astype(np.uint8), 24, 24, 24, 24,
-                                               cv2.BORDER_CONSTANT, value=255))
+    for look in (whiteness, standout):
+        for target in (36, 48):
+            s = target / text_h
+            big = cv2.resize(look, None, fx=s, fy=s, interpolation=cv2.INTER_CUBIC)
+            for img in ((big > 0.5) * 255.0, np.clip(big, 0, 1) * 255):
+                pictures.append(cv2.copyMakeBorder((255 - img).astype(np.uint8), 24, 24, 24, 24,
+                                                   cv2.BORDER_CONSTANT, value=255))
     return pictures
 
 
@@ -77,7 +82,7 @@ def vote(texts):
     if not found:
         return None
     key, n = found.most_common(1)[0]
-    if n * 2 < len(texts):
+    if n < 2:
         return None
     same = [p for p in parsed if _key(p) == key]
     if key[0] == "mesos":

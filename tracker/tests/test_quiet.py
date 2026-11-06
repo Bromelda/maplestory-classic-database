@@ -99,6 +99,10 @@ check("the card's hotkey hides it", a.card_off is True)
 check("for this run: the setting's untouched", a.cfg["hud"] is True)
 maple_exp.App._hotkey(a, "card")
 check("and shows it", a.card_off is False)
+a.items_opened = 0
+a.open_items = lambda: setattr(a, "items_opened", a.items_opened + 1)
+maple_exp.App._hotkey(a, "items")
+check("the Items window's hotkey", a.items_opened == 1)
 check("every action has a name and a key", set(maple_exp.HOTKEY_ACTIONS) == set(maple_exp.DEFAULT_HOTKEYS))
 for key in maple_exp.DEFAULT_HOTKEYS.values():
     check(f"{key} can't be typed in chat", maple_exp.parse_hotkey(key) and "+F" in key)

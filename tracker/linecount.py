@@ -52,6 +52,10 @@ class Meter:
         self.window = window
         self.recent = deque()           # (when, what, how much)
         self.total = Counter()
+        self.box_value = None           # the mesos count when it was last seen
+        self.since_seen = 0             # mesos lines since then
+        self.visited_town = False       # been in a town since then
+        self.last_check = None          # (the lines' mesos, what the count gained) at the last comparison
 
     def add(self, what, amount, t):
         self.recent.append((t, what, amount))
@@ -76,19 +80,42 @@ class Meter:
         return min(1.0, numbers[lines] / numbers[screen]) if numbers[screen] > 0 else None
 
     def line(self, now):
-        """One line of text, for the Log page."""
+        """How much is being read, in words."""
         n, parts = self.last(now), []
-        for label, lines, screen in (("EXP", "exp_lines", "exp_bar"), ("mesos", "mesos_lines", "mesos_box")):
+        for label, lines, screen in (("EXP", "exp_lines", "exp_bar"), ("mesos", "mesos_checked", "mesos_box")):
             s = self.share(n, lines, screen)
             if s is not None:
                 parts.append(f"{label} {s:.0%}")
         seen = n["items_read"] + n["items_unread"]
         if seen:
             parts.append(f"item names {n['items_read']:,} of {seen:,}")
-        return ("Reading, last 5 minutes: " + " · ".join(parts)) if parts else "Reading: nothing to compare yet"
+        text = ("Reading, last 5 minutes: " + " · ".join(parts)) if parts else "Reading: nothing to compare yet"
+        if self.last_check:
+            counted, gained = self.last_check
+            text += f"\nLast check against your inventory: counted {counted:,} mesos picked up, and it went up by {gained:,}"
+        return text
+
+    def mesos_seen(self, value, t, in_town=False):
+        """The mesos count, read off the inventory whenever it's open. The mesos lines since it was last seen ought to add
+        up to the difference, however long it's been closed. Mesos going down, or a town (a shop), means there's nothing to
+        compare: it starts again from here."""
+        if in_town:
+            self.visited_town = True
+        if value == self.box_value:
+            return
+        gained = None if self.box_value is None else value - self.box_value
+        if gained is not None and gained > 0 and not self.visited_town:
+            self.add("mesos_box", gained, t)
+            self.add("mesos_checked", self.since_seen, t)
+            self.last_check = (self.since_seen, gained)
+        self.box_value, self.since_seen, self.visited_town = value, 0, in_town
+
+    def mesos_line(self, amount, t):
+        self.add("mesos_lines", amount, t)
+        self.since_seen += amount
 
     def results(self):
-        return {k: self.total[k] for k in ("exp_lines", "exp_bar", "mesos_lines", "mesos_box", "items_read", "items_unread")}
+        return {k: self.total[k] for k in ("exp_lines", "exp_bar", "mesos_lines", "mesos_checked", "mesos_box", "items_read", "items_unread")}
 
 
 class Stretch:
@@ -172,7 +199,7 @@ class LineCounter:
 
     def pickup(self, name, qty, t):
         if name == "mesos":
-            self.meter.add("mesos_lines", qty, t)
+            self.meter.mesos_line(qty, t)
         else:
             self.meter.add("items_read", 1, t)
         if self.open:
@@ -191,9 +218,9 @@ class LineCounter:
             if s and t > s.counts_from:
                 s.exp_bar += gained
 
-    def mesos_box(self, gained, t):
-        """The mesos count's gone up by this much (not a shop's doing)."""
-        self.meter.add("mesos_box", gained, t)
+    def mesos_seen(self, value, t, in_town=False):
+        """The mesos count, off the inventory, whenever it's open."""
+        self.meter.mesos_seen(value, t, in_town)
 
     def other_kill(self, species, t):
         """The pictures saw this kind vanish, and no EXP line went with it: someone else's kill, or something hidden."""

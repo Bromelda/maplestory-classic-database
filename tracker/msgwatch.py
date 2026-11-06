@@ -51,6 +51,11 @@ PART = 100                  # ...or this long, if it reads as an amount line (ov
                             # line may not show)
 DIM_STEP = 0.04             # a line may read this much brighter than last time (the scenery shows through)
 NEW = 0.3                   # what calling a row a new line is worth (an old line found again: up to 1)
+DIM_PER_S = 0.15            # ...and how much it's dimmed by, each second after that
+MANY_NEW = 3                # more new lines than this in one look is less likely than something having gone wrong
+DIM_STEP_LATE = 0.01        # ...with looks further apart, when it's had time to dim
+ALIKE = 0.45                # rows at least this alike could be the same line, one of them not read
+FLASH = 40                  # the whole stack this much lighter than at the last look: something flashed over it
 SETTLED = 0.35              # a line this old (s) has dimmed: new ones are brighter
 SKIPS = 3                   # unclear looks left out in a row, at most
 READ_OK, READ_MARGIN = 0.55, 0.04   # a digit's least match to its shape, and its lead over the next best
@@ -59,6 +64,7 @@ FEAT_LOW = 0.62             # a letter's pixels are at least this bright, of the
 KINDS = ("mesos", "exp", "bonus")
 CHARS = "0123456789+"
 TRIES = 4                   # looks to read a line that isn't clear (it's bright for longer)
+ITEM_LOOKS = 3              # looks to keep an item line's picture from, before it's read
 
 
 def true_gh(gh, window_h):
@@ -142,6 +148,16 @@ def _amount(row):
     return said[:2] if said and said[0] not in (None, "text") and said[1] is not None else None
 
 
+def _alike(a, b):
+    """How alike two rows look, -1 to 1: their right ends, and their last two digits as they are."""
+    return 0.5 * (1.0 - float(np.abs(a.look - b.look).mean()) * 2.5) + 0.5 * _same_end(a.end, b.end)
+
+
+def _known(row):
+    """Is this row known to be a line? It reads as an amount, or as an item line."""
+    return row is not None and (_amount(row) is not None or row.item)
+
+
 @dataclass
 class Row:
     right: int              # where its line ends (x in the band)
@@ -151,6 +167,7 @@ class Row:
     look: np.ndarray        # its shape, small, to find it again a row up
     end: np.ndarray         # its right end (the amount) as it is, to tell "+4" from "+7"
     said: tuple = None      # what it says (Font.read), when it could be read
+    item: bool = False      # it's an item line (ItemReader.is_line)
 
 
 @dataclass
@@ -166,6 +183,8 @@ class Line:
     amount: int = None
     band: np.ndarray = None                        # its latest picture (Tesseract reads "text" lines from it)
     span: tuple = None                             # where it starts and ends in that picture (x)
+    pictures: list = field(default_factory=list)   # an item line: (band, span) at each look so far. As it moves up a row, the
+                                                   # scenery behind it changes, and it may be clearer in one of them
     done: bool = False
 
 
@@ -264,10 +283,11 @@ class MessageWatcher:
         self.skipped = 0                # looks in a row left out as unclear
         self.fit = []                   # how well the old lines were found again, at the last look
         self.gap = 0.0                  # how long since the last look
+        self.light = None               # how light the stack's picture was, at the last clear look
         self.look_at = None
 
     def reset(self):
-        self.before, self.lines, self.skipped = None, {}, 0
+        self.before, self.lines, self.skipped, self.light = None, {}, 0, None
 
     def rows(self, img, gh):
         """Each row's line (a Row), or None where there's none, bottom row first."""
@@ -288,7 +308,7 @@ class MessageWatcher:
             near = 10 * s if self.edge is not None else 1.5 * GH0 * s     # (wider until it's learned)
             xs = xs[np.abs(xs + 1 - guess) <= near] if xs.size else xs
             if not xs.size:
-                out.append(None)
+                out.append(self._faint_row(band, body, s))
                 continue
             right = int(xs[-1]) + 1
             if self.edge is not None:           # (they all end at the same spot: what's past it is scenery)
@@ -298,7 +318,7 @@ class MessageWatcher:
             gaps = np.nonzero(np.diff(on) > GAP * s)[0]
             left = int(on[gaps[-1] + 1]) if gaps.size else int(on[0])
             if right - left < PART * s:
-                out.append(None)
+                out.append(self._faint_row(band, body, s))
                 continue
             px = body[edge]
             core = edge[:, right - int(LOOK_W * s):right]
@@ -310,23 +330,45 @@ class MessageWatcher:
             # (Most looks see the same lines as the last: a row that hasn't changed isn't read again.)
             was = self.before[k] if self.before else None
             if was is not None and was.right == right and _same_end(was.end, end) > 0.98                     and float(np.abs(was.look - look).mean()) < 0.01:
-                said = was.said
+                said, item = was.said, was.item
             else:
                 said = self.font.read(band, s, right)
+                item = bool(said and said[0] == "text" and self.is_item and self.is_item(band, right, s))
             if right - left < SHORTEST * s and not (said and said[0] not in (None, "text")):
-                out.append(None)
+                out.append(self._faint_row(band, body, s))
                 continue
-            out.append(Row(right, left, "yellow" if yellow else "white", bright, look, end, said))
+            out.append(Row(right, left, "yellow" if yellow else "white", bright, look, end, said, item))
         return out, bands
+
+    def _faint_row(self, band, body, s):
+        """A row with too little shadow showing to make out a line: a dim one over pale scenery looks like that. It only
+        counts as a line if it reads clearly where a line would end. (Otherwise, nothing's there.)"""
+        if self.edge is None:
+            return None
+        right = int(round(self.edge))
+        said = self.font.read(band, s, right)
+        if not said[2] or said[0] in (None, "text"):
+            return None
+        L = lightness(body)
+        start = max(0, right - int(LOOK_W * s))
+        part = strokes(body, s)[:, start:right]
+        on = part > 0.5
+        if not on.any():
+            return None
+        px = body[:, start:right][on]
+        return Row(right, start, "yellow" if px[:, 0].mean() < 0.55 * max(1.0, px[:, 2].mean()) else "white",
+                   float(np.median(L[:, start:right][on])), cv2.resize(on.astype(np.float32), (48, 8), interpolation=cv2.INTER_AREA),
+                   feature(body[:, right - int((END_W + BRACKET_W) * s):right - int(BRACKET_W * s)], s), said)
 
     def _fresh(self, row):
         """Is a row's line as bright as a new one?"""
         return row.bright >= (FRESH if self.gap <= 0.15 else FRESH_LATE) * self.peak.get(row.colour, row.bright)
 
     def _shift(self, before, now, s, age=None):
-        """How many rows the stack moved up since the last look (new lines in at the bottom): the move
-        that explains the most rows as lines that were already there (a row up or more, the same
-        shape, no brighter), and the rest below them as new lines at full brightness."""
+        """How many rows the stack moved up since the last look (new lines in at the bottom): the move that explains the
+        most rows as lines that were already there (a row up or more, the same shape, no brighter), and the rest below them
+        as new lines at full brightness. Only rows known to be lines say anything: a row that can't be read may be a sign
+        or a spear behind the stack, which stays where it is whatever the stack does."""
         best = None
         # The last line in (the bottom row before) has dimmed a little once it's a few tenths of a
         # second old: a new line now is brighter. (A monkey walking over it changes how it looks,
@@ -341,26 +383,37 @@ class MessageWatcher:
             for k in range(ROWS):
                 n = now[k]
                 if k < shift:
-                    score += NEW if n and self._fresh(n) else -3.0
+                    if _known(n):
+                        # (Dim isn't new. With looks far apart, it may have had time to dim, though.)
+                        score += NEW if self._fresh(n) else (-1.0 if self.gap >= 0.25 else -3.5)
+                    else:
+                        score -= 0.3 if n else 3.0      # (it may be there, unread. If nothing's there, nothing came in)
                     continue
                 b = before[k - shift]
-                if b is None and n is None:
+                if not _known(b) and not _known(n):
                     continue
-                if b is None:
-                    score -= 3.0                    # a line out of nowhere above the new ones
-                elif n is None:
-                    score -= 0.2                    # a line faded out (they do)
+                if not _known(b):
+                    # A line out of nowhere above the new ones, or just not read before: then it looks the same.
+                    # (A dim line, found again: it was only hidden for a moment.)
+                    score -= (3.0 if self._fresh(n) else 1.5) if not b else (0.1 if _alike(b, n) >= ALIKE else 1.5)
+                elif not _known(n):
+                    # A line faded out (they do, but not at once), or just not read now: then it looks the same.
+                    score -= (1.0 if self._fresh(b) else 0.2) if not n else (0.1 if _alike(b, n) >= ALIKE else 1.0)
                 else:
-                    same = 0.5 * (1.0 - float(np.abs(b.look - n.look).mean()) * 2.5) + 0.5 * _same_end(b.end, n.end)
+                    same = _alike(b, n)
                     if n.colour != b.colour:                    # (a dim line's colour is less sure)
                         same -= 1.0 if min(self._fresh(n), self._fresh(b)) else 0.3
+                    said_same = _amount(b) is not None and _amount(b) == _amount(n)
                     if _amount(b) is not None and _amount(n) is not None:
-                        same += 0.3 if _amount(b) == _amount(n) else -1.5     # (read: the same line or not)
-                    brighter = (n.bright - b.bright) / self.peak.get(n.colour, 255) - DIM_STEP
-                    same -= min(3.0, max(0.0, brighter) / DIM_STEP)
+                        same += 0.3 if said_same else -1.5      # (read: the same line or not)
+                    # (A while since the last look, it ought to have dimmed: one that hasn't is a new line just like it.
+                    # But the scenery behind it changes how bright it reads too, so that only goes so far against what it says.)
+                    allowed = DIM_STEP if self.gap < 0.25 else DIM_STEP_LATE - DIM_PER_S * (self.gap - 0.25)
+                    brighter = (n.bright - b.bright) / self.peak.get(n.colour, 255) - allowed
+                    same -= min(1.2 if said_same else 3.0, max(0.0, brighter) / DIM_STEP)
                     score += same
                     sames.append(same)
-            score -= 0.05 * shift
+            score -= 0.05 * shift + 0.3 * max(0, shift - MANY_NEW)
             if best is None or score > best[0]:
                 best = (score, shift, sames)
         self.fit = best[2]
@@ -373,6 +426,12 @@ class MessageWatcher:
         s = gh / GH0
         self.gap = now - self.look_at if self.look_at is not None else 0.0
         self.look_at = now
+        light = float(lightness(img).mean())
+        flash = self.light is not None and light - self.light >= FLASH and self.skipped < SKIPS
+        if flash:
+            self.skipped += 1
+            return []
+        self.light = light
         rows, bands = self.rows(img, gh)
         for r in rows:
             if r:
@@ -393,8 +452,8 @@ class MessageWatcher:
         # A look where none of the lines that should still be there (a row or more up) is found again
         # is left out: something passed over the stack (a skill's flash, a monster). The next look is
         # compared with the last clear one; lines last 2 to 3 seconds, so nothing's lost meanwhile.
-        reach = sum(1 for k, b in enumerate(self.before) if b is not None and k + shift < ROWS)
-        if reach >= 2 and not self.fit and self.skipped < SKIPS:
+        reach = sum(1 for k, b in enumerate(self.before) if _known(b) and k + shift < ROWS)
+        if reach >= 2 and not self.fit and not any(_known(rows[k]) for k in range(shift)) and self.skipped < SKIPS:
             self.skipped += 1
             return []
         self.skipped = 0
@@ -416,8 +475,10 @@ class MessageWatcher:
             line.band, line.span = bands[line.row], (rows[line.row].left, rows[line.row].right)
             if self.edge is not None:           # (scenery past the line's end isn't the line)
                 line.span = line.span[0], min(line.span[1], int(round(self.edge)))
-            if kind == "text" and self.is_item and self.is_item(line.band, line.span[1], s):
-                sure = True                     # (read it now, at its brightest, before the stack moves it)
+            if line.pictures or (kind == "text" and self.is_item and self.is_item(line.band, line.span[1], s)):
+                kind, amount = "text", None     # (once it's an item line, it stays one, however it reads a row up)
+                line.pictures.append((line.band.copy(), line.span))
+                sure = len(line.pictures) >= ITEM_LOOKS
             line.tries.append((kind, amount, sure))
             if sure or len(line.tries) >= TRIES:
                 self._finish(line, out)
@@ -429,7 +490,9 @@ class MessageWatcher:
         "text" (no amount: an item, for Tesseract); else None (nothing could be read)."""
         sure = [t for t in line.tries if t[2]]
         amounts = [t[:2] for t in line.tries if t[0] not in (None, "text") and t[1] is not None]
-        if sure:
+        if line.pictures:
+            line.kind, line.amount = "text", None
+        elif sure:
             line.kind, line.amount = sure[0][:2]
         elif amounts:
             line.kind, line.amount = max(set(amounts), key=amounts.count)

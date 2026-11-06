@@ -51,6 +51,7 @@ from msgwatch import GH0 as GH0_MSG, Font as MessageFont, MessageWatcher, stack_
 from itemwatch import ItemReader
 from daybook import DayBook
 from dropscan import DropScan, SCAN_POLL, next_look
+from ui_items import ItemsWindow, RunItems
 
 cv2.setNumThreads(1)    # By default OpenCV spreads each small job over every core: on 24 threads, the same looks took 5.8
                         # cores instead of 0.8, on the game's own PC, and no faster
@@ -322,9 +323,9 @@ def version_key(version):
 # doesn't get those keys, so they can't be anything you'd type in chat: Shift+1 was "!" and Shift+2 was "@".
 
 HOTKEY_ACTIONS = {"window": "Hide / show window", "card": "Hide / show card", "start": "Start / Pause",
-                  "repot": "Repot bell", "edit": "Move card", "reset": "Reset"}
+                  "repot": "Repot bell", "edit": "Move card", "reset": "Reset", "items": "Items window"}
 DEFAULT_HOTKEYS = {"window": "Shift+F1", "card": "Shift+F2", "start": "Shift+F3", "repot": "Shift+F4", "edit": "Shift+F5",
-                   "reset": "Shift+F6"}
+                   "reset": "Shift+F6", "items": "Shift+F7"}
 OLD_DEFAULT_HOTKEYS = {"start": "Shift+1", "reset": "Shift+2", "repot": "Shift+3", "edit": "Shift+5"}
 
 
@@ -3064,6 +3065,8 @@ class App:
         self.died_at = None
         self.log_open = False
         self.settings_win = None
+        self.items_win = None
+        self.run_items = RunItems()
         self.q = queue.Queue()
         self.stop_evt = threading.Event()
         self.last_capture = None
@@ -3152,6 +3155,8 @@ class App:
         try:                                    # (which monster each drop came from: dropscan.py)
             self.drop_scan = DropScan(ASSETS, DATA_DIR / "drops")
             self.drop_scan.keep_clips(bool(self.cfg.get("drop_clips")))
+            if self.items:
+                self.drop_scan.on_map = self.items.set_likely
         except Exception as e:
             self.drop_scan = None
             log_error("loading the drop scanner", e)
@@ -3177,7 +3182,7 @@ class App:
         self.theme = Theme(self.root, self._px_per_pt * 0.75, ASSETS / "fonts", self._own_fonts, PLATFORM.font)
         # The simple window: the numbers are on the tracker card over the game.
         callbacks = dict(settings=self.open_settings, start=self.toggle, reset=self.reset, repot=self.ring_repot,
-                         move=self.toggle_hud_editing)
+                         move=self.toggle_hud_editing, items=self.open_items)
         self.view = self.main = SimpleView(self.root, self.theme, callbacks)
         self.view.grid(row=0, column=0, sticky="n")
         self._set_start(self._start_text)
@@ -3604,15 +3609,20 @@ class App:
                 self.autolog.delete(entry)
             self._fill_log()
 
-    def _log_status_text(self, now):
+    def _run_text(self, now):
+        """Where things stand, in words: the map, how much it's reading, what's been learned, the run's account."""
         where = " · ".join(x for x in (self.map_name or "Map not read yet", f"Lv {self.level or '?'}",
                                        self.job, party_label(self.party)) if x)
         if self.drop_scan and self.cfg.get("drop_scanner") and self.session.started:
             where = f"{where}\n{self.drop_scan.status()}"
         if self.drop_scan and self.cfg.get("drop_scanner"):
-            where = "\n".join([where, self.drop_scan.meter_line(now)] + self.drop_scan.learned())
+            where = "\n".join([where] + self.drop_scan.map_lines() + [self.drop_scan.meter_line(now)] + self.drop_scan.learned())
         if self.daybook:
             where = "\n".join([where] + self.daybook.lines())
+        return where
+
+    def _log_status_text(self, now):
+        where = self._run_text(now)
         if self.skip_log:
             return f"{where}\nNot logging this run."
         if not self.session.on:
@@ -3715,6 +3725,17 @@ class App:
     def _section(self, parent, text, first=False):
         tk.Label(parent, text=text.upper(), bg=BG, fg=DIM, font=self.theme.font("semibold", 10)).pack(
             anchor="w", pady=(0 if first else self.theme.px(20), self.theme.px(8)))
+
+    def open_items(self):
+        """What's been picked up this run, and how the reading's going. (Its hotkey closes it again.)"""
+        if self.items_win and self.items_win.exists():
+            self.items_win.win.destroy()
+            return
+        r = self._window_rect()
+        at = (r[0] + 40, max(0, r[1] + 40)) if r and r[0] > -30000 else None    # (minimized windows are at -32000)
+        self.items_win = ItemsWindow(self.root, self.theme, dict(bg=BG, fg=FG, dim=DIM, list_bg=LIST_BG, select=SELECT, accent=ACCENT),
+                                     lambda: self.run_items, lambda: self._run_text(time.monotonic()), topmost=bool(self.cfg["topmost"]),
+                                     at=at, style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM))
 
     def open_settings(self):
         if self.settings_win and self.settings_win.winfo_exists():
@@ -4125,7 +4146,10 @@ class App:
                     rect = self.reader.last_rect
                     if self.drop_scan and self.cfg.get("drop_scanner") and self.session.started and rect and self.reader.hwnd and self.reader.mode == "window":
                         if PLATFORM.game_in_front():
-                            self.drop_scan.map_seen(self.map_name, t0)
+                            if self.reader.map_blind_seconds() > MAP_BLIND_SECONDS:
+                                self.drop_scan.map_lost(t0)
+                            else:
+                                self.drop_scan.map_seen(self.map_name, t0)
                             shot = self.reader._hide_own(grab(sct, *rect))
                             if shot:
                                 self.drop_scan.look(shot[0], t0)
@@ -4149,7 +4173,7 @@ class App:
             elif line.kind == "mesos":
                 out.append(("mesos", line.amount))
             elif line.kind == "text" and line.colour == "white" and self.items and line.band is not None:
-                got = self.items.read(line.band, line.span, gh / GH0_MSG, TESS.read_lines if tesseract_ok else None)
+                got = self.items.read_line(line, gh / GH0_MSG, TESS.read_lines if tesseract_ok else None)
                 out.append(got or ("unread",))
         return out
 
@@ -4177,9 +4201,11 @@ class App:
         picked = [p for p in found if p[0] in ("mesos", "item")]
         if picked:
             self._pickups(picked, when)
+        self.run_items.picked([p for p in found if p[0] == "unread"])
 
     def _pickups(self, found, when):
         """Pickup lines read: mesos picked up count exactly, items go on the loot list (potions: see PotTracker)."""
+        self.run_items.picked(found)
         if self.daybook:                        # (the day's account doesn't depend on Start)
             for p in found:
                 if p[0] == "mesos":
@@ -4396,10 +4422,9 @@ class App:
             self.reader.saved_mesos = tuple(r.mesos_at)
             save_config(self.cfg)
         if r.mesos is not None:
-            earned = self.meso.earned
             self.meso.observe(r.mesos, now, t.elapsed(), self.session.started)   # (through pauses: shop trips)
-            if self.drop_scan and self.meso.earned > earned and not self.in_town:   # (selling to a shop has no line)
-                self.drop_scan.mesos_box(self.meso.earned - earned, now)
+            if self.drop_scan and self.meso.value is not None:
+                self.drop_scan.mesos_seen(self.meso.value, now, self.in_town)
             if self.daybook and self.meso.value is not None:
                 self.daybook.mesos(self.meso.value)
         if r.party is not None:                         # believe a new party size once seen twice
@@ -4818,6 +4843,9 @@ class App:
         if action == "window":
             self.toggle_window()
             return
+        if action == "items":
+            self.open_items()
+            return
         if action == "card":
             self.card_off = not self.card_off
             self.recent.add("Card hidden" if self.card_off else "Card shown")
@@ -4870,6 +4898,7 @@ class App:
     def reset(self):
         self.session.reset()
         self.picked_mesos, self.timed_mesos, self.loot, self.pickups_seen, self.session_pot_cost = 0, 0, {}, False, 0
+        self.run_items.clear()
         self.autolog.reset_clock()
         self.skip_log = False
         self._show_skip_log()

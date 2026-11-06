@@ -7,7 +7,11 @@ Status: **not tested on the real game yet.** See [What's been checked](#whats-be
 
 ## Your run
 
-The Log page keeps a running account from when the tracker opens until it closes. Each time it opens, this account and
+The **Items and reading** button (or Shift+F7) opens a window with two tabs. **Items** lists everything you've picked up this
+run, the latest first, with how many and which inventory tab, potions included. **Reading** has the rest of this section,
+how much it's reading, and what's been learned so far. Reset clears the list, and so does closing the tracker.
+
+The Reading tab keeps a running account from when the tracker opens until it closes. Each time it opens, this account and
 the repot numbers on the tracker card start fresh, even after a crash. Settings, the log of past sessions, clips and
 drop results are kept. While it's open, the account is saved in `daybook.json` in the tracker's data folder.
 
@@ -51,16 +55,25 @@ monster gives its own amount of EXP, so the line alone names it: on a map with W
   kinds drop can't count this way.
 
 Whether any of it counts is decided from the kills and how well they were read, never from what dropped. These numbers are
-kept apart from the ones from the pictures, show on the Log page and in `report.html`, and **don't go on the website**:
+kept apart from the ones from the pictures, show on the Reading tab and in `report.html`, and **don't go on the website**:
 that waits until they've been checked on a monster with counted rates.
 
 Party kills aren't counted, for now. A party's EXP lines don't name the monster.
 
-### The Reading line
+### The map
 
-The Log page's "Reading" line says how much of the last 5 minutes it caught. The game's own numbers are the check: the EXP
-lines against what the EXP bar gained, the mesos lines against what your mesos count gained (with the inventory open), and
-item lines read against those that couldn't be. A span of play where the EXP lines add up to under 90% of the bar is left
+It needs the minimap's name, as read off the screen, to know what can be here. From that it looks up the database: which
+monsters live here, how much EXP each gives, what each is known to drop, and which items only one of them drops. That's what
+names a kill from its EXP, narrows down a name that's hard to read, and picks which sprites and drop pictures to look for. The
+Reading tab shows what it knows about the map you're on. If the name's out of sight for 45 seconds, it can't be sure you're
+on the same map, so kills stop counting until it can be read again. Run `tools/make_scan_data.py` after the database updates.
+
+### How much it's reading
+
+The Reading tab says how much of the last 5 minutes it caught. The game's own numbers are the check: the EXP lines against
+what the EXP bar gained, and item lines read against those that couldn't be. Mesos are checked whenever your inventory is
+open: the mesos lines counted since it was last open, however long ago, against how much the count went up. Mesos going down,
+or a town in between, means a shop may have been involved, so it starts again from there. A span of play where the EXP lines add up to under 90% of the bar is left
 out, in pieces of 5 minutes, so a bad minute only costs its own piece.
 
 ## What counts
@@ -125,7 +138,7 @@ Everything stays in `%APPDATA%\MapleEXP\drops`:
 
 Check new drops against their pictures before copying them to the database.
 
-The Log page shows what all your sessions add up to: kills counted, why others were skipped, and how far each monster
+The Reading tab shows what all your sessions add up to: kills counted, why others were skipped, and how far each monster
 is from the 200 kills it needs.
 
 ## Getting rates onto the website
@@ -202,15 +215,20 @@ windows left open don't move with the world. It now follows the view through the
 says the view went comes out sharp. In four clips, the message readers went from 2 item lines read to 16, of at least 35
 showing. That's on clips at about 3 looks a second, and the live tracker takes about 10, so it hasn't been measured live.
 
-It looks at the field and the messages 10 times a second, and shows how often it really managed on the Log page. Following
+It looks at the field and the messages 10 times a second, and shows how often it really managed on the Reading tab. Following
 what's known happens every look, and finding what's new about 3 times a second. Run together in real time on the real
 clips (no game running, so not the real load): 9.5 looks a second each, at under one core (4% of a 24-thread PC). OpenCV
 was spreading each job over every core: the same work took 5.8 cores before it was limited to one.
 
-The first real check of the Reading line, with the real bar and mesos readers on six party clips at about 3 looks a second:
-the lines caught under half of what the bar gained. Reading rows over pale rock, and allowing for a line having dimmed between
-looks, took that to about 60%, with no sign of counting lines twice. A solo session, at 10 looks a second, is still to be
-measured. Real lines saved on 5 Nov name every kill kind they could on a map of five kinds.
+The first real check of the reading, with the real bar and mesos readers on nine party clips: the lines caught under 60% of what
+the bar gained. Working out how the stack moved from the rows known to be lines (a sign behind the stack had been counted as
+one), no longer throwing out looks when a line behind the new ones couldn't be read, and a second way of seeing letters over pale
+rock took that to about 76% for EXP and 79% for mesos, with almost nothing counted twice. Those clips have gaps of up to a second
+between frames, as the scanner used to be slow, and lines get lost in them. Known lines drawn over the real scenery at 10 looks a
+second are caught with 1 to 3% counted twice, but that's easier than the real thing. So 90% hasn't been shown yet: a real
+session is what will say. Item names went from 45 to 64 named on those clips, with one wrong name (Fire Boar's Tooth for a Wild
+Boar Tooth), and many of the rest were never recognised as item lines. Real lines saved on 5 Nov named kills by kind on a map of
+five kinds.
 
 Tried on real clips of a busy party map: it read HP and MP in all 832 frames, it found coins and items by their pictures
 with few false fits, and it no longer loses its place. But party members' pets took most drops as they landed, so it saw few
