@@ -16,6 +16,9 @@ by its size and not called a potion.
 When an item's count can be seen, the count is the truth: what you had, plus what you picked up, less what you
 have now, is what you used, and a rise beyond your pickups was bought. While the count is in view, HP and MP jumps
 are ignored for that item. While it isn't, they keep the tally going, and the next count corrects them.
+
+While a shop's open, it's better than that: shopwatch.py sees what was bought or sold, how many and for how much, off the
+shop's own window (shop_trade). The count then only has to agree.
 """
 import json
 import threading
@@ -32,16 +35,17 @@ MATCH_SECONDS = 30              # how long a fall in the mesos can wait to be pu
 LOOKS_DROP, LOOKS_RISE, LOOKS_ODD = 2, 3, 8     # how many looks in a row have to agree on a new count
 PICKED_RISE = 3                 # a rise this small with no pickup line is a pickup whose line wasn't read, not a purchase
 LOOKS_LOST = 1200               # a number with digits lost (216 and 21) is nearly always a misread: about 5 minutes of looks
+SHOP_WAIT = 20                  # seconds a count waits to show what a shop said was bought or sold
 
 
 def _blank():
-    return {"start": None, "now": None, "picked_mesos": 0, "spent": 0, "sold": 0, "pending_mesos": 0, "cost_seen": 0, "items": {}, "jumps": {}}
+    return {"start": None, "now": None, "picked_mesos": 0, "spent": 0, "sold": 0, "pending_mesos": 0, "cost_seen": 0, "items": {}, "jumps": {}, "shop": {}}
 
 
 def _item(day, name):
     it = day["items"].setdefault(name, {})
     for key, value in (("picked", 0), ("used", 0), ("bought", 0), ("cost", 0), ("first", None), ("count", None), ("seen", None),
-                       ("pending", 0), ("from_jumps", 0)):
+                       ("pending", 0), ("from_jumps", 0), ("sold", 0), ("shop", 0)):
         it.setdefault(key, value)
     return it
 
@@ -71,6 +75,7 @@ class DayBook:
         self.count_maybe = {}           # item name: (a new count, how many looks in a row)
         self.count_at = {}              # item name: when its count was last in view
         self.moved_at = {}              # item name: when its count or its pickups last changed
+        self.shop_at = {}               # item name: when a shop last said some were bought or sold
 
     def _day(self):
         return self.days.setdefault(self.run, _blank())
@@ -114,6 +119,39 @@ class DayBook:
                 d["sold"] += new_cost - matched
             self._save()
 
+    def shop_trade(self, kind, name, qty, total, mesos, now=None):
+        """What shopwatch.py saw: "bought" or "sold", the item, how many, for how much, and the mesos after."""
+        now = time.monotonic() if now is None else now
+        sign = -1 if kind == "bought" else 1
+        with self.lock:
+            d = self._day()
+            if d["start"] is None:
+                d["start"] = d["now"] = mesos - sign * total
+            d["now"] += sign * total
+            d["spent" if kind == "bought" else "sold"] += total
+            got = d.setdefault("shop", {}).setdefault(kind, {}).setdefault(name, [0, 0])
+            got[0] += qty
+            got[1] += total
+            if name in self.heals or name in d["items"]:
+                it = _item(d, name)
+                if kind == "bought":
+                    it["bought"] += qty
+                    it["cost"] += total
+                    d["cost_seen"] += total                 # (the mesos have already been put down to this)
+                else:
+                    it["sold"] += qty
+                if it["count"] is not None:
+                    it["shop"] -= sign * qty
+                    self.shop_at[name] = now
+            self._save()
+        self.mesos(mesos, now)
+
+    def traded(self):
+        """What shops have seen this run: ({item: how many sold}, {item: how many bought})."""
+        with self.lock:
+            shop = self._day().get("shop", {})
+            return tuple({n: v[0] for n, v in shop.get(k, {}).items()} for k in ("sold", "bought"))
+
     def picked_mesos(self, amount):
         with self.lock:
             d = self._day()
@@ -143,12 +181,18 @@ class DayBook:
             it = _item(self._day(), name)
             self.count_at[name] = now
             if value != it["seen"]:
-                if not self._agreed(name, value, it["seen"]):
+                from_shop = it["shop"] and it["count"] is not None and value - it["seen"] == it["shop"]
+                if from_shop:
+                    self.count_maybe.pop(name, None)    # (just what the shop said: no need for more looks)
+                elif not self._agreed(name, value, it["seen"]):
                     return                          # (nothing's settled while a new count is still in doubt)
                 if it["count"] is None:
                     it["first"] = it["count"] = it["seen"] = value
                     self._save()
                     return
+                if from_shop:
+                    it["count"] += it["shop"]
+                    it["shop"] = 0
                 it["seen"] = value
                 self.moved_at[name] = now
             else:
@@ -175,6 +219,10 @@ class DayBook:
 
     def _settle(self, name, it, now):
         """Works out what the change since the last settled count was. True if anything changed."""
+        if it["shop"]:
+            if now - self.shop_at.get(name, now) <= SHOP_WAIT:
+                return False                                # (the count hasn't shown what the shop said yet)
+            it["shop"] = 0
         if it["count"] is None or (it["seen"] == it["count"] and not it["pending"] and not it["from_jumps"]):
             return False
         change = it["seen"] - it["count"] - it["pending"]   # what the pickups don't explain
@@ -286,17 +334,23 @@ class DayBook:
                     text += f" · sold {d['sold']:,}"
                 out.append(text)
             parts = [self._item_text(n, i) for n, i in sorted(d["items"].items())
-                     if i.get("seen") != 0 or i["used"] or i["picked"] or i.get("bought") or i.get("first")]
+                     if i.get("seen") != 0 or i["used"] or i["picked"] or i.get("bought") or i.get("sold") or i.get("first")]
             parts += [f"{k} ×{n}" for k, n in sorted(d["jumps"].items())]
             if parts:
                 out.append("Potions: " + " · ".join(parts))
+            for kind, title in (("bought", "Bought at shops"), ("sold", "Sold at shops")):
+                got = d.get("shop", {}).get(kind)
+                if got:
+                    out.append(f"{title}: " + " · ".join(f"{n} ×{q:,} for {t:,}" for n, (q, t) in sorted(got.items())))
             return out
 
     @staticmethod
     def _item_text(name, it):
         title = name.lstrip("~") + ("?" if name.startswith("~") else "")
+        sold = f", sold {it['sold']:,}" if it.get("sold") else ""
         if it.get("count") is None:
-            return f"{title} +{it['picked']} −{it['used']}"
+            bought = f" bought {it['bought']:,}" if it.get("bought") else ""
+            return f"{title} +{it['picked']} −{it['used']}{bought}{sold}"
         cost = f" for {it['cost']:,}" if it.get("cost") else ""
-        return (f"{title}: had {it['first']:,}, picked {it['picked']:,}, bought {it['bought']:,}{cost}, "
+        return (f"{title}: had {it['first']:,}, picked {it['picked']:,}, bought {it['bought']:,}{cost}{sold}, "
                 f"used {it['used']:,}, left {it['seen']:,}")

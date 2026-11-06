@@ -58,6 +58,9 @@ ALIKE = 0.45                # rows at least this alike could be the same line, o
 FLASH = 40                  # the whole stack this much lighter than at the last look: something flashed over it
 SETTLED = 0.35              # a line this old (s) has dimmed: new ones are brighter
 SKIPS = 3                   # unclear looks left out in a row, at most
+LASTS = 6.0                 # a line stays on screen about this long: one younger than this has not faded out
+LOW_ROWS = 2                # (higher up, a line's pushed off the top with lots coming in, however young)
+GONE_TOO_SOON = 2.5         # what it's worth against a move that would have a line this young vanish
 READ_OK, READ_MARGIN = 0.55, 0.04   # a digit's least match to its shape, and its lead over the next best
 KIND_OK = 0.45
 FEAT_LOW = 0.62             # a letter's pixels are at least this bright, of the line's brightest
@@ -276,6 +279,7 @@ class MessageWatcher:
     def __init__(self, font, is_item=None):
         self.font = font
         self.is_item = is_item          # (band, where the line ends, s): is this row an item line? It can be read at once
+        self.out_of_sight = []          # (a row, its line) that went out of sight just now
         self.before = None              # the rows at the last look
         self.lines = {}                 # row -> Line, the lines in the stack now
         self.edge = None                # where the lines end, learned from the bright ones
@@ -287,7 +291,7 @@ class MessageWatcher:
         self.look_at = None
 
     def reset(self):
-        self.before, self.lines, self.skipped, self.light = None, {}, 0, None
+        self.before, self.lines, self.skipped, self.light, self.out_of_sight = None, {}, 0, None, []
 
     def rows(self, img, gh):
         """Each row's line (a Row), or None where there's none, bottom row first."""
@@ -315,6 +319,9 @@ class MessageWatcher:
                 right = min(right, int(round(self.edge)))
             # The line's left end: letters and words, with gaps of no more than GAP.
             on = np.nonzero(cols[:right])[0]
+            if not on.size:                     # (all of it past where the lines end)
+                out.append(self._faint_row(band, body, s))
+                continue
             gaps = np.nonzero(np.diff(on) > GAP * s)[0]
             left = int(on[gaps[-1] + 1]) if gaps.size else int(on[0])
             if right - left < PART * s:
@@ -397,7 +404,12 @@ class MessageWatcher:
                     # (A dim line, found again: it was only hidden for a moment.)
                     score -= (3.0 if self._fresh(n) else 1.5) if not b else (0.1 if _alike(b, n) >= ALIKE else 1.5)
                 elif not _known(n):
-                    # A line faded out (they do, but not at once), or just not read now: then it looks the same.
+                    # A line faded out (they do, but not at once), or just not read now: then it looks the same. Young, it
+                    # can't have faded. (Moving makes the scenery behind one line look like a new line each time it changes.)
+                    if not n and k <= LOW_ROWS:
+                        line = self.lines.get(k - shift)
+                        if shift and line is not None and self.look_at - line.born < LASTS:
+                            score -= GONE_TOO_SOON
                     score -= (1.0 if self._fresh(b) else 0.2) if not n else (0.1 if _alike(b, n) >= ALIKE else 1.0)
                 else:
                     same = _alike(b, n)
@@ -462,11 +474,18 @@ class MessageWatcher:
             if k + shift < ROWS and rows[k + shift] is not None:
                 line.row, line.bright = k + shift, rows[k + shift].bright
                 moved[k + shift] = line
-            elif not line.done:
-                self._finish(line, out)         # gone before it was clear: the best of its readings
+            else:
+                if self.before[k] is not None:
+                    self.out_of_sight.append((self.before[k], line))
+                if not line.done:
+                    self._finish(line, out)     # gone before it was clear: the best of its readings
+        self.out_of_sight = [g for g in self.out_of_sight if now - g[1].born < LASTS]
         for k in range(shift):
             if rows[k] is not None:
-                moved[k] = Line(now, rows[k].colour, k, rows[k].bright)
+                again = self._seen_again(rows[k])
+                if again:
+                    again.row, again.bright = k, rows[k].bright
+                moved[k] = again or Line(now, rows[k].colour, k, rows[k].bright)
         self.lines, self.before = moved, rows
         for line in self.lines.values():
             if line.done:
@@ -483,6 +502,17 @@ class MessageWatcher:
             if sure or len(line.tries) >= TRIES:
                 self._finish(line, out)
         return out
+
+    def _seen_again(self, row):
+        """A row that's dim, like a line that went out of sight a moment ago: that line, back. (Scenery can hide one for a look.)"""
+        if self._fresh(row):
+            return None
+        for i, (was, line) in enumerate(self.out_of_sight):
+            said = _amount(was) is not None and _amount(was) == _amount(row)
+            if said or (_amount(was) is None and _amount(row) is None and _alike(was, row) >= ALIKE):
+                del self.out_of_sight[i]
+                return line
+        return None
 
     @staticmethod
     def _finish(line, out):

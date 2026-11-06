@@ -48,8 +48,11 @@ import ocr
 import report
 from hud import LAYOUTS as HUD_LAYOUTS, THEMES as HUD_THEMES, HudCard
 from msgwatch import GH0 as GH0_MSG, Font as MessageFont, MessageWatcher, stack_area, true_gh
-from itemwatch import ItemReader
+from invwatch import InventoryCheck, InventoryReader
+from linecount import ExpText
+from itemwatch import ItemReader, load_items
 from daybook import DayBook
+from shopwatch import LOOK_CLOSED, LOOK_OPEN, ShopWatch
 from dropscan import DropScan, SCAN_POLL, next_look
 from ui_items import ItemsWindow, RunItems
 
@@ -318,9 +321,10 @@ def version_key(version):
 
 # --------------------------------------------------------------------------- hotkeys
 #
-# Shift+F1 to F6 by default (changeable in Settings). How they're caught is up to the OS
-# (PLATFORM.create_hotkeys); they're only on while MapleStory or the overlay is in front. While they're on, the game
-# doesn't get those keys, so they can't be anything you'd type in chat: Shift+1 was "!" and Shift+2 was "@".
+# Shift+F1 to F7 by default, any of them changeable in Settings to nearly any key, with or without Ctrl, Alt or Shift. How
+# they're caught is up to the OS (PLATFORM.create_hotkeys); they're only on while MapleStory or the overlay is in front. While
+# they're on, the game doesn't get those keys, so the defaults aren't anything you'd type in chat. A plain key is your choice to
+# make: Settings says what it costs, and it's let go while a shop's "how many" box is waiting for numbers.
 
 HOTKEY_ACTIONS = {"window": "Hide / show window", "card": "Hide / show card", "start": "Start / Pause",
                   "repot": "Repot bell", "edit": "Move card", "reset": "Reset", "items": "Items window"}
@@ -738,6 +742,36 @@ def find_map_box(bgr, gh):
     return (x, y, w, h) if w >= 10 * gh and h >= 4 * gh else None
 
 
+def find_map_bar(bgr):
+    """(x, y, w, h) of the words on a collapsed minimap's bar, "Victoria Road : Kerning City Pharmacy", or None. It's a pale bar
+    with an orange WORLD button at its right end, and no light-blue box under it."""
+    hue, sat, val = [c.astype(np.int16) for c in cv2.split(cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV))]
+    n, _, stats, _ = cv2.connectedComponentsWithStats(((abs(hue - 18) <= 8) & (sat > 120) & (val > 170)).astype(np.uint8), connectivity=8)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    for i in range(1, n):
+        x, y, w, h = map(int, stats[i][:4])
+        if not (30 <= w <= 150 and 0.2 <= h / w <= 0.4 and y >= 3):
+            continue
+        right = x - int(0.9 * w)                # (the - and + buttons)
+        band = gray[y - 3, :right]              # just above the words, along the bar
+        left = right - 1
+        while left > 0 and band[left] >= 190:
+            left -= 1
+        top, bottom = y - int(0.3 * h), y + h + int(0.35 * h)
+        if right - left >= 2.5 * w and top >= 0:
+            return left + 3, top, right - left - 3, bottom - top
+    return None
+
+
+def find_map_area(bgr, gh):
+    """Where to read the map's name: ((x, y, w, h), is it the collapsed bar), or (None, False). The open minimap's box has the bar
+    across its top. Light blue anywhere else, with a bar showing, is scenery (a pharmacy's wall) and not the box."""
+    box, bar = find_map_box(bgr, gh), find_map_bar(bgr)
+    if box and bar and not (box[0] <= bar[0] + bar[2] and bar[0] <= box[0] + box[2] and box[1] <= bar[1] + bar[3] and bar[1] <= box[1] + box[3]):
+        box = None
+    return (box, False) if box else (bar, bool(bar))
+
+
 _ROMAN = re.compile(r"^(?:X{0,2})(?:IX|IV|V?I{0,3})$")
 
 
@@ -863,6 +897,22 @@ def read_map_name(bgr, gh):
     votes = _ocr_votes(white[y0:y1, x0:x1], max(b.h for b in ln), None, _clean_map_name)
     name, n = votes.most_common(1)[0] if votes else (None, 0)
     return snap_map_name(name) if n >= 2 else None
+
+
+def read_map_bar(bgr):
+    """The map's name from the words on a collapsed minimap's bar (find_map_bar). Dark words on a pale bar, the region first:
+    a name is only believed if it's on the game's list, so anything else that looks like a bar reads as nothing."""
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    votes = _ocr_votes(np.clip((170 - gray) / 110, 0, 1), 0.55 * bgr.shape[0], None, _clean_map_name)
+    names = Counter()
+    for text, n in votes.items():
+        if ":" in text:
+            names[text.rsplit(":", 1)[1].strip()] += n
+    for name, n in names.most_common():
+        found = map_list().find(name) if n >= 2 else None
+        if found:
+            return found[0]
+    return None
 
 
 # --------------------------------------------------------------------------- mesos and party
@@ -1262,6 +1312,7 @@ class ScreenReader:
         self.last_full_search = 0.0
         self.gh = None              # EXP digit height: how big the game's UI is drawn
         self.map_box = None         # the minimap's info box, relative to the game window
+        self.map_is_bar = False     # (or the words on its bar, when it's collapsed)
         self.map_print = None       # rough picture of its text, to notice map changes
         self.map_unread = False
         self.next_map_search = 0.0
@@ -1661,13 +1712,16 @@ class ScreenReader:
         name = note = None
 
         hidden = self.map_blind_seconds() > MAP_HIDDEN_SECONDS
-        if self.map_box is None and now >= self.next_map_search:
+        if (self.map_box is None or self.map_is_bar) and now >= self.next_map_search:
             self.next_map_search = now + (1 if hidden else 3)     # looks harder for a name that has gone missing
             shot = self._hide_own(grab(sct, wx, wy, int(ww * 0.4), int(wh * 0.3)))
-            box = find_map_box(shot[0], g) if shot else None
-            if box:
-                self.map_box = (shot[1] - wx + box[0], shot[2] - wy + box[1], box[2], box[3])
+            found, is_bar = find_map_area(shot[0], g) if shot else (None, False)
+            if found and (self.map_box is None or is_bar != self.map_is_bar):
+                self.map_box = (shot[1] - wx + found[0], shot[2] - wy + found[1], found[2], found[3])
+                self.map_is_bar = is_bar
                 self.map_print, self.map_unread = None, True
+            elif not found and self.map_is_bar:
+                self.map_box, self.map_is_bar = None, False
         if self.map_box is None:
             if self._covered(wx, wy, int(ww * 0.4), int(wh * 0.3)):
                 note = "This window may be covering the minimap. Move it so the map name can be read."
@@ -1691,7 +1745,7 @@ class ScreenReader:
                         self.map_box, self.next_map_search = None, now + 1
                         self.map_unread, self.next_map_read = True, 0.0
                     elif self.map_unread and now >= self.next_map_read:
-                        name = read_map_name(shot[0], g)
+                        name = read_map_bar(shot[0]) if self.map_is_bar else read_map_name(shot[0], g)
                         self.map_look = {"image": shot[0], "text": name}
                         self.map_unread = name is None
                         self.next_map_read = now + (2 if hidden else 5)   # if unreadable, try again later
@@ -2024,6 +2078,15 @@ class ExpTracker:
             return None
         (t0, g0), (t1, g1) = self.samples[0], self.samples[-1]
         return (g1 - g0) / (t1 - t0) * 3600 if t1 - t0 >= 30 else None
+
+    def per_minute(self):
+        """EXP a minute, over the last minute (or since tracking started, if that's less), or None."""
+        now = self.elapsed()
+        if now < 10:
+            return None
+        points = list(self.samples)
+        got = sum(b[1] - a[1] for a, b in zip(points, points[1:]) if b[0] > now - 60)
+        return got / min(60.0, now) * 60
 
     def recent_gain(self):
         """EXP gained in the last 5 minutes (or since tracking started, if that's less), or None."""
@@ -3067,6 +3130,8 @@ class App:
         self.settings_win = None
         self.items_win = None
         self.run_items = RunItems()
+        self.exp_text = ExpText()
+        self.inv_check = InventoryCheck()
         self.q = queue.Queue()
         self.stop_evt = threading.Event()
         self.last_capture = None
@@ -3170,6 +3235,7 @@ class App:
         self.vitals_at = 0.0
         threading.Thread(target=self._message_worker, daemon=True).start()
         threading.Thread(target=self._scan_worker, daemon=True).start()
+        threading.Thread(target=self._shop_worker, daemon=True).start()
         root.after(200, self._pump)
         root.after(500, self._refresh)
 
@@ -3619,7 +3685,13 @@ class App:
             where = "\n".join([where] + self.drop_scan.map_lines() + [self.drop_scan.meter_line(now)] + self.drop_scan.learned())
         if self.daybook:
             where = "\n".join([where] + self.daybook.lines())
-        return where
+        return "\n".join([where, self._inventory_check()[0]])
+
+    def _inventory_check(self):
+        """(a line saying how it's going, the rows): what the inventory's counts did, against the lines read."""
+        lines = {it[0]: it[1] for it in self.run_items.items.values()}
+        sold, bought = self.daybook.traded() if self.daybook else ({}, {})
+        return self.inv_check.summary(lines, sold, bought), self.inv_check.rows(lines, sold, bought)
 
     def _log_status_text(self, now):
         where = self._run_text(now)
@@ -3735,7 +3807,7 @@ class App:
         at = (r[0] + 40, max(0, r[1] + 40)) if r and r[0] > -30000 else None    # (minimized windows are at -32000)
         self.items_win = ItemsWindow(self.root, self.theme, dict(bg=BG, fg=FG, dim=DIM, list_bg=LIST_BG, select=SELECT, accent=ACCENT),
                                      lambda: self.run_items, lambda: self._run_text(time.monotonic()), topmost=bool(self.cfg["topmost"]),
-                                     at=at, style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM))
+                                     at=at, style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM), get_check=self._inventory_check)
 
     def open_settings(self):
         if self.settings_win and self.settings_win.winfo_exists():
@@ -3955,7 +4027,8 @@ class App:
         grid = tk.Frame(box, bg=BG)
         grid.pack(anchor="w", padx=(px(2), 0))
         buttons, notes, choosing = {}, {}, {"action": None}
-        idle_hint = "Click one, then press the keys you want. Backspace turns it off."
+        idle_hint = ("Click one, then press the key you want, with or without Ctrl, Alt or Shift. Backspace turns it off.\n"
+                     "While the game's in front, it won't get that key: a plain 0 won't work in game or type in chat.")
         hint = tk.StringVar(value=idle_hint)
 
         def show():
@@ -4020,7 +4093,7 @@ class App:
             else:
                 key = hotkey_text(bool(e.state & 0x4), bool(e.state & 0x20000), bool(e.state & 0x1), e.keycode)
                 if not key:
-                    hint.set("Use Ctrl, Alt or Shift with a number or letter, or an F key.")
+                    hint.set("That key can't be used. Try a number, letter, F key, number pad key or punctuation.")
                     return "break"
                 done(action, key)
             return "break"
@@ -4033,7 +4106,7 @@ class App:
             buttons[action].grid(row=i, column=1, sticky="w", pady=px(3))
             notes[action] = tk.Label(grid, bg=BG, fg="#ff8a7a", font=th.font("regular", 10))
             notes[action].grid(row=i, column=2, sticky="w", padx=(px(8), 0))
-        tk.Label(box, textvariable=hint, bg=BG, fg=FAINT, font=th.font("regular", 10)).pack(anchor="w", pady=(px(6), 0))
+        tk.Label(box, textvariable=hint, bg=BG, fg=FAINT, font=th.font("regular", 10), justify="left").pack(anchor="w", pady=(px(6), 0))
         w.bind("<KeyPress>", pressed)
         w.bind("<Destroy>", lambda e: e.widget is w and self.hotkeys.pause(False))
         self._hotkey_ui = {"buttons": buttons, "choose": choose, "choosing": choosing, "pressed": pressed, "on": on}   # (tests)
@@ -4161,6 +4234,47 @@ class App:
                 due = next_look(due, now)
                 self.stop_evt.wait(max(0.001, due - now))
 
+    def _shop_worker(self):
+        """Watches for an NPC shop (shopwatch.py): once a second until one opens, four times a second while it is. What's bought
+        and sold goes in the run's account. While it's open, plain keys chosen as hotkeys are let go, for its "how many" box.
+        Otherwise, with the inventory open and solid, reads the items in the tab that's showing (invwatch.py)."""
+        watch = None
+        try:
+            slots = InventoryReader(ASSETS, json.loads((ASSETS / "scan_data.json").read_text(encoding="utf-8")).get("item_gids", {}))
+        except Exception as e:
+            slots = None
+            log_error("loading the item pictures", e)
+        with mss.mss() as sct:
+            while not self.stop_evt.is_set():
+                wait = LOOK_CLOSED
+                try:
+                    rect = self.reader.last_rect
+                    if watch is None and TESS and self.daybook:
+                        names = [n for tab in load_items(ASSETS / "items.txt").values() for n in tab]
+                        watch = ShopWatch(TESS.read_lines, names, _load_prices())
+                    if rect and self.reader.hwnd and self.reader.mode == "window" and PLATFORM.game_in_front():
+                        shot = self.reader._hide_own(grab(sct, *rect))
+                        if shot:
+                            for e in watch.look(shot[0]) if watch else ():
+                                if e["kind"] == "mesos":
+                                    self.daybook.mesos(e["mesos"])
+                                else:
+                                    self.daybook.shop_trade(e["kind"], e["name"], e["qty"], e["total"], e["mesos"])
+                            g = self.reader.gh
+                            fields = find_mesos_fields(shot[0], g) if slots and g and not (watch and watch.open) else None
+                            if fields:
+                                seen = slots.slots(shot[0], fields[0])
+                                if seen:
+                                    self.inv_check.look(*seen)
+                    elif watch:
+                        watch.reset()
+                    if watch:
+                        self.hotkeys.hold(watch.open)
+                        wait = LOOK_OPEN if watch.open else LOOK_CLOSED
+                except Exception as e:
+                    log_error("watching for a shop", e)
+                self.stop_evt.wait(wait)
+
     def _said(self, lines, gh):
         """New message lines (msgwatch.Line) as what they say: ("exp", amount) for an EXP or party bonus
         line, ("mesos", amount), ("item", name, how many, tab). A white line with no amount is an item,
@@ -4173,7 +4287,11 @@ class App:
             elif line.kind == "mesos":
                 out.append(("mesos", line.amount))
             elif line.kind == "text" and line.colour == "white" and self.items and line.band is not None:
-                got = self.items.read_line(line, gh / GH0_MSG, TESS.read_lines if tesseract_ok else None)
+                try:
+                    got = self.items.read_line(line, gh / GH0_MSG, TESS.read_lines if tesseract_ok else None)
+                except Exception as e:          # (one line that can't be read doesn't lose the others with it)
+                    log_error("reading an item's name", e)
+                    got = None
                 out.append(got or ("unread",))
         return out
 
@@ -4481,8 +4599,9 @@ class App:
                 self.reader.box, self.rejected = None, 0
             if t.running and t.gained != before and not self.skip_log:
                 self.autolog.gain(now, t.gained - before)
-            if self.drop_scan and t.gained > before:
-                self.drop_scan.exp_bar(t.gained - before, now)
+            risen = self.exp_text.seen(t.exp, t.req)        # (what the number says, paused or not)
+            if self.drop_scan and risen > 0:
+                self.drop_scan.exp_bar(risen, now)
             if note == "died":
                 self.died_at = now
             if note == "LEVEL UP!":
@@ -4631,7 +4750,7 @@ class App:
             eta=f"Lv {level + 1} in {eta}" if level and eta else f"Lv {level}" if level else "",
             level=level or None, eta_time=eta or "",
             mesos=fmt_num(m.per_hour(el)),
-            tiles={"Last 5 min": fmt_num(rolling), "Mesos / hr": fmt_num(m.per_hour(el)), "Elapsed": fmt_dur(el)},
+            tiles={"EXP / min": fmt_num(t.per_minute()), "Mesos / hr": fmt_num(m.per_hour(el)), "Elapsed": fmt_dur(el)},
             details={"% / hr": f"{rate / t.req * 100:.2f}%" if rate and t.req else "\u2014",
                      "Gained": f"{fmt_short(t.gained)}{f'  (+{t.levels} lvl)' if t.levels else ''}",
                      "Current": f"{fmt_num(shown[0])} [{shown[1]:.2f}%]" if shown else "\u2014",
@@ -4697,7 +4816,6 @@ class App:
         calibrating = HUD_CALIBRATION - el if (t.running or el > 0) and el < HUD_CALIBRATION else None
         best = rolling or rate
         to_level = (t.req - t.exp) / best * 3600 if t.req and t.exp is not None and best and best > 0 else None
-        recent = t.recent_gain()
         per_hr = m.per_hour(el)
         mesos_known = m.value is not None
         # With the inventory closed, the mesos can't be read: what's been picked up since is guessed at the
@@ -4724,7 +4842,7 @@ class App:
             "pct": f"{shown[1]:.1f}%" if shown else "?",
             "time": fmt_clock(None if calibrating else to_level), "slime": slime,
             "calibrating": calibrating,
-            "last5": f"+{fmt_num(recent)}" if recent else "+0" if recent == 0 else "—",
+            "per_min": fmt_num(t.per_minute()) if t.per_minute() is not None else "—",
             "rate": "Calibrating…" if calibrating else fmt_num(rate) if rate is not None else "—",
             "session": f"+{fmt_num(t.gained)}" if t.gained else "+0",
             "mesos_rate": "Calibrating…" if calibrating else fmt_num(per_hr) if per_hr is not None else "—",
@@ -4899,6 +5017,7 @@ class App:
         self.session.reset()
         self.picked_mesos, self.timed_mesos, self.loot, self.pickups_seen, self.session_pot_cost = 0, 0, {}, False, 0
         self.run_items.clear()
+        self.inv_check.clear()
         self.autolog.reset_clock()
         self.skip_log = False
         self._show_skip_log()

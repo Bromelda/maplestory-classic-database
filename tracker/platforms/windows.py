@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .base import Hotkeys, Platform, parse_hotkey
+from .base import Hotkeys, Platform, parse_hotkey, to_register
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -117,7 +117,7 @@ class WindowsHotkeys(Hotkeys):
 
     def __init__(self, on_press):
         super().__init__(on_press)
-        self._wanted, self._paused, self._changed = {}, False, True
+        self._wanted, self._paused, self._held, self._changed = {}, False, False, True
         self._lock = threading.Lock()
         threading.Thread(target=self._run, daemon=True).start()
 
@@ -129,6 +129,11 @@ class WindowsHotkeys(Hotkeys):
     def pause(self, paused):
         with self._lock:
             self._paused, self._changed = paused, True
+
+    def hold(self, held):
+        with self._lock:
+            if held != self._held:
+                self._held, self._changed = held, True
 
     def in_front(self):
         hwnd = _GetForegroundWindow()
@@ -157,7 +162,7 @@ class WindowsHotkeys(Hotkeys):
                 except Exception:
                     on = False
                 with self._lock:
-                    changed, wanted, paused, self._changed = self._changed, dict(self._wanted), self._paused, False
+                    changed, wanted, paused, held, self._changed = self._changed, dict(self._wanted), self._paused, self._held, False
                 on = on and not paused
                 if not changed and on == was_on:
                     continue
@@ -165,11 +170,12 @@ class WindowsHotkeys(Hotkeys):
                     _UnregisterHotKey(None, hid)
                 active, was_on = {}, on
                 if on:
-                    for hid, (action, (mods, vk)) in enumerate(wanted.items(), start=1):
+                    for hid, (action, mods, vk, must) in enumerate(to_register(wanted, held), start=1):
                         if _RegisterHotKey(None, hid, mods | 0x4000, vk):     # MOD_NOREPEAT
                             active[hid] = action
-                            self.problems.pop(action, None)
-                        else:
+                            if must:
+                                self.problems.pop(action, None)
+                        elif must:
                             self.problems[action] = "used by another program"
 
 

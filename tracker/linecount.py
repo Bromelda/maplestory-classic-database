@@ -44,6 +44,27 @@ def _same_item(listed, said):
     return a == b or (b.endswith("...") and a.startswith(b.rstrip(". ")))
 
 
+class ExpText:
+    """What the EXP number next to the MP bar says was gained, whether tracking's paused or not. seen() gives what it went up by."""
+
+    def __init__(self):
+        self.last = None
+
+    def seen(self, exp, req):
+        """A trusted reading: the EXP, and how much the level takes (None if it's not known yet)."""
+        if exp is None:
+            return 0
+        last, self.last = self.last, (exp, req)
+        if last is None:
+            return 0
+        was, was_req = last
+        if exp >= was and (req == was_req or req is None or was_req is None):
+            return exp - was
+        if exp < was and was_req and req != was_req:
+            return was_req - was + exp      # (a level up)
+        return 0                            # (it fell: a death)
+
+
 class Meter:
     """How much of what happened was read: the lines against the numbers on screen. Counts for the whole run, and for
     the last few minutes."""
@@ -76,8 +97,8 @@ class Meter:
 
     @staticmethod
     def share(numbers, lines, screen):
-        """How much of what the screen's number gained the lines account for, up to 100%. None: nothing to compare."""
-        return min(1.0, numbers[lines] / numbers[screen]) if numbers[screen] > 0 else None
+        """How much of what the screen's number gained the lines account for. Over 100% is lines counted twice. None: nothing to compare."""
+        return numbers[lines] / numbers[screen] if numbers[screen] > 0 else None
 
     def line(self, now):
         """How much is being read, in words."""
@@ -90,6 +111,9 @@ class Meter:
         if seen:
             parts.append(f"item names {n['items_read']:,} of {seen:,}")
         text = ("Reading, last 5 minutes: " + " · ".join(parts)) if parts else "Reading: nothing to compare yet"
+        if self.total["exp_bar"] > 0:
+            text += (f"\nEXP since it opened: lines read {self.total['exp_lines']:,}, and the number by your MP went up "
+                     f"{self.total['exp_bar']:,} ({self.total['exp_lines'] / self.total['exp_bar']:.0%}). Over 100% is lines counted twice.")
         if self.last_check:
             counted, gained = self.last_check
             text += f"\nLast check against your inventory: counted {counted:,} mesos picked up, and it went up by {gained:,}"

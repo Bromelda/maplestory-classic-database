@@ -17,27 +17,51 @@ from abc import ABC, abstractmethod
 HOTKEY_MODS = {"Ctrl": 0x2, "Alt": 0x1, "Shift": 0x4}           # MOD_CONTROL, MOD_ALT, MOD_SHIFT
 
 
+_OTHER_KEYS = {0x21: "PageUp", 0x22: "PageDown", 0x23: "End", 0x24: "Home", 0x2D: "Insert", 0xBA: ";", 0xBB: "=", 0xBC: ",",
+               0xBD: "-", 0xBE: ".", 0xBF: "/", 0xC0: "`", 0xDB: "[", 0xDC: "\\", 0xDD: "]", 0xDE: "'"}
+_ALL_VKS = [*range(0x21, 0x25), 0x2D, *range(0x30, 0x3A), *range(0x41, 0x5B), *range(0x60, 0x6A), *range(0x70, 0x7C),
+            *range(0xBA, 0xC1), *range(0xDB, 0xDF)]
+
+
 def _key_name(vk):
     if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:
         return chr(vk)
+    if 0x60 <= vk <= 0x69:
+        return f"Num{vk - 0x60}"
     if 0x70 <= vk <= 0x7B:
         return f"F{vk - 0x6F}"
-    return None
+    return _OTHER_KEYS.get(vk)
 
 
 def parse_hotkey(text):
-    """'Shift+1' -> (modifiers, virtual key), or None if it isn't a hotkey the overlay takes:
-    Ctrl, Alt and/or Shift with a number or letter, or an F key (with or without them)."""
+    """'Shift+1' or '0' -> (modifiers, virtual key), or None if it isn't a hotkey the overlay takes: a number, letter, F key,
+    number pad key, punctuation, or Insert, Home, End, PageUp or PageDown, with or without Ctrl, Alt or Shift. The game doesn't
+    get a hotkey while it's on, so a plain key can't be typed in chat: that's for whoever chooses it to weigh up."""
     if not isinstance(text, str) or not text:
         return None
     *mods, key = text.split("+")
     if len(set(mods)) != len(mods) or any(m not in HOTKEY_MODS for m in mods):
         return None
-    vk = next((v for v in list(range(0x30, 0x3A)) + list(range(0x41, 0x5B)) + list(range(0x70, 0x7C))
-               if _key_name(v) == key), None)
-    if vk is None or (not mods and not key.startswith("F")):     # a plain letter would block typing
+    vk = next((v for v in _ALL_VKS if _key_name(v) == key), None)
+    if vk is None:
         return None
     return sum(HOTKEY_MODS[m] for m in mods), vk
+
+
+def typing_key(vk):
+    """Would this key, with no Ctrl, Alt or Shift, be typed into a box in the game (a number, letter or punctuation)?"""
+    return 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A or 0x60 <= vk <= 0x69 or 0xBA <= vk <= 0xC0 or 0xDB <= vk <= 0xDE
+
+
+def to_register(wanted, held=False):
+    """What to ask the OS for, from {action: (modifiers, key)}: [(action, modifiers, key, must have)]. A plain key is also
+    asked for with Shift, or it wouldn't fire while Shift's held down to attack. held: a box in the game is waiting for typing,
+    so plain typing keys are left alone."""
+    keys = {a: k for a, k in wanted.items() if not (held and not k[0] and typing_key(k[1]))}
+    out = [(a, m, vk, True) for a, (m, vk) in keys.items()]
+    taken = set(wanted.values())
+    out += [(a, HOTKEY_MODS["Shift"], vk, False) for a, (m, vk) in keys.items() if not m and (HOTKEY_MODS["Shift"], vk) not in taken]
+    return out
 
 
 def hotkey_text(ctrl, alt, shift, vk):
@@ -66,6 +90,9 @@ class Hotkeys(ABC):
     @abstractmethod
     def pause(self, paused):
         """Off for a moment (e.g. while a new hotkey is being chosen), then back on."""
+
+    def hold(self, held):
+        """While a box in the game is waiting for typing (a shop's "how many"), plain typing keys go to the game."""
 
 
 class Platform(ABC):

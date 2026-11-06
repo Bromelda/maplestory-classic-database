@@ -1,7 +1,8 @@
 """The Items window: what you've picked up this run, and how the reading's going.
 
-Two tabs. Items lists every item whose pickup line was read since the tracker opened (or Reset), with how many and which
-inventory tab, newest pickups first. Reading says how much of the lines it's catching, and what's been learned so far.
+Items lists every item whose pickup line was read since the tracker opened (or Reset), with how many and which inventory tab,
+newest pickups first. Inventory sets those against what your inventory's counts really did. Reading says how much of the lines
+it's catching, and what's been learned so far.
 It's only a window on what the tracker already knows: closing it changes nothing.
 """
 import tkinter as tk
@@ -50,8 +51,8 @@ class RunItems:
 class ItemsWindow:
     """get_items: a RunItems. get_reading: the Reading tab's text. colours: bg, fg, dim, list_bg, select, accent."""
 
-    def __init__(self, root, theme, colours, get_items, get_reading, topmost=False, at=None, style_window=None):
-        self.get_items, self.get_reading = get_items, get_reading
+    def __init__(self, root, theme, colours, get_items, get_reading, topmost=False, at=None, style_window=None, get_check=None):
+        self.get_items, self.get_reading, self.get_check = get_items, get_reading, get_check
         self.colours = c = colours
         px = theme.px
         w = self.win = tk.Toplevel(root)
@@ -70,7 +71,7 @@ class ItemsWindow:
         tabs = tk.Frame(w, bg=c["bg"])
         tabs.pack(fill="x", padx=px(14), pady=(px(12), px(8)))
         self.tab_buttons, self.pages = {}, {}
-        for name in ("Items", "Reading"):
+        for name in ("Items", "Inventory", "Reading") if get_check else ("Items", "Reading"):
             b = tk.Label(tabs, text=name, bg=c["bg"], fg=c["dim"], font=text, padx=px(10), pady=px(5), cursor="hand2")
             b.pack(side="left", padx=(0, px(4)))
             b.bind("<Button-1>", lambda e, n=name: self.show(n))
@@ -100,6 +101,25 @@ class ItemsWindow:
         self.tree.configure(yscrollcommand=bar.set)
         self.tree.pack(side="left", fill="both", expand=True)
         bar.pack(side="right", fill="y")
+
+        if get_check:
+            page = self.pages["Inventory"] = tk.Frame(w, bg=c["bg"])
+            self.check_summary = tk.StringVar()
+            label = tk.Label(page, textvariable=self.check_summary, bg=c["bg"], fg=c["dim"], font=small, justify="left", anchor="w")
+            label.pack(fill="x", pady=(0, px(6)))
+            page.bind("<Configure>", lambda e, lb=label: lb.configure(wraplength=max(120, e.width - 8)))
+            box = tk.Frame(page, bg=c["bg"])
+            box.pack(fill="both", expand=True)
+            self.check_tree = ttk.Treeview(box, columns=("item", "had", "now", "got", "read"), show="headings", style="Items.Treeview", selectmode="none")
+            for key, title, width, anchor, stretch in (("item", "Item", px(170), "w", True), ("had", "Had", px(50), "e", False), ("now", "Now", px(50), "e", False),
+                                                       ("got", "Got", px(50), "e", False), ("read", "Lines read", px(90), "e", False)):
+                self.check_tree.heading(key, text=title, anchor=anchor)
+                self.check_tree.column(key, width=width, anchor=anchor, stretch=stretch)
+            bar = ttk.Scrollbar(box, orient="vertical", command=self.check_tree.yview)
+            self.check_tree.configure(yscrollcommand=bar.set)
+            self.check_tree.pack(side="left", fill="both", expand=True)
+            bar.pack(side="right", fill="y")
+        self.shown_check = None
 
         page = self.pages["Reading"] = tk.Frame(w, bg=c["bg"])
         self.reading = tk.Text(page, wrap="word", bg=c["bg"], fg=c["fg"], font=small, relief="flat", highlightthickness=0,
@@ -141,6 +161,14 @@ class ItemsWindow:
             self.tree.delete(*self.tree.get_children())
             for name, qty, tab in rows:
                 self.tree.insert("", "end", values=(name, f"{qty:,}", tab))
+        if self.get_check:
+            summary, check = self.get_check()
+            self.check_summary.set(summary)
+            if check != self.shown_check:
+                self.shown_check = check
+                self.check_tree.delete(*self.check_tree.get_children())
+                for name, _, had, now, got, read, share in check:
+                    self.check_tree.insert("", "end", values=(name, f"{had:,}", f"{now:,}", f"{got:+,}", f"{read:,}" + (f" ({share:.0%})" if share is not None else "")))
         text = self.get_reading()
         if text != self.shown_text:
             self.shown_text = text

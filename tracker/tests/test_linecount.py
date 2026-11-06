@@ -211,7 +211,7 @@ check("the run's totals are kept", m.results()["exp_lines"] == 90 and m.results(
 m = Meter()
 m.add("exp_lines", 200, 1.0)
 m.add("exp_bar", 100, 1.0)
-check("the bar behind the lines is 100%, no more", "EXP 100%" in m.line(2.0), m.line(2.0))
+check("lines past the bar show, as counted twice", "EXP 200%" in m.line(2.0), m.line(2.0))
 m = Meter()
 m.mesos_line(200, 1.0)
 check("with the inventory never seen, no mesos figure", "mesos" not in m.line(2.0), m.line(2.0))

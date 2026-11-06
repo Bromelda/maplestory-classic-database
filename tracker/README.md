@@ -60,9 +60,24 @@ that waits until they've been checked on a monster with counted rates.
 
 Party kills aren't counted, for now. A party's EXP lines don't name the monster.
 
+### Your inventory, the real check
+
+Whenever your inventory's open and solid, it reads the tab showing: what each slot's picture is, and the number on it. An item's
+first count is where it starts, and the **Inventory** tab of the Items window sets what it's gained since against the pickup
+lines read for it, so it says plainly how many it really caught. Selling and buying count, as shops are watched. Handing items in
+for a quest doesn't, yet, and reads as lines too many. So open each tab you care about before you hunt, and again after.
+Only tabs you open are read, and only the rows showing. An item whose picture the tracker doesn't have can't be named, so it's left out.
+
+### Shops
+
+While a shop's open, its window shows your mesos and keeps the row you clicked highlighted. So when your mesos fall, it knows
+what you bought, and the fall over the row's price is how many: 100 Lemons at 150 is 15,000. The same goes for the other side
+when you sell. It uses the price on screen, so a discount where you're a citizen counts. It's all in the run's account on the
+Reading tab, and works for any item, not just what's on your quick bar.
+
 ### The map
 
-It needs the minimap's name, as read off the screen, to know what can be here. From that it looks up the database: which
+It needs the minimap's name, as read off the screen (open or collapsed to its bar), to know what can be here. From that it looks up the database: which
 monsters live here, how much EXP each gives, what each is known to drop, and which items only one of them drops. That's what
 names a kill from its EXP, narrows down a name that's hard to read, and picks which sprites and drop pictures to look for. The
 Reading tab shows what it knows about the map you're on. If the name's out of sight for 45 seconds, it can't be sure you're
@@ -70,8 +85,9 @@ on the same map, so kills stop counting until it can be read again. Run `tools/m
 
 ### How much it's reading
 
-The Reading tab says how much of the last 5 minutes it caught. The game's own numbers are the check: the EXP lines against
-what the EXP bar gained, and item lines read against those that couldn't be. Mesos are checked whenever your inventory is
+The Reading tab says how much of the last 5 minutes it caught, and of the whole run. The game's own numbers are the check: the EXP
+lines against what the EXP number next to your MP bar went up by, whether tracking was paused or not (over 100% means lines counted
+twice), and item lines read against those that couldn't be. Mesos are checked whenever your inventory is
 open: the mesos lines counted since it was last open, however long ago, against how much the count went up. Mesos going down,
 or a town in between, means a shop may have been involved, so it starts again from there. A span of play where the EXP lines add up to under 90% of the bar is left
 out, in pieces of 5 minutes, so a bad minute only costs its own piece.
@@ -119,8 +135,12 @@ with a switch and a button that opens the drops folder.
 | Shift+F5 | Move the card |
 | Shift+F6 | Reset |
 
-They work while the game or the tracker is in front, and bringing the window back leaves the keyboard with the game. You
-can change them in Settings. With another program in front, click the taskbar button or double-click the desktop shortcut.
+They work while the game or the tracker is in front, and bringing the window back leaves the keyboard with the game. With
+another program in front, click the taskbar button or double-click the desktop shortcut.
+
+You can change them in Settings to nearly any key, such as plain 0, 9, 8 and 7, with no Shift. A plain key also works while
+Shift's held down to attack. While the game's in front, the game doesn't get a key you've chosen, so a plain 0 can't be typed in
+chat or used by the game. A shop's "how many" box still gets its numbers.
 
 The tracker runs at below-normal priority, so the game comes first.
 

@@ -38,6 +38,7 @@ NAME_GAP = 16               # px between two words of a name, at most (more: som
 DOTS_OK = 0.7               # the "..." at the end of a name cut short
 MATCH_OK, MATCH_MARGIN = 0.75, 0.05  # Tesseract's reading against the item list: how close, how much closer
 LIKELY_OK = 0.6             # ...against what this map's monsters are known to drop: so few, it can be less close
+MIN_CHAR_W = 3                  # a name in a picture (at 4K) is at least this wide per letter
 KEEP = 3                    # pictures kept of each name (from different lines)
 
 
@@ -86,6 +87,11 @@ def match_name(raw, tab, items, cut, ok=MATCH_OK):
     return name if best >= ok and best - second >= MATCH_MARGIN else None
 
 
+def _whole_picture(name, pic):
+    """Is this picture wide enough to be this whole name? A sliver of one once got kept, and broke reading anything on that tab."""
+    return pic.ndim == 2 and pic.shape[1] >= MIN_CHAR_W * len(name)
+
+
 class ItemReader:
     """Reads item lines: read() for one line's picture."""
 
@@ -121,7 +127,8 @@ class ItemReader:
         if f"{prefix}_names" not in data.files:
             return
         for k, (name, tab) in enumerate(zip(data[f"{prefix}_names"], data[f"{prefix}_tabs"])):
-            self.names.append([str(name), str(tab), data[f"{prefix}{k}"].astype(np.float32)])
+            if _whole_picture(str(name), data[f"{prefix}{k}"]):
+                self.names.append([str(name), str(tab), data[f"{prefix}{k}"].astype(np.float32)])
 
     def _save(self):
         if not self.learned_path:
@@ -231,7 +238,7 @@ class ItemReader:
                 continue
             core = ref[2:-2, 2:-2]
             area = G[:, max(0, end - core.shape[1] - 2 * NAME_SLACK - 2):end]
-            if core.shape[0] > area.shape[0] or core.shape[1] > area.shape[1]:
+            if not core.size or core.shape[0] > area.shape[0] or core.shape[1] > area.shape[1]:
                 continue
             _, score, _, _ = cv2.minMaxLoc(cv2.matchTemplate(area, core, cv2.TM_CCOEFF_NORMED))
             scores[name] = max(scores.get(name, -1.0), float(score))
@@ -244,7 +251,7 @@ class ItemReader:
 
     def learn(self, name, tab, pic):
         """Keeps a picture of a name, to know it by sight from now on (up to KEEP of each)."""
-        if sum(1 for n, t, _ in self.names if n == name and t == tab) >= KEEP:
+        if not _whole_picture(name, pic) or sum(1 for n, t, _ in self.names if n == name and t == tab) >= KEEP:
             return
         self.names.append([name, tab, pic.astype(np.float32)])
         self.learned += 1

@@ -107,15 +107,33 @@ check("every action has a name and a key", set(maple_exp.HOTKEY_ACTIONS) == set(
 for key in maple_exp.DEFAULT_HOTKEYS.values():
     check(f"{key} can't be typed in chat", maple_exp.parse_hotkey(key) and "+F" in key)
 
+from platforms import hotkey_text, to_register, typing_key  # noqa: E402
+SHIFT = 0x4
+for key, vk in (("0", 0x30), ("9", 0x39), ("7", 0x37), ("Z", 0x5A), ("F8", 0x77), ("Num0", 0x60), ("-", 0xBD), ("\\", 0xDC), ("Home", 0x24)):
+    check(f"{key} can be a hotkey with no Shift", maple_exp.parse_hotkey(key) == (0, vk), maple_exp.parse_hotkey(key))
+    check(f"pressing {key} gives its name", hotkey_text(False, False, False, vk) == key, hotkey_text(False, False, False, vk))
+check("with Shift still works", maple_exp.parse_hotkey("Shift+F3") == (SHIFT, 0x72) and maple_exp.parse_hotkey("Ctrl+Alt+R") == (0x3, 0x52))
+check("Shift alone or nonsense isn't a key", not maple_exp.parse_hotkey("Shift") and not maple_exp.parse_hotkey("Banana") and not maple_exp.parse_hotkey("Shift+Shift+1"))
+check("Enter and the arrows can't be taken from the game", hotkey_text(False, False, False, 0x0D) is None and hotkey_text(False, False, False, 0x25) is None)
+got = to_register({"start": (0, 0x30), "reset": (SHIFT, 0x71)})
+check("a plain key also fires with Shift held down to attack", ("start", SHIFT, 0x30, False) in got and ("start", 0, 0x30, True) in got, got)
+check("a Shift key isn't asked for twice", len([g for g in got if g[0] == "reset"]) == 1, got)
+got = to_register({"start": (0, 0x30), "reset": (SHIFT, 0x30)})
+check("a plain key doesn't take another hotkey's Shift version", [g for g in got if g[0] == "start"] == [("start", 0, 0x30, True)], got)
+got = to_register({"start": (0, 0x30), "repot": (0, 0x77), "reset": (SHIFT, 0x71)}, held=True)
+check("a shop's box gets its numbers, and other keys stay", {g[0] for g in got} == {"repot", "reset"}, got)
+check("what counts as typing", typing_key(0x30) and typing_key(0x60) and typing_key(0xBD) and not typing_key(0x77) and not typing_key(0x24))
+
 with tempfile.TemporaryDirectory() as folder:
     path = Path(folder) / "config.json"
-    path.write_text(json.dumps({"hotkeys": {"start": "Shift+1", "reset": "Ctrl+R", "repot": "", "edit": "Shift+5"}}), encoding="utf-8")
+    path.write_text(json.dumps({"hotkeys": {"start": "Shift+1", "reset": "Ctrl+R", "repot": "", "edit": "Shift+5", "window": "0", "card": "9"}}), encoding="utf-8")
     with mock.patch.object(maple_exp, "CONFIG_PATH", path):
         keys = maple_exp.load_config()["hotkeys"]
     check("old default keys move to the new ones", keys["start"] == "Shift+F3" and keys["edit"] == "Shift+F5", keys)
     check("one you chose stays", keys["reset"] == "Ctrl+R", keys)
     check("one you turned off stays off", keys["repot"] == "", keys)
-    check("the new ones arrive", keys["window"] == "Shift+F1" and keys["card"] == "Shift+F2", keys)
+    check("plain keys you chose stay", keys["window"] == "0" and keys["card"] == "9", keys)
+    check("the new ones arrive", keys["items"] == "Shift+F7", keys)
 
 
 # The view, with windows left open that don't move with the world.
