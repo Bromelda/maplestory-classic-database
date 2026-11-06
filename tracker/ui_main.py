@@ -472,7 +472,7 @@ class Strip(tk.Frame):
     Both carry their own Start/Pause, compact and settings buttons, because the main window's are hidden here."""
 
     CARD = {"wide": (54, 112), "bar": (12, 72)}               # the card's top and height
-    STATS = ("EXP / HR", "LAST 5 MIN", "MESOS / HR", "NEXT LEVEL")
+    STATS = ("EXP / HR", "EXP / MIN", "MESOS / HR", "NEXT LEVEL")
 
     def __init__(self, parent, theme, cb, shape, bg=INK):
         super().__init__(parent, bg=bg)
@@ -604,7 +604,7 @@ class Strip(tk.Frame):
             if not wide:
                 c.coords(self._unit, end + g.px(6), y0 + g.px(31))
         if wide and (everything or "tiles" in changed or "mesos" in changed or "eta_time" in changed or "level" in changed):
-            vals = ((m["tiles"] or {}).get("Last 5 min", "\u2014"), m["mesos"] or "\u2014", m["eta_time"] or "\u2014")
+            vals = ((m["tiles"] or {}).get("EXP / min", "\u2014"), m["mesos"] or "\u2014", m["eta_time"] or "\u2014")
             for item, value in zip(self._vals, vals):
                 c.itemconfigure(item, text=value)
             lvl = m["level"]
@@ -686,7 +686,7 @@ class MainView(tk.Frame):
         self.tiles_row.grid(row=2, column=0, padx=g.px(SIDE), pady=pad(0, 6), sticky="we")
         tw = (INNER - 16) // 3
         self.tiles = {}
-        for i, name in enumerate(("Last 5 min", "Mesos / hr", "Elapsed")):
+        for i, name in enumerate(("EXP / min", "Mesos / hr", "Elapsed")):
             t = Tile(self.tiles_row, theme, name, tw, bg)
             t.grid(row=0, column=i, padx=(0 if i == 0 else g.px(8), 0))
             self.tiles[name] = t
@@ -851,6 +851,9 @@ class SimpleView(tk.Frame):
         self.move_btn = Button(more, theme, text="Move card", kind="secondary", width=half, height=38, radius=12,
                                size=12, command=cb["move"], tip="Move or resize the tracker card", bg=bg)
         self.move_btn.grid(row=0, column=1, padx=(g.px(6), 0))
+        self.items_btn = Button(more, theme, text="Items and reading", kind="secondary", width=INNER, height=38, radius=12,
+                                size=12, command=cb["items"], tip="What you've picked up this run, and how much it's reading", bg=bg)
+        self.items_btn.grid(row=1, column=0, columnspan=2, sticky="w", pady=(g.px(6), 0))
 
         self.message = Message(self, theme, bg)
         self.message.grid(row=3, column=0, padx=g.px(SIDE + 2), pady=pad(8, 14), sticky="we")

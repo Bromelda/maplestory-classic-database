@@ -39,7 +39,7 @@ def next_look(due, now, every=SCAN_POLL):
 
 
 def line_lines(sessions, need=NEED_KILLS, kept=3):
-    """What the message lines have added up to, every session so far: lines for the Log page."""
+    """What the message lines have added up to, every session so far: lines for the Reading tab."""
     solo, kills, listed, skipped = Counter(), Counter(), {}, Counter()
     for s in sessions:
         line = s.get("line") or {}
@@ -66,7 +66,7 @@ def line_lines(sessions, need=NEED_KILLS, kept=3):
 
 
 def learned_lines(sessions, reasons, need=NEED_KILLS, kept=3):
-    """What every session so far adds up to, as lines for the Log page. sessions: their saved results. reasons: what
+    """What every session so far adds up to, as lines for the Reading tab. sessions: their saved results. reasons: what
     each reason for skipping a kill means."""
     kills, skipped = Counter(), Counter()
     for s in sessions:
@@ -138,12 +138,18 @@ class DropScan:
         self.learned_text, self.learned_at = None, 0.0
         self.clip_at = 0.0
         self.looks = deque(maxlen=50)   # when the latest looks were
+        self.on_map = None              # told what can drop on a new map: (a set of item names)
+        self.blind = False              # the minimap's name has been out of sight for a while: the map may have changed
 
     # ---------- what comes in ----------
 
     def map_seen(self, name, now):
         """The map's name as read off the screen."""
         found = self.data.find_map(name) if name else None
+        if self.blind and found:
+            with self.lock:
+                self.blind = False
+                self.lines.set_map(found, now)
         if found == self.map or (found is None and name):
             return                      # (a misread name isn't a new map)
         with self.lock:
@@ -152,6 +158,44 @@ class DropScan:
             self.ledger.set_map(found, now)
             self.lines.set_map(found, now)
             self.field.set_species(self.data.species_on(found) if found else [])
+            if self.on_map:
+                self.on_map({i for s in self.data.species_on(found) for i in self.data.drops_of(s)} if found else None)
+
+    def map_lost(self, now):
+        """The minimap's name has been out of sight for a while, so which map this is isn't certain. The lines' EXP can't name
+        a monster without it: nothing counts until the name can be read again."""
+        with self.lock:
+            if not self.blind:
+                self.blind = True
+                self.lines.set_map(None, now)
+
+    def map_lines(self):
+        """What's known about this map, from the database, as lines of text."""
+        with self.lock:
+            blind, name = self.blind, self.map
+            odd = [(a, n) for a, n in self.lines.odd_amounts.most_common(3) if n >= 3]
+            only = len(self.lines._owners()) if name and not blind else 0
+        if blind:
+            return ["Can't see the map's name, so kills aren't counting. Open the minimap."]
+        if not name:
+            return ["Map not read yet. Kills start counting once the minimap's name can be read."]
+        d, species = self.data, self.data.species_on(name)
+        if not species:
+            return [f"{name}: no monsters live here."]
+        counts = d.counts_on(name)
+        mobs = " · ".join(f"{d.name_of(s)} ({d.exp_of(s)} EXP{f', {counts[s]} here' if counts.get(s) else ''})" for s in species)
+        out = [f"{name}: {mobs}"]
+        same = {}
+        for s in species:
+            same.setdefault(d.exp_of(s), []).append(d.name_of(s))
+        for names in same.values():
+            if len(names) > 1:
+                out.append(f"{' and '.join(names)} give the same EXP, so their kills can't be told apart.")
+        if only:
+            out.append(f"{only} items here are known from only one of these, so they can count in a mixed hunt.")
+        if odd:
+            out.append("EXP lines that fit nothing here: " + ", ".join(f"{a} ({n} times)" for a, n in odd))
+        return out
 
     def heard(self, lines, found, now):
         """New message lines. lines: msgwatch.Line, for the EXP. found: pickups as read: ("mesos", amount)
@@ -168,12 +212,19 @@ class DropScan:
     def exp_bar(self, gained, now):
         """The EXP bar's gone up: what the lines ought to add up to."""
         with self.lock:
-            self.lines.exp_bar(gained, now)
+            self.lines.exp_number(gained, now)
 
-    def mesos_box(self, gained, now):
-        """The mesos count's gone up: what the lines ought to add up to."""
+    def quest_reward(self, exp, mesos, now):
+        """A quest's reward, read off the screen."""
         with self.lock:
-            self.lines.mesos_box(gained, now)
+            self.lines.quest_reward(exp, mesos, now)
+
+    def mesos_seen(self, value, now, in_town=False):
+        """The mesos count as read off the inventory, whenever it's open: the lines since it was last seen ought to add up
+        to the difference."""
+        with self.lock:
+            # (A town, or anywhere with no monsters: not hunting, and maybe a shop.)
+            self.lines.mesos_seen(value, now, in_town or bool(self.map and not self.data.species_on(self.map)))
 
     def away(self, now):
         """The game's not in front: nothing's being read."""
@@ -181,7 +232,7 @@ class DropScan:
             self.lines.away(now)
 
     def meter_line(self, now):
-        """How much of the lines are being read, and how often the field's being looked at, for the Log page."""
+        """How much of the lines are being read, and how often the field's being looked at, for the Reading tab."""
         with self.lock:
             text = self.lines.meter.line(now)
             looks = list(self.looks)

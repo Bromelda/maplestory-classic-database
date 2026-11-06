@@ -112,7 +112,8 @@ def main():
     maps = {}
     for mp in load("maps"):
         spawns = [s["monster"] for s in mp.get("spawns", []) if s["monster"] in monsters]
-        maps[mp["name"]] = {"id": mp["id"], "spawns": spawns, "size": mp.get("size")}
+        maps[mp["name"]] = {"id": mp["id"], "spawns": spawns, "size": mp.get("size"),
+                            "counts": {s["monster"]: s.get("count") for s in mp.get("spawns", []) if s["monster"] in monsters}}
     out = HERE / "assets" / "scan_data.json"
     item_gids = {n: gid_by_name[n] for m in monsters.values() for n in m["drops"] if n in gid_by_name}
     heals = {i["name"]: heal_of(i.get("effect")) for i in all_items if heal_of(i.get("effect"))}

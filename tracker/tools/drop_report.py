@@ -86,7 +86,7 @@ def _lines_section(t):
     if r.get("exp_bar"):
         parts.append(f"EXP {min(1, r.get('exp_lines', 0) / r['exp_bar']):.0%}")
     if r.get("mesos_box"):
-        parts.append(f"mesos {min(1, r.get('mesos_lines', 0) / r['mesos_box']):.0%}")
+        parts.append(f"mesos {min(1, r.get('mesos_checked', 0) / r['mesos_box']):.0%}")
     seen = r.get("items_read", 0) + r.get("items_unread", 0)
     if seen:
         parts.append(f"item names {r.get('items_read', 0)} of {seen}")

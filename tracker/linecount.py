@@ -32,6 +32,7 @@ PARTY_S = 30.0              # a party bonus line means a party for this long
 CHUNK_S = 300.0             # a long stretch is checked in pieces this long, so a bad minute costs only its own piece
 MIN_READ = 0.9              # share of what the EXP bar gained that the lines must add up to
 METER_S = 300.0             # how far back the live meter looks
+LUMP_LEAST, LUMP_TIMES = 500, 6     # EXP going up by this much at once, and this many times the biggest line read: a quest's reward, not kills
 
 SKIPPED = {"lead": "the start of a stretch", "party": "in a party", "exp": "the EXP fit no monster here (or more than one)",
            "unread": "EXP lines were going unread", "nomap": "the map wasn't known yet", "others": "another kind was killed by someone else",
@@ -44,6 +45,27 @@ def _same_item(listed, said):
     return a == b or (b.endswith("...") and a.startswith(b.rstrip(". ")))
 
 
+class ExpText:
+    """What the EXP number next to the MP bar says was gained, whether tracking's paused or not. seen() gives what it went up by."""
+
+    def __init__(self):
+        self.last = None
+
+    def seen(self, exp, req):
+        """A trusted reading: the EXP, and how much the level takes (None if it's not known yet)."""
+        if exp is None:
+            return 0
+        last, self.last = self.last, (exp, req)
+        if last is None:
+            return 0
+        was, was_req = last
+        if exp >= was and (req == was_req or req is None or was_req is None):
+            return exp - was
+        if exp < was and was_req and req != was_req:
+            return was_req - was + exp      # (a level up)
+        return 0                            # (it fell: a death)
+
+
 class Meter:
     """How much of what happened was read: the lines against the numbers on screen. Counts for the whole run, and for
     the last few minutes."""
@@ -52,8 +74,15 @@ class Meter:
         self.window = window
         self.recent = deque()           # (when, what, how much)
         self.total = Counter()
+        self.box_value = None           # the mesos count when it was last seen
+        self.since_seen = 0             # mesos lines since then
+        self.visited_town = False       # been in a town since then
+        self.last_check = None          # (the lines' mesos, what the count gained) at the last comparison
+        self.biggest = 0                # the biggest EXP line read
 
     def add(self, what, amount, t):
+        if what == "exp_lines":
+            self.biggest = max(self.biggest, amount)
         self.recent.append((t, what, amount))
         self.total[what] += amount
         self.forget(t)
@@ -72,23 +101,51 @@ class Meter:
 
     @staticmethod
     def share(numbers, lines, screen):
-        """How much of what the screen's number gained the lines account for, up to 100%. None: nothing to compare."""
-        return min(1.0, numbers[lines] / numbers[screen]) if numbers[screen] > 0 else None
+        """How much of what the screen's number gained the lines account for. Over 100% is lines counted twice. None: nothing to compare."""
+        return numbers[lines] / numbers[screen] if numbers[screen] > 0 else None
 
     def line(self, now):
-        """One line of text, for the Log page."""
+        """How much is being read, in words."""
         n, parts = self.last(now), []
-        for label, lines, screen in (("EXP", "exp_lines", "exp_bar"), ("mesos", "mesos_lines", "mesos_box")):
+        for label, lines, screen in (("EXP", "exp_lines", "exp_bar"), ("mesos", "mesos_checked", "mesos_box")):
             s = self.share(n, lines, screen)
             if s is not None:
                 parts.append(f"{label} {s:.0%}")
         seen = n["items_read"] + n["items_unread"]
         if seen:
             parts.append(f"item names {n['items_read']:,} of {seen:,}")
-        return ("Reading, last 5 minutes: " + " · ".join(parts)) if parts else "Reading: nothing to compare yet"
+        text = ("Reading, last 5 minutes: " + " · ".join(parts)) if parts else "Reading: nothing to compare yet"
+        if self.total["exp_bar"] > 0:
+            text += (f"\nEXP since it opened: lines read {self.total['exp_lines']:,}, and the number by your MP went up "
+                     f"{self.total['exp_bar']:,} ({self.total['exp_lines'] / self.total['exp_bar']:.0%}). Over 100% is lines counted twice.")
+        if self.total["exp_lump"] > 0:
+            text += f"\nLeft out of that: {self.total['exp_lump']:,} EXP that came all at once, most likely from a quest."
+        if self.last_check:
+            counted, gained = self.last_check
+            text += f"\nLast check against your inventory: counted {counted:,} mesos picked up, and it went up by {gained:,}"
+        return text
+
+    def mesos_seen(self, value, t, in_town=False):
+        """The mesos count, read off the inventory whenever it's open. The mesos lines since it was last seen ought to add
+        up to the difference, however long it's been closed. Mesos going down, or a town (a shop), means there's nothing to
+        compare: it starts again from here."""
+        if in_town:
+            self.visited_town = True
+        if value == self.box_value:
+            return
+        gained = None if self.box_value is None else value - self.box_value
+        if gained is not None and gained > 0 and not self.visited_town:
+            self.add("mesos_box", gained, t)
+            self.add("mesos_checked", self.since_seen, t)
+            self.last_check = (self.since_seen, gained)
+        self.box_value, self.since_seen, self.visited_town = value, 0, in_town
+
+    def mesos_line(self, amount, t):
+        self.add("mesos_lines", amount, t)
+        self.since_seen += amount
 
     def results(self):
-        return {k: self.total[k] for k in ("exp_lines", "exp_bar", "mesos_lines", "mesos_box", "items_read", "items_unread")}
+        return {k: self.total[k] for k in ("exp_lines", "exp_bar", "mesos_lines", "mesos_checked", "mesos_box", "items_read", "items_unread")}
 
 
 class Stretch:
@@ -102,6 +159,8 @@ class Stretch:
 
 
 class LineCounter:
+    quest_exp = 0                       # a quest's EXP read off the screen, that the number hasn't shown yet
+
     """Feed it what the lines say. All times from the same clock."""
 
     def __init__(self, data):
@@ -172,7 +231,7 @@ class LineCounter:
 
     def pickup(self, name, qty, t):
         if name == "mesos":
-            self.meter.add("mesos_lines", qty, t)
+            self.meter.mesos_line(qty, t)
         else:
             self.meter.add("items_read", 1, t)
         if self.open:
@@ -184,16 +243,38 @@ class LineCounter:
         """A white line that couldn't be read."""
         self.meter.add("items_unread", 1, t)
 
+    def quest_reward(self, exp, mesos, t):
+        """A quest's reward was read off the screen: EXP and mesos no line will say."""
+        self.quest_exp += exp
+        if mesos:
+            self.meter.visited_town = True      # (so the mesos start again from here, as after a shop)
+
+    def exp_number(self, gained, t):
+        """The EXP number's gone up by this much since the last reading. A quest's reward has no line to read: a big jump is one,
+        even if its reward wasn't seen, and its mesos come with it."""
+        taken = min(gained, self.quest_exp)
+        if taken:
+            self.quest_exp -= taken
+            self.meter.add("exp_lump", taken, t)
+            gained -= taken
+        if not gained:
+            return
+        if gained >= max(LUMP_LEAST, LUMP_TIMES * self.meter.biggest):
+            self.meter.add("exp_lump", gained, t)
+            self.meter.visited_town = True      # (so the mesos start again from here, as after a shop)
+        else:
+            self.exp_bar(gained, t)
+
     def exp_bar(self, gained, t):
-        """The EXP bar's gone up by this much."""
+        """The EXP bar's gone up by this much, from kills."""
         self.meter.add("exp_bar", gained, t)
         for s in (self.open, self.span):
             if s and t > s.counts_from:
                 s.exp_bar += gained
 
-    def mesos_box(self, gained, t):
-        """The mesos count's gone up by this much (not a shop's doing)."""
-        self.meter.add("mesos_box", gained, t)
+    def mesos_seen(self, value, t, in_town=False):
+        """The mesos count, off the inventory, whenever it's open."""
+        self.meter.mesos_seen(value, t, in_town)
 
     def other_kill(self, species, t):
         """The pictures saw this kind vanish, and no EXP line went with it: someone else's kill, or something hidden."""

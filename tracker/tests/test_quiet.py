@@ -99,19 +99,104 @@ check("the card's hotkey hides it", a.card_off is True)
 check("for this run: the setting's untouched", a.cfg["hud"] is True)
 maple_exp.App._hotkey(a, "card")
 check("and shows it", a.card_off is False)
+a.items_opened = 0
+a.open_items = lambda: setattr(a, "items_opened", a.items_opened + 1)
+maple_exp.App._hotkey(a, "items")
+check("the Items window's hotkey", a.items_opened == 1)
 check("every action has a name and a key", set(maple_exp.HOTKEY_ACTIONS) == set(maple_exp.DEFAULT_HOTKEYS))
 for key in maple_exp.DEFAULT_HOTKEYS.values():
     check(f"{key} can't be typed in chat", maple_exp.parse_hotkey(key) and "+F" in key)
 
+from platforms import hotkey_text, presses, to_register, typing_key  # noqa: E402
+if sys.platform == "win32":
+    from unittest import mock
+    from platforms.windows import WindowsPlatform
+    seen = []
+    with mock.patch("os.startfile", seen.append, create=True), mock.patch("os.path.realpath", lambda p: "REAL:" + str(p)):
+        WindowsPlatform.open_folder(None, "C:/folder")
+    check("the folder's opened at its real path, not the Store Python's view of it", seen == ["REAL:C:/folder"], seen)
+SHIFT = 0x4
+for key, vk in (("0", 0x30), ("9", 0x39), ("7", 0x37), ("Z", 0x5A), ("F8", 0x77), ("Num0", 0x60), ("-", 0xBD), ("\\", 0xDC), ("Home", 0x24)):
+    check(f"{key} can be a hotkey with no Shift", maple_exp.parse_hotkey(key) == (0, vk), maple_exp.parse_hotkey(key))
+    check(f"pressing {key} gives its name", hotkey_text(False, False, False, vk) == key, hotkey_text(False, False, False, vk))
+check("with Shift still works", maple_exp.parse_hotkey("Shift+F3") == (SHIFT, 0x72) and maple_exp.parse_hotkey("Ctrl+Alt+R") == (0x3, 0x52))
+check("Shift alone or nonsense isn't a key", not maple_exp.parse_hotkey("Shift") and not maple_exp.parse_hotkey("Banana") and not maple_exp.parse_hotkey("Shift+Shift+1"))
+check("Enter and the arrows can't be taken from the game", hotkey_text(False, False, False, 0x0D) is None and hotkey_text(False, False, False, 0x25) is None)
+got = to_register({"start": (0, 0x30), "reset": (SHIFT, 0x71)})
+check("a plain key also fires with Shift held down to attack", ("start", SHIFT, 0x30, False) in got and ("start", 0, 0x30, True) in got, got)
+check("a Shift key isn't asked for twice", len([g for g in got if g[0] == "reset"]) == 1, got)
+got = to_register({"start": (0, 0x30), "reset": (SHIFT, 0x30)})
+check("a plain key doesn't take another hotkey's Shift version", [g for g in got if g[0] == "start"] == [("start", 0, 0x30, True)], got)
+got = to_register({"start": (0, 0x30), "repot": (0, 0x77), "reset": (SHIFT, 0x71)}, held=True)
+check("a shop's box gets its numbers, and other keys stay", {g[0] for g in got} == {"repot", "reset"}, got)
+# Noticing a press. (The top bit: down now. The low bit: pressed since last asked.)
+DOWN, TAPPED, UP = -32768, 1, 0
+keys = to_register({"window": (0, 0x7A), "start": (SHIFT, 0x72), "reset": (0, 0xBB)})
+down = set()
+check("nothing pressed", presses(keys, {0x7A: UP, 0x72: UP, 0xBB: UP}, 0, down) == [])
+check("a press fires", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0, down) == ["window"])
+check("held down, only the once", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0, down) == [])
+check("let go", presses(keys, {0x7A: UP, 0x72: UP, 0xBB: UP}, 0, down) == [])
+check("pressed again, it fires again", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0, down) == ["window"])
+presses(keys, {0x7A: UP, 0x72: UP, 0xBB: UP}, 0, down)
+check("a tap between checks isn't lost", presses(keys, {0x7A: TAPPED, 0x72: UP, 0xBB: UP}, 0, down) == ["window"])
+check("a plain key with Shift held, attacking", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, SHIFT, set()) == ["window"])
+check("not with Ctrl", presses(keys, {0x7A: DOWN, 0x72: UP, 0xBB: UP}, 0x2, set()) == [])
+check("Shift+F3 needs Shift", presses(keys, {0x7A: UP, 0x72: DOWN, 0xBB: UP}, 0, set()) == [])
+check("and has it", presses(keys, {0x7A: UP, 0x72: DOWN, 0xBB: UP}, SHIFT, set()) == ["start"])
+if sys.platform == "win32":
+    import time as _time
+    import platforms.windows as pw
+    pressed, script = [], {"keys": {}}
+    with mock.patch.object(pw, "_GetAsyncKeyState", lambda vk: script["keys"].get(vk, 0)), mock.patch.object(pw.WindowsHotkeys, "in_front", lambda self: script.get("front", True)):
+        hk = pw.WindowsHotkeys(pressed.append)
+        changes = []
+        hk.on_change = lambda on, n: changes.append((on, n))
+        hk.set({"window": "F11", "reset": "="})
+        _time.sleep(0.1)
+        script["keys"] = {0x7A: DOWN}
+        _time.sleep(0.1)
+        script["keys"] = {}
+        _time.sleep(0.1)
+        check("for real: a press comes through once", pressed == ["window"], pressed)
+        check("it says the keys are on", (True, 2) in changes, changes)
+        hk.pause(True)
+        _time.sleep(0.05)
+        script["keys"] = {0x7A: DOWN}
+        _time.sleep(0.1)
+        check("paused, nothing", pressed == ["window"], pressed)
+        script["keys"] = {}
+        hk.pause(False)
+        hk.hold(True)
+        _time.sleep(0.05)
+        script["keys"] = {0xBB: DOWN}
+        _time.sleep(0.1)
+        check("a shop's box waiting: not a plain typing key", pressed == ["window"], pressed)
+        script["keys"] = {}
+        hk.hold(False)
+        _time.sleep(0.05)
+        script["front"] = False
+        _time.sleep(0.35)
+        script["keys"] = {0x7A: DOWN}
+        _time.sleep(0.1)
+        check("another program in front: nothing", pressed == ["window"], pressed)
+        script["keys"], script["front"] = {}, True
+        _time.sleep(0.35)
+        hk.set({})
+        _time.sleep(0.05)
+
+check("what counts as typing", typing_key(0x30) and typing_key(0x60) and typing_key(0xBD) and not typing_key(0x77) and not typing_key(0x24))
+
 with tempfile.TemporaryDirectory() as folder:
     path = Path(folder) / "config.json"
-    path.write_text(json.dumps({"hotkeys": {"start": "Shift+1", "reset": "Ctrl+R", "repot": "", "edit": "Shift+5"}}), encoding="utf-8")
+    path.write_text(json.dumps({"hotkeys": {"start": "Shift+1", "reset": "Ctrl+R", "repot": "", "edit": "Shift+5", "window": "0", "card": "9"}}), encoding="utf-8")
     with mock.patch.object(maple_exp, "CONFIG_PATH", path):
         keys = maple_exp.load_config()["hotkeys"]
     check("old default keys move to the new ones", keys["start"] == "Shift+F3" and keys["edit"] == "Shift+F5", keys)
     check("one you chose stays", keys["reset"] == "Ctrl+R", keys)
     check("one you turned off stays off", keys["repot"] == "", keys)
-    check("the new ones arrive", keys["window"] == "Shift+F1" and keys["card"] == "Shift+F2", keys)
+    check("plain keys you chose stay", keys["window"] == "0" and keys["card"] == "9", keys)
+    check("the new ones arrive", keys["items"] == "Shift+F7", keys)
 
 
 # The view, with windows left open that don't move with the world.

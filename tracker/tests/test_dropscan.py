@@ -84,6 +84,44 @@ try:
     again.look(frame, 3.0)
     check("...and going back brings it back", again.field.bank.scale == 0.66, again.field.bank.scale)
 
+    # What the map tells it.
+    m = DropScan(ROOT / "assets", folder)
+    m.scales = {}
+    check("before a map's read, it says so", "not read yet" in m.map_lines()[0], m.map_lines())
+    m.map_seen("Land of Wild Boar", 1.0)
+    got = m.map_lines()
+    check("it shows the map's monsters and EXP", "Wild Boar (46 EXP, 22 here)" in got[0] and "Dark Axe Stump (43 EXP, 7 here)" in got[0], got)
+    check("it says which kinds can't be told apart", any("Jr. Boogie 1 and Jr. Boogie 2" in x for x in got), got)
+    check("it says how many items only one kind drops", any("known from only one" in x for x in got), got)
+    m.lines.kill(46, 2.0)
+    check("a kill named from the map's own numbers", m.lines.open and m.lines.open.species == "wild_boar")
+    m.map_lost(3.0)
+    check("the map's name out of sight: it says so", "Open the minimap" in m.map_lines()[0], m.map_lines())
+    m.lines.kill(46, 4.0)
+    check("and kills stop counting", m.lines.skipped["nomap"] == 1 and not m.lines.open, m.lines.skipped)
+    m.map_seen(None, 5.0)
+    check("still not known with no name", m.blind)
+    m.map_seen("Land of Wild Boar", 6.0)
+    m.lines.kill(46, 7.0)
+    check("the name back: they count again", m.lines.open is not None and not m.blind)
+    m.map_seen("The Land of Wild Boar II", 8.0)
+    check("a new map starts anew", m.lines.open is None and m.lines.map == "The Land of Wild Boar II", m.lines.map)
+    m.map_seen("Henesys Market", 9.0)
+    if m.map == "Henesys Market":
+        check("a map with no monsters says so", "no monsters" in m.map_lines()[0], m.map_lines())
+    told = []
+    m.on_map = told.append
+    m.map_seen("Land of Wild Boar", 10.0)
+    check("the item reader's told what can drop here", told and "Firewood" in told[0], told[:1])
+    m.mesos_seen(1000, 11.0)
+    m.lines.pickup("mesos", 40, 12.0)
+    m.mesos_seen(1040, 13.0)
+    check("mesos are checked on a hunting map", m.lines.meter.total["mesos_box"] == 40)
+    nomob = next(n for n, v in d.maps.items() if not v["spawns"])
+    m.map_seen(nomob, 14.0)
+    m.mesos_seen(1500, 15.0)
+    check("not on a map with no monsters (it may be a shop)", m.lines.meter.total["mesos_box"] == 40, m.lines.meter.total)
+
     # Adding up two sessions.
     (folder / "session-a.json").write_text(json.dumps({"counted": 10, "skipped": {"left": 2}, "untied_pickups": 1,
         "drop_list": {"Pig": {"Pig's Ribbon": 3}}, "new_drops": {"Pig": ["Thing"]}, "kills": {"Pig": 10},

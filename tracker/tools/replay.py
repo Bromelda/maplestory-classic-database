@@ -154,7 +154,7 @@ def main():
                     elif line.kind == "mesos":
                         ledger.pickup("mesos", line.amount, "", t)
                     elif line.kind == "text" and line.colour == "white" and line.band is not None:
-                        got = items.read(line.band, line.span, args.gh / mw.GH0)
+                        got = items.read_line(line, args.gh / mw.GH0)
                         if got and got[0] == "item":
                             print(f"{t:7.2f}  item: {got[1:]}")
                             ledger.pickup(got[1], got[2], got[3], t)

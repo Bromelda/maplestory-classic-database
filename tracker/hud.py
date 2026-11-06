@@ -5,7 +5,7 @@ EXP gauge with a slime riding its end, and the time to the next level; then, dep
 layout, a row of session numbers and a row of mesos numbers:
 
     minimal   header + level, gauge and time to level
-    session   ...plus last 5 min, EXP/hr, this session and time to level
+    session   ...plus EXP a minute, EXP/hr, this session and time to level
     full      ...plus mesos/hr, net session, mesos gained and mesos spent
 
 Four colour themes (brown, orange, blue, steel) change the header, the badge and the time.
@@ -339,7 +339,7 @@ def render_base(layout, theme, scale, c, art, width=W0, tall=0, repot=True):
     y = top + top_h + 4
     if layout in ("session", "full"):
         nxt_label = f"TO LV. {nxt}" if nxt else "TO NEXT LV."
-        panel(y, 94 + extra, [(None, "LAST 5 MIN", c.get("last5", "-"), False),
+        panel(y, 94 + extra, [(None, "EXP/MIN", c.get("per_min", "-"), False),
                               (None, "EXP/HR", c.get("rate", "-"), False),
                               (None, "THIS SESSION", c.get("session", "-"), False),
                               (None, nxt_label, c.get("time") or "--:--:--", False)])
