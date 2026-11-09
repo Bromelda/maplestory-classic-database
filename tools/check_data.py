@@ -67,6 +67,14 @@ def main(old_dir, new_dir):
         for q in data["quests"]:
             for key in ("need", "rewards", "choice", "start_items"):
                 problems += [f"quest {q['name']} uses unknown item {x['item']}" for x in q.get(key) or [] if x["item"] not in ids["items"]]
+    try:
+        scrolls = load(new_dir, "scrolls")
+    except (OSError, ValueError):
+        scrolls = []  # optional: the site just shows no success rates without it
+    for s in scrolls:
+        if not 0 < s.get("success", 0) <= 100 or not 0 <= s.get("destroy", 0) <= 100 or not s.get("stats"):
+            problems.append(f"scroll {s.get('name')} has success {s.get('success')}%, destroy {s.get('destroy')}%, stats {s.get('stats')}")
+
     if "gear" in data and not any(g.get("slot") == "weapon" for g in data["gear"]):
         problems.append("gear.json has no weapons")
 

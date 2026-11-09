@@ -492,6 +492,23 @@ tr.pick:hover, tr.pick.selected { background: var(--accent-soft); }
 .sell-advice.keep { border-left-color: #f3c56b; }
 .sell-advice.maybe { border-left-color: #a8c2ff; }
 .sell-advice.safe { border-left-color: #8fe0ad; }
+
+/* scroll success rate and what it adds */
+.scroll-box { --rate: #f3c56b; display: flex; gap: 12px; align-items: flex-start; margin: 10px 0; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--line); border-left: 4px solid var(--rate); background: var(--accent-soft); }
+.scroll-box.sure, .scroll-tag.sure { --rate: #8fe0ad; }
+.scroll-box.fair, .scroll-tag.fair { --rate: #f3c56b; }
+.scroll-box.long, .scroll-tag.long { --rate: #ff9b8f; }
+.scroll-rate { display: flex; flex-direction: column; align-items: center; min-width: 58px; line-height: 1.1; }
+.scroll-rate b { font-size: 1.6rem; color: var(--rate); }
+.scroll-rate span { font-size: .75em; color: var(--muted); }
+.scroll-what { flex: 1; min-width: 0; font-size: .92em; }
+.scroll-what p { margin: 0 0 4px; }
+.scroll-what p:last-child { margin-bottom: 0; }
+.scroll-k { display: block; font-size: .78em; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.scroll-tag { display: inline-block; font-size: .72em; border-radius: 999px; padding: 1px 8px; white-space: nowrap; color: var(--rate);
+  border: 1px solid color-mix(in srgb, var(--rate) 45%, transparent); background: color-mix(in srgb, var(--rate) 12%, transparent); }
+@media (max-width: 600px) { .scroll-tag { white-space: normal; border-radius: 8px; } }
 .sell-advice a { color: var(--accent); }
 
 .route-form { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px 12px; align-items: end; margin-bottom: 14px; }

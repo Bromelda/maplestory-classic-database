@@ -5,7 +5,7 @@ const DATASETS = ["monsters", "items", "maps", "jobs", "npcs", "quests", "meta",
 const OPTIONAL = ["log", "patches", "skills", "gear", "ammo", "gear_info", "potions", "scrolls"]; // fine if missing
 const db = {};
 const byId = {};
-const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {}, usedIn: {}, shopOf: {} };
+const idx = { spawnsOf: {}, droppedBy: {}, incoming: {}, zones: {}, qGiver: {}, qEnder: {}, qNext: {}, qNeedItem: {}, qRewardItem: {}, qKill: {}, usedIn: {}, shopOf: {}, scrollOf: {} };
 
 const $ = (s, el = document) => el.querySelector(s);
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -108,6 +108,7 @@ async function load() {
   for (const list of Object.values(idx.spawnsOf)) list.sort((a, b) => b.count - a.count);
   if (db.meta?.built_from) $("#builtFrom").textContent = `Data: ${db.meta.built_from}.`;
 
+  for (const s of db.scrolls || []) idx.scrollOf[s.gid] = s;
   for (const it of db.items) for (const s of it.shops || []) (idx.shopOf[s.npc] ||= []).push({ item: it.id, price: s.price });
   for (const it of db.items) for (const r of it.crafts || []) for (const mat of r.materials) (idx.usedIn[mat.item] ||= []).includes(it.id) || idx.usedIn[mat.item].push(it.id);
   if (typeof buildSkills === "function") buildSkills();
@@ -401,6 +402,34 @@ function markZone(z) {
 
 // ---------- tables ----------
 const ITEM_STATS = [["ATT", "Weapon ATT"], ["MATT", "Magic ATT"], ["STR", "STR"], ["DEX", "DEX"], ["INT", "INT"], ["LUK", "LUK"], ["ACC", "Accuracy"], ["AVOID", "Avoid"], ["WDEF", "Weapon DEF"], ["MDEF", "Magic DEF"], ["HP", "HP"], ["MP", "MP"], ["SPEED", "Speed"], ["JUMP", "Jump"], ["CRIT", "Crit rate"], ["CRITDMG", "Crit damage"]];
+// ---------- scrolls: success rate and what they add (data/scrolls.json, from the game files) ----------
+const SCROLL_SHORT = { ATT: "ATT", MATT: "M.ATT", WDEF: "DEF", MDEF: "M.DEF", ACC: "Acc", AVOID: "Avoid", SPEED: "Speed", JUMP: "Jump", CRIT: "Crit", CRITDMG: "Crit dmg" };
+const pctStat = (k) => /CRIT/.test(k) ? "%" : "";
+function scrollOf(it) { return it?.gid ? idx.scrollOf[it.gid] : null; }
+function scrollGain(s, short = false) {
+  return Object.entries(s.stats).map(([k, v]) => short
+    ? `+${v}${pctStat(k)} ${SCROLL_SHORT[k] || k}`
+    : `+${v}${pctStat(k)} ${ITEM_STATS.find(([x]) => x === k)?.[1] || k}`).join(", ");
+}
+function scrollTag(s) { return `${s.success}% · ${scrollGain(s, true)}`; }
+const SCROLL_ON = { Cape: "a cape", Earrings: "earrings", Overall: "an overall", Bottomwear: "bottomwear", Gloves: "gloves", Helmet: "a helmet", Shoes: "shoes", Topwear: "a top",
+  Pet: "pet equipment", Shield: "a shield", Bow: "a bow", Claw: "a claw", Crossbow: "a crossbow", Dagger: "a dagger", "One-Handed Axe": "a one-handed axe",
+  "One-Handed BW": "a one-handed blunt weapon", "One-Handed Sword": "a one-handed sword", Polearm: "a polearm", Spear: "a spear", Staff: "a staff",
+  "Two-Handed Axe": "a two-handed axe", "Two-Handed BW": "a two-handed blunt weapon", "Two-Handed Sword": "a two-handed sword", Wand: "a wand" };
+const scrollClass = (s) => (s.success >= 100 ? "sure" : s.success >= 50 ? "fair" : "long");
+function scrollBox(s) {
+  const fail = s.destroy
+    ? `<b>${s.destroy}% chance the item is destroyed.</b> Otherwise nothing changes.`
+    : "Nothing changes, and the item is safe.";
+  return `<div class="scroll-box ${scrollClass(s)}">
+    <div class="scroll-rate"><b>${s.success}%</b><span>success</span></div>
+    <div class="scroll-what">
+      <p><span class="scroll-k">If it works</span>${esc(scrollGain(s))} to ${esc(SCROLL_ON[s.category] || s.category.toLowerCase())}</p>
+      ${s.success < 100 ? `<p><span class="scroll-k">If it fails</span>${fail}</p>` : ""}
+      <p class="sub">Uses one upgrade slot either way.</p>
+    </div></div>`;
+}
+
 function columnsOf(tab) {
   const stat = tab === "items" && $("#itemStat").value;
   if (!stat) return COLUMNS[tab];
@@ -481,6 +510,8 @@ function renderTable() {
       if (i === 0 && e.variant) extra = ` <span class="badge">${esc(e.variant)}</span>`;
       if (i === 0 && e.previous) extra += ' <span class="badge" title="Changed by a patch">Patched</span>';
       if (i === 0 && e.region === "Hidden Street") extra = ' <span class="badge hidden">Hidden</span>';
+      const sc = i === 0 && tab === "items" && scrollOf(e);
+      if (sc) extra += ` <span class="scroll-tag ${scrollClass(sc)}"${sc.destroy ? ` title="A failure has a ${sc.destroy}% chance to destroy the item"` : ""}>${esc(scrollTag(sc))}${sc.destroy ? " · can destroy" : ""}</span>`;
       const cell = c.html ? v : i === 0 && tab === "monsters" ? `<span class="spr-cell">${sprite(e, 28)}</span>${esc(e.name)}` : esc(fmt(v));
       return `<td class="${c.num ? "num" : ""} ${c.wide ? "wide-only" : ""}">${cell}${extra}</td>`;
     }).join("") + "</tr>").join("");
@@ -854,6 +885,8 @@ function itemDetail(it) {
   const stats = it.stats ? Object.entries(it.stats).map(([k, v]) => `${esc(k)} ${v > 0 ? "+" : ""}${v}`).join(", ") : null;
   const req = db.gear_info?.[it.gid];
   const reqText = req && Object.keys(req).length ? ["STR", "DEX", "INT", "LUK"].filter((k) => req[k]).map((k) => `${req[k]} ${k}`).join(", ") : null;
+  const scroll = scrollOf(it);
+  if (scroll) html += scrollBox(scroll);
   html += dl([["Req. level", it.level], ["Req. stats", reqText], ["Effect", esc(it.effect)], ["Stats", stats], ["Shop price", !it.shops && it.shop_price ? fmt(it.shop_price) + " mesos" : null], ["Sells to NPC for", it.sell ? fmt(it.sell) + " mesos" : null]]);
   html += gearComparison(it);
   html += sellAdvice(it);
@@ -1116,7 +1149,7 @@ function buildSearch() {
   add("zone", Object.values(nodes).map((n) => ({ id: n.name, name: n.name })), (n) => { const c = idx.zones[n.id]?.length || 0; return `${c} ${c === 1 ? "map" : "maps"}`; });
   add("map", db.maps, (m) => (m.levels ? `Lv ${levelText(m.levels)}` : m.node || ""));
   add("monster", db.monsters, (m) => `Lv ${m.level}${m.variant ? ` · ${m.variant}` : ""}`);
-  add("item", db.items, (i) => [i.category || i.type, i.level ? `Lv ${i.level}` : ""].filter(Boolean).join(" · "));
+  add("item", db.items, (i) => { const s = scrollOf(i); return [i.category || i.type, i.level ? `Lv ${i.level}` : "", s ? scrollTag(s) : "", s?.destroy ? "can destroy" : ""].filter(Boolean).join(" · "); });
   add("npc", db.npcs, (n) => n.role || "");
   add("quest", db.quests, (q) => `Lv ${q.level} · ${q.area}`);
   add("job", db.jobs, (j) => j.branch || "");

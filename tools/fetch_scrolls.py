@@ -16,7 +16,7 @@ OUT = Path(__file__).resolve().parent.parent / "data" / "scrolls.json"
 API = "https://maplestory.io/api/MCW/1/item"
 THREADS = 4
 FIELDS = {"incWAT": "ATT", "incPAD": "ATT", "incMAD": "MATT", "incSTR": "STR", "incDEX": "DEX", "incINT": "INT", "incLUK": "LUK", "incACC": "ACC",
-          "incEVA": "AVOID", "incPDD": "WDEF", "incMDD": "MDEF", "incMHP": "HP", "incMMP": "MP", "incSpeed": "SPEED", "incJump": "JUMP"}
+          "incEVA": "AVOID", "incPDD": "WDEF", "incMDD": "MDEF", "incMHP": "HP", "incMMP": "MP", "incSpeed": "SPEED", "incJump": "JUMP", "incCRT": "CRIT", "incCRD": "CRITDMG"}
 
 
 def fetch(row, kind):
