@@ -8,6 +8,8 @@ everything on this PC, in the data folder's "drops" folder:
     pictures/               what each of those looked like on the ground, to check by eye
     clips/                  short videos around kills, for finding out why it got something wrong (clips.py).
                             There's a switch for these in Settings.
+
+And it keeps the page of which monster drops what up to date, in Documents (mobbook.py).
 """
 import json
 import re
@@ -22,11 +24,13 @@ from clips import ClipKeeper
 from fieldwatch import FieldWatch
 from linecount import SKIPPED as LINE_SKIPPED, LineCounter
 from lootwatch import WHY, DropLedger
+from mobbook import write_page
 from scandata import SCANNER_VERSION, GameData
 
 SAVE_EVERY = 30.0           # seconds
 SCAN_POLL = 0.1             # how often to look at the field
 CLIP_EVERY = 0.2            # how often a look goes in a clip. Each is over a megabyte, and clips don't need them all
+PARTY_CLIPS = True          # party play in clips too: it can't teach rates, but how well lines are read in a party can only be checked on them
 NEED_KILLS = 200            # kills of a monster before its rates can go on the site (as in tools/publish_drops.py)
 LEARNED_SECONDS = 30.0      # how often the "learned so far" lines are added up again
 
@@ -118,8 +122,10 @@ def feed(ledger, lines, found, now, counter=None):
 
 
 class DropScan:
-    def __init__(self, assets, folder):
+    def __init__(self, assets, folder, book=None):
         self.assets, self.folder = Path(assets), Path(folder)
+        self.book = book                # where the page of which monster drops what goes (mobbook.py)
+        self.inventory = None           # gives what the inventory's counts did against the lines, to keep with the session: [(item, tab, had, has, gained, lines, share)]
         self.data = GameData(self.assets / "scan_data.json")
         self.lock = threading.Lock()
         self.lines = LineCounter(self.data)
@@ -206,7 +212,7 @@ class DropScan:
             said = [{"kind": x.kind, "amount": x.amount, "born": x.born} for x in lines if x.kind in ("exp", "bonus")]
             if said or found:
                 self.clips.event({"lines": said, "found": [list(p) for p in found]}, now)
-                if not self.ledger.in_party(now):
+                if PARTY_CLIPS or not self.ledger.in_party(now):
                     self.clips.mark(now)
 
     def exp_bar(self, gained, now):
@@ -266,9 +272,9 @@ class DropScan:
             self.looks.append(now)
             self._sprite_size(frame.shape[0], now)
             if self.field.species:
-                if not self.ledger.in_party(now) and now - self.clip_at >= CLIP_EVERY - 0.01:
+                if (PARTY_CLIPS or not self.ledger.in_party(now)) and now - self.clip_at >= CLIP_EVERY - 0.01:
                     self.clip_at = now
-                    self.clips.frame(frame, now)        # (party play can't teach the rates: no clips of it, so they last)
+                    self.clips.frame(frame, now)
                 self.field.look(frame, now)
                 self._remember_size(frame.shape[0])
                 happened = self.ledger.vanished_seen + self.ledger.drops_seen
@@ -356,7 +362,13 @@ class DropScan:
                 "kills": {name(s): n for s, n in led.kills_counted.items()},
                 "rate_drops": {name(s): dict(c) for s, c in led.rate_drops.items()},
                 "rate_mesos": {name(s): list(m) for s, m in led.rate_mesos.items()},
-                "line": self.lines.results(time.monotonic())}
+                "line": self.lines.results(time.monotonic()), "inventory": self._inventory_rows()}
+
+    def _inventory_rows(self):
+        try:
+            return [list(row) for row in self.inventory()] if self.inventory else []
+        except (RuntimeError, TypeError, ValueError, KeyError):         # (it's changing as it's read: there's always the next save)
+            return []
 
     def save(self):
         with self.lock:
@@ -371,6 +383,8 @@ class DropScan:
             tmp.replace(path)
         except OSError:
             pass
+        if self.book:
+            write_page(self.folder, self.book, self.data)
 
     def status(self):
         """One line for the tracker's window."""

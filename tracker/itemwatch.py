@@ -16,13 +16,14 @@ Sizes are 4K pixels (gh 20), like msgwatch.py's; at other sizes everything is sc
 """
 import difflib
 import re
+from collections import Counter
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 import msgwatch as mw
-from pickwatch import read_line as tesseract_line
+from pickwatch import line_pictures, read_line as tesseract_line
 
 GH0 = 20.0
 TAB_GAP = 13                # px between "earned." and the tab's "("
@@ -34,12 +35,18 @@ DIGIT_OK = 0.55             # ...and each digit of the count
 NAME_OK, NAME_MARGIN = 0.8, 0.05    # a name's picture: how alike, and how much more than any other's
 NAME_SLACK = 6              # px a name's end may be off from where it's looked for
 LIFT = 6                    # px a line may sit higher or lower than its row's middle (caught moving up)
-NAME_GAP = 16               # px between two words of a name, at most (more: something else)
+NAME_GAP = 30               # px between two words of a name, at most (more: something else)
 DOTS_OK = 0.7               # the "..." at the end of a name cut short
 MATCH_OK, MATCH_MARGIN = 0.75, 0.05  # Tesseract's reading against the item list: how close, how much closer
 LIKELY_OK = 0.6             # ...against what this map's monsters are known to drop: so few, it can be less close
-MIN_CHAR_W = 3                  # a name in a picture (at 4K) is at least this wide per letter
+MIN_CHAR_W = 9              # a name in a picture (at 4K) is at least this wide per letter ("Leaf" is the narrowest yet: 11)
+LEFT_CLEAR = 30             # px clear of letters left of a name, more than a word's gap: "Iron Ore" isn't the end of "Silver Ore"
+LEARN_OK = 0.85              # Tesseract's reading against the item list, to keep a picture of it as that name
+LEFT_TOUCH = 4              # ...not counting right next to it: a picture can start a little inside its first letter
+LEFT_SAME = 6               # px a name's picture may start from where its line does, to be kept
 KEEP = 3                    # pictures kept of each name (from different lines)
+SAME_LINE = 0.7             # how alike two lines must look (ending at the same spot) to say the same thing
+STILL_BRIGHT = 0.6          # seconds a line stays as bright as a new one could read
 
 
 def _white(band):
@@ -83,13 +90,18 @@ def match_name(raw, tab, items, cut, ok=MATCH_OK):
     best, name, shown = scored[0]
     # (Names that look the same as shown, "Arrows for Bows" and "Arrows for Bows x", can't be told
     # apart: they count as a runner-up.)
-    second = max((s for s, nm, sh in scored[1:] if nm != name), default=0.0)
+    second = max((s for s, nm, sh in scored[1:] if nm != name and nm != name + " x" and name != nm + " x"), default=0.0)
     return name if best >= ok and best - second >= MATCH_MARGIN else None
 
 
 def _whole_picture(name, pic):
-    """Is this picture wide enough to be this whole name? A sliver of one once got kept, and broke reading anything on that tab."""
+    """Is this picture wide enough to be this whole name? Just "Ore" got kept as Iron Ore, so every ore read as Iron Ore."""
     return pic.ndim == 2 and pic.shape[1] >= MIN_CHAR_W * len(name)
+
+
+def closeness(raw, name):
+    """How close Tesseract's reading is to a name, 0..1."""
+    return difflib.SequenceMatcher(None, norm(raw), norm(name)).ratio()
 
 
 class ItemReader:
@@ -117,6 +129,7 @@ class ItemReader:
         self._scaled = {}
         self.likely = None                      # what this map's monsters are known to drop, if the map's known: a set of names
         self.likely_items = {}                  # ...as self.items: {tab: [names]}
+        self.counted = []                       # (name, when it came in), of the lines read lately
 
     def set_likely(self, names):
         """Tells it what can drop here. A poor look at a name can only be one of these."""
@@ -237,10 +250,15 @@ class ItemReader:
             if t != tab:
                 continue
             core = ref[2:-2, 2:-2]
-            area = G[:, max(0, end - core.shape[1] - 2 * NAME_SLACK - 2):end]
+            x0 = max(0, end - core.shape[1] - 2 * NAME_SLACK - 2)
+            area = G[:, x0:end]
             if not core.size or core.shape[0] > area.shape[0] or core.shape[1] > area.shape[1]:
                 continue
-            _, score, _, _ = cv2.minMaxLoc(cv2.matchTemplate(area, core, cv2.TM_CCOEFF_NORMED))
+            _, score, _, at = cv2.minMaxLoc(cv2.matchTemplate(area, core, cv2.TM_CCOEFF_NORMED))
+            # (It's lined up on the name's end, so a short name fits the end of a longer one. More letters to its left: not this name.)
+            start = x0 + at[0] - 2
+            if ((G[:, max(0, start - LEFT_CLEAR):max(0, start - LEFT_TOUCH)] > 0.3).sum(axis=0) >= 2).any():
+                score = -1.0
             scores[name] = max(scores.get(name, -1.0), float(score))
         if not scores:
             return None
@@ -248,6 +266,27 @@ class ItemReader:
         best, score = ranked[0]
         second = ranked[1][1] if len(ranked) > 1 else -1.0
         return best if score >= NAME_OK and score - second >= NAME_MARGIN else None
+
+    def read_name(self, band, span, name_right, tab, cut, s, read_lines):
+        """A name, by Tesseract, when the end of its line is already known: just the name is read, a few ways, and each reading
+        is matched to the item list. (Read with the rest of the line, a misread bracket lost clean lines.) (name, closeness), or None."""
+        pad = int(0.3 * GH0 * s)
+        texts = [" ".join(t.split()) for t in read_lines(line_pictures(band, (band.shape[0] / 2, span[0], max(span[0] + 1, name_right - pad), None), GH0 * s))]
+        votes, close = Counter(), {}
+        for lists, ok in ((self.items, MATCH_OK), (self.likely_items, LIKELY_OK)):      # (the whole list first)
+            for t in texts:
+                shown = cut or ".." in t
+                name = match_name(t, tab, lists, shown, ok) or (match_name(t, tab, lists, True, ok) if not shown and lists is self.items else None)
+                if name:
+                    votes[name] += 1
+                    n = norm(name)
+                    close[name] = max(close.get(name, 0.0), closeness(t, n[:len(norm(t))] if shown else n))
+            if votes:
+                break
+        ranked = votes.most_common(2)
+        if not ranked or ranked[0][1] < 2 or (len(ranked) > 1 and ranked[0][1] == ranked[1][1]):
+            return None
+        return ranked[0][0], close[ranked[0][0]]
 
     def learn(self, name, tab, pic):
         """Keeps a picture of a name, to know it by sight from now on (up to KEEP of each)."""
@@ -257,10 +296,55 @@ class ItemReader:
         self.learned += 1
         self._save()
 
+    def _end(self, band, span, s):
+        """The end of the line in this picture (tail()), however it's seen best."""
+        white = _white(band)
+        return self.tail(mw.feature(white, s), span[1], s) or self.tail(mw.strokes(white, s), span[1], s)
+
     def read_line(self, line, s, read_lines=None):
+        """What a msgwatch.Line says (see _read_line). ("again", name): the same line seen again, and not another pickup. Moving scenery can make the
+        stack look moved, or hide a line for a look or two. Then a dim line "comes in" just after one of that name, with no more lines of that name on
+        screen than there were lately. Or a bright one does, so soon after the other that it could still be as bright as that, and the other isn't
+        where it should be now. (What's picked up often comes in runs of the same thing, so a bright one needs that much.)"""
+        got = self._read_line(line, s, read_lines)
+        if got and got[0] == "item":
+            self.counted = [c for c in self.counted if 0 <= line.born - c[1] < mw.LASTS]
+            same = [when for name, when in self.counted if name == got[1]]
+            if same and line.fresh and line.left_place and line.born - max(same) <= STILL_BRIGHT:
+                return ("again", got[1])
+            if same and not line.fresh and line.stack and line.pictures:
+                ref = line.pictures[0]
+                if self._alike_lines(ref, line.stack[0], s) <= max((self._alike_lines(ref, look, s) for look in line.stack[1]), default=0):
+                    return ("again", got[1])
+            self.counted.append((got[1], line.born))
+        return got
+
+    @staticmethod
+    def _alike_lines(ref, others, s):
+        """How many of these lines look like this one: lined up on their ends, which are all at the same spot, as far along as this one goes."""
+        band, span = ref
+        white = _white(band)
+        n = 0
+        a = int(round(2 * s))
+        for other, sp in others:
+            best = -1.0
+            for look in (mw.feature, mw.strokes):
+                t = look(white, s)[a:-a or None, max(0, span[0]):span[1]]
+                o = look(_white(other), s)[:, max(0, span[0] - a):min(other.shape[1], span[1] + a)]
+                if t.max() > 0 and o.max() > 0 and t.shape[0] <= o.shape[0] and t.shape[1] <= o.shape[1]:
+                    best = max(best, float(cv2.matchTemplate(o, t, cv2.TM_CCOEFF_NORMED).max()))
+            n += best >= SAME_LINE
+        return n
+
+    def _read_line(self, line, s, read_lines=None):
         """What a msgwatch.Line says, from any of the pictures of it: by sight first, as that's quick and certain. Only
         then Tesseract, on the pictures one after another."""
         pictures = line.pictures or [(line.band, line.span)]
+        # (If the stack's move was misjudged, a later picture can be of the next line along: its tab or count gives that away.)
+        ends = [self._end(band, span, s) for band, span in pictures]
+        first = next((e for e in ends if e), None)
+        if first:
+            pictures = [p for p, e in zip(pictures, ends) if e and e[:2] == first[:2]]
         for band, span in pictures:
             got = self.read(band, span, s)
             if got:
@@ -286,8 +370,9 @@ class ItemReader:
         if end is None:
             got = tesseract_line(band, span, GH0 * s, read_lines) if read_lines is not None else None
             if got and got[0] == "item":
-                name = (match_name(got[1], got[3], self.likely_items, False, LIKELY_OK) or match_name(got[1], got[3], self.items, False)
-                        or match_name(got[1], got[3], self.items, True))
+                # (The whole list first: "Silver Ore" is close enough to Iron Ore, if that's all that's listed here.)
+                name = (match_name(got[1], got[3], self.items, False) or match_name(got[1], got[3], self.items, True)
+                        or match_name(got[1], got[3], self.likely_items, False, LIKELY_OK))
                 return ("item", name, got[2] or 1, got[3]) if name else None
             return got
         tab, qty, name_right, cut = end
@@ -296,10 +381,10 @@ class ItemReader:
             poor = self.known(G, name_right, tab, s)
             name = poor if poor and (self.likely is None or poor in self.likely) else None
         if name is None and read_lines is not None:
-            pic = self._picture(F, self.name_left(F, name_right, s), name_right, s)
-            got = tesseract_line(band, span, GH0 * s, read_lines)
-            if got and got[0] == "item":
-                name = match_name(got[1], tab, self.likely_items, cut, LIKELY_OK) or match_name(got[1], tab, self.items, cut)
-                if name:
-                    self.learn(name, tab, pic)
+            left = self.name_left(F, name_right, s)
+            got = self.read_name(band, span, name_right, tab, cut, s, read_lines)
+            if got:
+                name = got[0]
+                if got[1] >= LEARN_OK and abs(left - span[0]) <= LEFT_SAME * s:
+                    self.learn(name, tab, self._picture(F, left, name_right, s))
         return ("item", name, qty, tab) if name else None

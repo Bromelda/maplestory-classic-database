@@ -23,8 +23,15 @@ scenery can hide the letters' shadow, so a row that isn't clear is tried again b
 with no amount (items) are left for Tesseract. A look where something bright passes over the
 stack (a skill's flash) and no line can be found again is left out.
 
+How bright a line reads depends on the scenery behind it: a new one over dark rock can read a tenth under the brightest yet, and
+a dim one over something pale can read nearly as bright as new. So brightness alone doesn't say whether a line's new. What a line says
+does: a row that says what no line lately has said can't be an old one, and one that says what a line just gone said has to be clearly
+brighter than that line would be by now. On real clips at about 10 looks a second (each frame shown three times, tests/test_msgwatch.py),
+that's every EXP line matching the number by the MP bar in 17 of 18 clips.
+
 Everything is in pixels of a 4K game (gh 20) and scaled by gh / GH0.
 """
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -36,12 +43,14 @@ ROWS = 8                    # rows in the stack (more than are ever seen at once
 PITCH = 39.7                # from one row to the next
 BOTTOM_UP = 441             # the bottom row's middle, above the game window's bottom
 EDGE_IN = 20                # where the lines end, in from the window's right edge
+EDGE_NEAR = 4               # ...give or take this: a line misread short (+51 as +5) ends a digit or more inside it
 AREA_W = 860                # how far left of that to look (the longest item lines)
 HALF = 17                   # a row's band: this far above and below its middle
 SHADOW = 3                  # the letters' shadow, down and to the right
 DIGIT_W, BRACKET_W = 20, 10
 CONTEXT_W = 120             # the word before the "(", that tells the kind of line
 FRESH = 0.94                # a new line's letters: as bright as lines get (seen within a tenth of a second)
+NEW_BRIGHT = 0.95           # a line this bright has only just come in (lines counted twice over moving scenery: 0.94 at most)
 FRESH_LATE = 0.8            # ...when the last look was longer ago than that, it's had time to dim
 LOOK_W = 300                # how much of a line's right end to compare it by (all lines are longer)
 END_W = 2 * DIGIT_W        # ...and its last two digits (or "+" and a digit), as they are
@@ -68,6 +77,13 @@ KINDS = ("mesos", "exp", "bonus")
 CHARS = "0123456789+"
 TRIES = 4                   # looks to read a line that isn't clear (it's bright for longer)
 ITEM_LOOKS = 3              # looks to keep an item line's picture from, before it's read
+BRIGHTER = 0.3              # a line this much brighter (of the brightest lines) than one that says the same can't be that one: lines only dim, and
+                            # the scenery behind one changes how bright it reads by less than this (0.29 at most, on real clips; new lines: 0.38 up)
+NEW_LEAST = 0.8             # how bright a new line is at least, of the brightest lines: it depends on the scenery behind it
+FADED = 0.75                # a line this dim (of the brightest lines) may go out of sight any time
+AGREE = 2                   # sure readings of an amount that must say the same (3 and 8 are close)
+RECENT_S = 1.5              # how far back to look for the item lines on screen, as scenery can hide one for a look or two
+SAME_LENGTH = 8             # (in pixels) two item lines that say the same are as long as each other, give or take this
 
 
 def true_gh(gh, window_h):
@@ -156,6 +172,15 @@ def _alike(a, b):
     return 0.5 * (1.0 - float(np.abs(a.look - b.look).mean()) * 2.5) + 0.5 * _same_end(a.end, b.end)
 
 
+def _near_amount(a, b):
+    """Could two amounts be the same one, one digit misread?"""
+    x, y = _amount(a), _amount(b)
+    if x is None or y is None:
+        return False
+    x, y = str(x), str(y)
+    return len(x) == len(y) and sum(p != q for p, q in zip(x, y)) <= 1
+
+
 def _known(row):
     """Is this row known to be a line? It reads as an amount, or as an item line."""
     return row is not None and (_amount(row) is not None or row.item)
@@ -189,6 +214,9 @@ class Line:
     pictures: list = field(default_factory=list)   # an item line: (band, span) at each look so far. As it moves up a row, the
                                                    # scenery behind it changes, and it may be clearer in one of them
     done: bool = False
+    fresh: bool = True                             # as bright as a new line, when it came in. If not, it may be an old line seen again
+    stack: tuple = None                            # the item lines on screen when it came in, and at each look just before: ([(band, span)], [[(band, span)]])
+    left_place: bool = False                       # a line like it was on screen just before, and isn't where it should be now
 
 
 class Font:
@@ -214,15 +242,17 @@ class Font:
         little more) and where it ends: (kind, amount, sure). kind: "mesos", "exp", "bonus", or "text"
         for a line that doesn't end in an amount (an item: Tesseract reads those); None when it went
         wrong part way. sure: every digit, and the kind, were clear."""
-        got = self._read(feature(band, s), s, right)
+        by_strokes = strokes(band, s)
+        got = self._read(feature(band, s), s, right, by_strokes)
         if got[2]:
             return got
-        other = self._read(strokes(band, s), s, right)
+        other = self._read(by_strokes, s, right)
         if other[2]:
             return other
         return other if got[0] in (None, "text") and other[0] not in (None, "text") else got
 
-    def _read(self, F, s, right):
+    def _read(self, F, s, right, other=None):
+        """other: another way of seeing the same letters, to choose between two digits this way can't tell apart."""
         chars, kinds = self._at(s)
         h, w = chars["+"].shape
         mid = F.shape[0] // 2
@@ -244,6 +274,10 @@ class Font:
                 _, best, _, at = cv2.minMaxLoc(res)
                 ranked.append((best, c, x0 + at[0]))
             ranked.sort(reverse=True)
+            if other is not None and ranked[0][0] - ranked[1][0] < READ_MARGIN:
+                look_at = other[y0:y1, x0:x1 + slack]
+                if max(cv2.matchTemplate(look_at, chars[ranked[1][1]], cv2.TM_CCOEFF_NORMED).max(), -1) > cv2.matchTemplate(look_at, chars[ranked[0][1]], cv2.TM_CCOEFF_NORMED).max():
+                    ranked[0], ranked[1] = ranked[1], ranked[0]
             score, c, found = ranked[0]
             if score < READ_OK:
                 return ("text", None, False) if k == 0 else (None, None, False)
@@ -289,6 +323,7 @@ class MessageWatcher:
         self.gap = 0.0                  # how long since the last look
         self.light = None               # how light the stack's picture was, at the last clear look
         self.look_at = None
+        self.items_lately = deque()     # (when, the item lines on screen then), at the last looks
 
     def reset(self):
         self.before, self.lines, self.skipped, self.light, self.out_of_sight = None, {}, 0, None, []
@@ -371,6 +406,30 @@ class MessageWatcher:
         """Is a row's line as bright as a new one?"""
         return row.bright >= (FRESH if self.gap <= 0.15 else FRESH_LATE) * self.peak.get(row.colour, row.bright)
 
+    def _says_same(self, a, b):
+        """Could these two rows be the same line? They say the same amount. Or neither has an amount, and they look alike and are as long as each
+        other: all item lines end in the same "x1 earned. (Etc)", so looking alike isn't enough."""
+        if _amount(a) is not None or _amount(b) is not None:
+            return _amount(a) == _amount(b)
+        return _alike(a, b) >= ALIKE and abs((a.right - a.left) - (b.right - b.left)) <= SAME_LENGTH
+
+    def _looks_new(self, row):
+        """How bright a new line reads depends on the scenery behind it, so being less than the brightest ever seen doesn't make it old.
+        A row that's sure of what it says, and with no line lately that says the same (or one it's clearly brighter than), can't be an
+        old line seen again."""
+        peak = self.peak.get(row.colour, row.bright)
+        if not _known(row) or row.bright < NEW_LEAST * peak:
+            return False
+        others = [(g[0], self._by_now(g)) for g in self.out_of_sight] + [(b, b.bright) for b in (self.before or []) if b]
+        unsure = _amount(row) is not None and not row.said[2]           # (a dim +28 misread as +23 says what no line lately has: a digit
+        same = (lambda o: _near_amount(o, row)) if unsure else (lambda o: self._says_same(o, row))     # out could be that line)
+        return all(row.bright - bright >= BRIGHTER * peak for o, bright in others if same(o))
+
+    def _by_now(self, gone):
+        """How bright a line that went out of sight would be by now: it's carried on dimming, out of sight."""
+        was, _, when = gone
+        return was.bright - DIM_PER_S * self.peak.get(was.colour, was.bright) * (self.look_at - when)
+
     def _shift(self, before, now, s, age=None):
         """How many rows the stack moved up since the last look (new lines in at the bottom): the move that explains the
         most rows as lines that were already there (a row up or more, the same shape, no brighter), and the rest below them
@@ -392,7 +451,7 @@ class MessageWatcher:
                 if k < shift:
                     if _known(n):
                         # (Dim isn't new. With looks far apart, it may have had time to dim, though.)
-                        score += NEW if self._fresh(n) else (-1.0 if self.gap >= 0.25 else -3.5)
+                        score += NEW if self._fresh(n) or self._looks_new(n) else (-1.0 if self.gap >= 0.25 else -3.5)
                     else:
                         score -= 0.3 if n else 3.0      # (it may be there, unread. If nothing's there, nothing came in)
                     continue
@@ -408,9 +467,12 @@ class MessageWatcher:
                     # can't have faded. (Moving makes the scenery behind one line look like a new line each time it changes.)
                     if not n and k <= LOW_ROWS:
                         line = self.lines.get(k - shift)
-                        if shift and line is not None and self.look_at - line.born < LASTS:
+                        if shift and line is not None and self.look_at - line.born < LASTS and b.bright >= FADED * self.peak.get(b.colour, b.bright):
                             score -= GONE_TOO_SOON
                     score -= (1.0 if self._fresh(b) else 0.2) if not n else (0.1 if _alike(b, n) >= ALIKE else 1.0)
+                    # (A "new" line that says the same as the one this would have gone, and no brighter: it's that line, and this isn't the move.)
+                    if not n and any(now[j] and self._says_same(b, now[j]) and now[j].bright - b.bright < BRIGHTER * self.peak.get(b.colour, b.bright) for j in range(shift)):
+                        score -= 2.0
                 else:
                     same = _alike(b, n)
                     if n.colour != b.colour:                    # (a dim line's colour is less sure)
@@ -421,8 +483,9 @@ class MessageWatcher:
                     # (A while since the last look, it ought to have dimmed: one that hasn't is a new line just like it.
                     # But the scenery behind it changes how bright it reads too, so that only goes so far against what it says.)
                     allowed = DIM_STEP if self.gap < 0.25 else DIM_STEP_LATE - DIM_PER_S * (self.gap - 0.25)
-                    brighter = (n.bright - b.bright) / self.peak.get(n.colour, 255) - allowed
-                    same -= min(1.2 if said_same else 3.0, max(0.0, brighter) / DIM_STEP)
+                    jump = (n.bright - b.bright) / self.peak.get(n.colour, 255)
+                    brighter = jump - allowed
+                    same -= min(1.2 if said_same and jump < BRIGHTER else 3.0, max(0.0, brighter) / DIM_STEP)
                     score += same
                     sames.append(same)
             score -= 0.05 * shift + 0.3 * max(0, shift - MANY_NEW)
@@ -451,7 +514,10 @@ class MessageWatcher:
                 self.peak[r.colour] = max(top, r.bright)
         # (Only lines it's sure of say where lines end: a sign or a spear behind the stack is bright too, and would drag
         # this away from the real lines until they fell outside it, and none were heard at all.)
-        bright_ends = [r.right for r in rows if r and self._fresh(r) and r.said and r.said[2]]
+        # A misread one ends early ("+51)" read as "+5" ends a digit short), and once learned, lines are cut off there, so a wrong
+        # first one would cut every line after it short: +41 read as +4 for a whole clip. So only ends near where lines should end count.
+        expected = img.shape[1] - EDGE_IN * gh / GH0
+        bright_ends = [r.right for r in rows if r and self._fresh(r) and r.said and r.said[2] and abs(r.right - expected) <= EDGE_NEAR * gh / GH0]
         if bright_ends:
             e = float(np.median(bright_ends))
             self.edge = e if self.edge is None else 0.9 * self.edge + 0.1 * e
@@ -459,6 +525,8 @@ class MessageWatcher:
             self.before = rows
             self.lines = {k: Line(now, r.colour, k, r.bright, done=True) for k, r in enumerate(rows) if r}
             return []
+        items_now = [(bands[k], (r.left, r.right)) for k, r in enumerate(rows) if r and r.item]
+        self.rows_now = rows
         bottom = self.lines.get(0)
         shift = self._shift(self.before, rows, s, now - bottom.born if bottom else None)
         # A look where none of the lines that should still be there (a row or more up) is found again
@@ -476,7 +544,7 @@ class MessageWatcher:
                 moved[k + shift] = line
             else:
                 if self.before[k] is not None:
-                    self.out_of_sight.append((self.before[k], line))
+                    self.out_of_sight.append((self.before[k], line, now))
                 if not line.done:
                     self._finish(line, out)     # gone before it was clear: the best of its readings
         self.out_of_sight = [g for g in self.out_of_sight if now - g[1].born < LASTS]
@@ -485,8 +553,12 @@ class MessageWatcher:
                 again = self._seen_again(rows[k])
                 if again:
                     again.row, again.bright = k, rows[k].bright
-                moved[k] = again or Line(now, rows[k].colour, k, rows[k].bright)
+                moved[k] = again or Line(now, rows[k].colour, k, rows[k].bright, fresh=rows[k].bright >= NEW_BRIGHT * self.peak.get(rows[k].colour, rows[k].bright),
+                                         stack=(items_now, [look for _, look in self.items_lately]), left_place=bool(rows[k].item and self._left_its_place(rows[k], shift)))
         self.lines, self.before = moved, rows
+        self.items_lately.append((now, items_now))
+        while now - self.items_lately[0][0] > RECENT_S:
+            self.items_lately.popleft()
         for line in self.lines.values():
             if line.done:
                 continue
@@ -499,19 +571,33 @@ class MessageWatcher:
                 line.pictures.append((line.band.copy(), line.span))
                 sure = len(line.pictures) >= ITEM_LOOKS
             line.tries.append((kind, amount, sure))
-            if sure or len(line.tries) >= TRIES:
+            agreed = sure and (line.pictures or sum(t == (kind, amount, True) for t in line.tries) >= AGREE)
+            if agreed or len(line.tries) >= TRIES:
                 self._finish(line, out)
         return out
 
+    def _left_its_place(self, row, shift):
+        """A line that looks like this one was on screen at the last look, and isn't where this move has it now: this row may be that line,
+        and not a new one."""
+        for j, b in enumerate(self.before):
+            if b and b.item and self._says_same(b, row):
+                to = j + shift
+                if to >= ROWS or self.rows_now[to] is None or not self._says_same(b, self.rows_now[to]):
+                    return True
+        return False
+
     def _seen_again(self, row):
-        """A row that's dim, like a line that went out of sight a moment ago: that line, back. (Scenery can hide one for a look.)"""
-        if self._fresh(row):
+        """A row like a line that went out of sight a moment ago, and no brighter: that line, back. (Scenery can hide one for a look, and
+        pale scenery can make a dim one read as bright as new. A new line that says the same would be clearly brighter: lines only dim.)
+        An item line that's as bright as new is left as a new one, as it may well be: what's picked up often comes in runs of the same
+        thing. Once its name's been read, itemwatch tells whether there are more on screen than there were."""
+        peak = self.peak.get(row.colour, row.bright)
+        if _amount(row) is None and self._fresh(row):
             return None
-        for i, (was, line) in enumerate(self.out_of_sight):
-            said = _amount(was) is not None and _amount(was) == _amount(row)
-            if said or (_amount(was) is None and _amount(row) is None and _alike(was, row) >= ALIKE):
+        for i, gone in enumerate(self.out_of_sight):
+            if self._says_same(gone[0], row) and row.bright - self._by_now(gone) < BRIGHTER * peak:
                 del self.out_of_sight[i]
-                return line
+                return gone[1]
         return None
 
     @staticmethod
@@ -523,7 +609,7 @@ class MessageWatcher:
         if line.pictures:
             line.kind, line.amount = "text", None
         elif sure:
-            line.kind, line.amount = sure[0][:2]
+            line.kind, line.amount = max(sure, key=sure.count)[:2]
         elif amounts:
             line.kind, line.amount = max(set(amounts), key=amounts.count)
         elif any(t[0] == "text" for t in line.tries):

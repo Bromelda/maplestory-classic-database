@@ -6,6 +6,7 @@ mss (which works on every OS) and reads them.
 Rectangles are (left, top, width, height) in the units mss screenshots use: physical pixels
 on Windows, points on macOS. A window handle is whatever the OS uses to name a window."""
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 
 # --------------------------------------------------------------------------- hotkey names
@@ -136,6 +137,11 @@ class Platform(ABC):
         """Makes this the only copy running for `key` (one per data folder). If another copy
         already is, shows it (or says so) and returns False."""
 
+    def ensure_admin(self, title):
+        """Makes sure this copy runs as administrator, where that's needed. True: carry on. False: this copy should stop (the
+        administrator copy is starting, or the user said no)."""
+        return True
+
     def ask_permissions(self):
         """Asks for anything the OS makes the user allow before the screen can be read."""
 
@@ -172,6 +178,14 @@ class Platform(ABC):
         """Shows the folder in the OS's file browser."""
 
     @abstractmethod
+    def documents(self):
+        """The user's Documents folder."""
+        return Path.home() / "Documents"
+
+    def open_file(self, path):
+        """Opens a file in whatever opens it normally, not as administrator."""
+        self.open_folder(path)
+
     def show_file(self, path):
         """Opens the file's folder in the OS's file browser, with the file selected."""
 

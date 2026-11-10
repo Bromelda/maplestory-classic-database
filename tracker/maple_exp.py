@@ -55,7 +55,10 @@ from daybook import DayBook
 from questwatch import QuestWatch
 from shopwatch import LOOK_CLOSED, LOOK_OPEN, ShopWatch
 from dropscan import DropScan, SCAN_POLL, next_look
+import mobbook
 from ui_items import ItemsWindow, RunItems
+import chatwatch
+from ui_chat import ChatWindow
 
 cv2.setNumThreads(1)    # By default OpenCV spreads each small job over every core: on 24 threads, the same looks took 5.8
                         # cores instead of 0.8, on the game's own PC, and no faster
@@ -108,6 +111,8 @@ HOME_DIR = Path(sys.executable).parent if getattr(sys, "frozen", False) else Pat
 DATA_DIR = Path(os.environ.get("MAPLE_EXP_DATA") or PLATFORM.data_root() / "MapleEXP")
 
 CONFIG_PATH = DATA_DIR / "config.json"
+# The page of which monster drops what: in Documents, to be easy to find. (DATA_DIR's deep inside the Store Python's own folders.)
+MOB_DROPS_PATH = (DATA_DIR if os.environ.get("MAPLE_EXP_DATA") else PLATFORM.documents()) / mobbook.FOLDER_NAME / mobbook.FILE_NAME
 ERROR_LOG_PATH = DATA_DIR / "errors.log"
 TEMPLATE_PATH = ASSETS / "digits.npz"
 ICON_PATH = ASSETS / "icon.ico"
@@ -153,7 +158,10 @@ DEFAULTS = {"gap_seconds": 120, "transparency": 0, "topmost": True,
             "drop_scanner": True,       # watch the field: which monster each drop came from (dropscan.py)
             "drop_clips": True,         # keep short videos around kills, for finding the scanner's mistakes (clips.py)
             "auto_start": True,         # starts by itself once it can read the EXP bar, so no hunt goes unwatched
-            "auto_tuck": True}          # the window goes to the taskbar once you're in the game: the card shows the numbers
+            "auto_tuck": True,          # the window goes to the taskbar once you're in the game: the card shows the numbers
+            "chat_alert": True,         # a bell, and the Buddy tab lights up, for a new buddy message (ui_chat.py)
+            "chat_geometry": "",        # where the Chat window was, and its size
+            "chat_text": 18}            # how big the Chat window's lines are (its A- and A+)
 SHAPE_LABELS = {"square": "Square", "wide": "Wide", "bar": "Bar"}
 SHAPE_BLURBS = {"square": "The narrow card: the big number, the level bar and Start/Pause.",
                 "wide": "Longer sideways: the level bar on top and four numbers in a row.",
@@ -336,10 +344,13 @@ def note_hotkey(text):
         pass
 
 
+CHAT_LOOK_S = 0.1               # how often the chat box is looked at (lines can come every quarter of a second)
+CHAT_TICK_MS = 250              # how often new chat lines are told of (the bell)
+
 HOTKEY_ACTIONS = {"window": "Hide / show window", "card": "Hide / show card", "start": "Start / Pause",
-                  "repot": "Repot bell", "edit": "Move card", "reset": "Reset", "items": "Items window"}
+                  "repot": "Repot bell", "edit": "Move card", "reset": "Reset", "items": "Items window", "chat": "Chat window"}
 DEFAULT_HOTKEYS = {"window": "Shift+F1", "card": "Shift+F2", "start": "Shift+F3", "repot": "Shift+F4", "edit": "Shift+F5",
-                   "reset": "Shift+F6", "items": "Shift+F7"}
+                   "reset": "Shift+F6", "items": "Shift+F7", "chat": "Shift+F8"}
 OLD_DEFAULT_HOTKEYS = {"start": "Shift+1", "reset": "Shift+2", "repot": "Shift+3", "edit": "Shift+5"}
 
 
@@ -1343,6 +1354,7 @@ class ScreenReader:
         self.next_scan = 0.0
         self.own_rect = None        # this app's window, which screenshots can't see through
         self.hud_rects = ()         # the EXP / mesos panels over the game: blacked out like it
+        self.extra_rects = ()       # the tracker's other windows over the game (Chat): blacked out too
         self.look_again_requested = False
         self.exp_anchor = None      # where the EXP number starts, relative to the game window
         self.job = None             # the class shown in the status bar
@@ -1470,7 +1482,7 @@ class ScreenReader:
             return shot
         img, sx, sy = shot
         copied = False
-        for r in [self.own_rect] + list(self.hud_rects):
+        for r in [self.own_rect] + list(self.hud_rects) + list(self.extra_rects):
             if not r:
                 continue
             x0, y0 = max(0, r[0] - sx), max(0, r[1] - sy)
@@ -3139,6 +3151,10 @@ class App:
         self.log_open = False
         self.settings_win = None
         self.items_win = None
+        self.chat_win = None
+        self.chat_log = chatwatch.ChatLog()     # the chat box's lines this run (chatwatch.py): in memory only
+        self.chat = None                        # the ChatWatch reading them, once Tesseract's there
+        self.chat_seen_at = None                # when the chat box was last seen (time.monotonic())
         self.run_items = RunItems()
         self.exp_text = ExpText()
         self.inv_check = InventoryCheck()
@@ -3217,7 +3233,7 @@ class App:
             self.messages = None
             log_error("loading the message font", e)
         try:                                    # (item lines: their names learned as they come, in the data folder)
-            self.items = ItemReader(ASSETS, DATA_DIR / "item_names.npz")
+            self.items = ItemReader(ASSETS, DATA_DIR / "item_names2.npz")     # (item_names.npz had slivers of names in it: "Ore" as Iron Ore)
         except Exception as e:
             self.items = None
             log_error("loading the item font", e)
@@ -3237,7 +3253,8 @@ class App:
         # all of them since Start; timed_mesos only those while the EXP clock runs, for mesos/hr.
         self.picked_mesos, self.timed_mesos, self.loot, self.pickups_seen = 0, 0, {}, False
         try:                                    # (which monster each drop came from: dropscan.py)
-            self.drop_scan = DropScan(ASSETS, DATA_DIR / "drops")
+            self.drop_scan = DropScan(ASSETS, DATA_DIR / "drops", book=MOB_DROPS_PATH)
+            self.drop_scan.inventory = lambda: self._inventory_check()[1]
             self.drop_scan.keep_clips(bool(self.cfg.get("drop_clips")))
             if self.items:
                 self.drop_scan.on_map = self.items.set_likely
@@ -3255,7 +3272,10 @@ class App:
         threading.Thread(target=self._message_worker, daemon=True).start()
         threading.Thread(target=self._scan_worker, daemon=True).start()
         threading.Thread(target=self._shop_worker, daemon=True).start()
+        threading.Thread(target=self._chat_worker, daemon=True).start()
+        threading.Thread(target=self._chat_reader, daemon=True).start()
         root.after(200, self._pump)
+        root.after(CHAT_TICK_MS, self._chat_tick)
         root.after(500, self._refresh)
 
     # ---- the main window
@@ -3267,7 +3287,7 @@ class App:
         self.theme = Theme(self.root, self._px_per_pt * 0.75, ASSETS / "fonts", self._own_fonts, PLATFORM.font)
         # The simple window: the numbers are on the tracker card over the game.
         callbacks = dict(settings=self.open_settings, start=self.toggle, reset=self.reset, repot=self.ring_repot,
-                         move=self.toggle_hud_editing, items=self.open_items)
+                         move=self.toggle_hud_editing, items=self.open_items, chat=self.open_chat)
         self.view = self.main = SimpleView(self.root, self.theme, callbacks)
         self.view.grid(row=0, column=0, sticky="n")
         self._set_start(self._start_text)
@@ -3828,6 +3848,93 @@ class App:
                                      lambda: self.run_items, lambda: self._run_text(time.monotonic()), topmost=bool(self.cfg["topmost"]),
                                      at=at, style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM), get_check=self._inventory_check)
 
+    def open_chat(self):
+        """The Chat window: buddy messages kept apart from the rest of the chat. (Its hotkey closes it again.)"""
+        if self.chat_win and self.chat_win.exists():
+            self.chat_win.win.destroy()
+            return
+
+        def alert_set(on):
+            self.cfg["chat_alert"] = on
+            save_config(self.cfg)
+
+        def moved(geometry):
+            self.cfg["chat_geometry"] = geometry
+
+        def text_size_set(size):
+            self.cfg["chat_text"] = size
+            save_config(self.cfg)
+        self.chat_win = ChatWindow(self.root, self.theme, dict(bg=BG, fg=FG, dim=DIM, list_bg=LIST_BG, select=SELECT, accent=ACCENT),
+                                   lambda: self.chat_log, self._chat_status, (lambda: self.cfg.get("chat_alert", True), alert_set),
+                                   geometry=self.cfg.get("chat_geometry") or None, on_geometry=moved,
+                                   style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM),
+                                   text_size=(lambda: self.cfg.get("chat_text", 18), text_size_set))
+        win = self.chat_win.win
+        win.bind("<Destroy>", lambda e: e.widget is win and save_config(self.cfg), add="+")
+
+    def _chat_status(self):
+        """How the chat reading's going, in a line."""
+        if not tesseract_ok:
+            return "Can't read the chat: Tesseract isn't installed (see the README)."
+        if self.chat_seen_at is None or time.monotonic() - self.chat_seen_at > 3:
+            return "Can't see the game's chat box right now. It's read while the game's in front."
+        waiting = len(self.chat.waiting) if self.chat else 0
+        note = f" {waiting} lines waiting to be read." if waiting > 3 else ""
+        lost = f" {self.chat.dropped:,} came too fast to read." if self.chat and self.chat.dropped else ""
+        return "Reading the chat box." + note + lost
+
+    def _chat_tick(self):
+        """New lines from the chat reader: a bell and a flash for a buddy's message."""
+        try:
+            new = self.chat.take_new() if self.chat else []
+            if any(x.kind in ("buddy", "whisper") for x in new) and self.cfg.get("chat_alert", True):
+                self.root.bell()
+                if self.chat_win and self.chat_win.exists():
+                    self.chat_win.flash()
+        except Exception as e:
+            log_error("telling of new chat", e)
+        if not self.stop_evt.is_set():
+            self.root.after(CHAT_TICK_MS, self._chat_tick)
+
+    def _chat_worker(self):
+        """Looks at the game's chat box 10 times a second (chatwatch.py), while the game's in front: lines can come every
+        quarter of a second. What it sees goes to _chat_reader to be read. General chat and speakers are only read while the
+        Chat window's open (they're most of the chat, and reading them costs a little); buddy, party and the rest always are."""
+        with mss.mss() as sct:
+            while not self.stop_evt.is_set():
+                t0 = time.monotonic()
+                try:
+                    if self.chat is None and TESS:
+                        self.chat = chatwatch.ChatWatch(TESS.read_lines, self.chat_log)
+                    rect = self.reader.last_rect
+                    if self.chat and rect and self.reader.hwnd and self.reader.mode == "window" and PLATFORM.game_in_front():
+                        window_open = bool(self.chat_win and self.chat_win.exists())
+                        self.chat.kinds = set(chatwatch.KINDS) - (set() if window_open else {"general", "notice", "speaker", "box"})
+                        where = chatwatch.area(rect)
+                        shot = self.reader._hide_own(grab(sct, *where))
+                        if shot:
+                            img, sx, sy = shot
+                            # (the window partly off the screen: the picture's cut, but its bottom is where lines are found from)
+                            if sy + img.shape[0] == where[1] + where[3]:
+                                x0 = chatwatch.text_x(rect) - (sx - where[0])
+                                if chatwatch.box_state(img, rect[3] / chatwatch.REF_H, x0):
+                                    self.chat_seen_at = t0
+                                self.chat.look(img, rect[3], x0, t0, time.time())
+                except Exception as e:
+                    log_error("watching the chat", e)
+                self.stop_evt.wait(max(0.01, CHAT_LOOK_S - (time.monotonic() - t0)))
+
+    def _chat_reader(self):
+        """Reads the chat lines _chat_worker found, a batch at a time, buddy lines first."""
+        while not self.stop_evt.is_set():
+            try:
+                if self.chat and self.chat.waiting:
+                    self.chat.read()
+                    continue
+            except Exception as e:
+                log_error("reading the chat", e)
+            self.stop_evt.wait(0.05)
+
     def open_settings(self):
         if self.settings_win and self.settings_win.winfo_exists():
             self.settings_win.lift()
@@ -3972,6 +4079,10 @@ class App:
         tk.Label(body, text="Videos of the game window, chat included, for finding out why the scanner got something wrong. "
                             "They stay on this PC, in the drops folder's clips folder. They use up to 5 GB, "
                             "and the oldest are deleted first. Turn this off once the scanner works well.",
+                 wraplength=wrap, justify="left", **dim).pack(anchor="w")
+        Button(body, self.theme, "See which monster drops what", kind="secondary", width=260, height=34, radius=10, size=12, bg=BG,
+               command=self._open_mob_drops).pack(anchor="w", pady=(px(6), 0))
+        tk.Label(body, text=f"Also in your Documents, in the {mobbook.FOLDER_NAME} folder. Kept up to date while hunting.",
                  wraplength=wrap, justify="left", **dim).pack(anchor="w")
         Button(body, self.theme, "Open the drops folder", kind="secondary", width=260, height=34, radius=10, size=12, bg=BG,
                command=self._open_drops).pack(anchor="w", pady=(px(6), 0))
@@ -4317,7 +4428,10 @@ class App:
                 except Exception as e:          # (one line that can't be read doesn't lose the others with it)
                     log_error("reading an item's name", e)
                     got = None
-                out.append(got or ("unread",))
+                if got and got[0] == "again":   # (a line already counted, seen again)
+                    continue
+                if got or line.pictures:        # (with no picture, it never looked like an item: a mesos or EXP line over scenery)
+                    out.append(got or ("unread",))
         return out
 
     def _save_capture(self, kind, img, what):
@@ -4790,6 +4904,10 @@ class App:
         self._log_tick(now)
         self.log_status.set(self._log_status_text(now))
         self.reader.own_rect = self._window_rect()
+        try:
+            self.reader.extra_rects = (PLATFORM.own_window_rect(self.chat_win.win),) if self.chat_win and self.chat_win.exists() else ()
+        except Exception:
+            self.reader.extra_rects = ()
 
     def _celebrate_gain(self, gained):
         """EXP came in but no EXP messages were seen (turned off, or covered): hop from the EXP itself.
@@ -4989,6 +5107,9 @@ class App:
             return
         if action == "items":
             self.open_items()
+            return
+        if action == "chat":
+            self.open_chat()
             return
         if action == "card":
             self.card_off = not self.card_off
@@ -5367,6 +5488,16 @@ class App:
             natural = [root.winfo_reqwidth(), root.winfo_reqheight()]
             self.cfg["log_size"] = size if size != natural else None
 
+    def _open_mob_drops(self):
+        """Brings the page of which monster drops what up to date, and opens it."""
+        if self.drop_scan:
+            self.drop_scan.save()
+        path = mobbook.write_page(DATA_DIR / "drops", MOB_DROPS_PATH, self.drop_scan.data if self.drop_scan else None)
+        if path:
+            PLATFORM.open_file(path)
+        else:
+            log_error("writing the mob drops page", OSError(str(MOB_DROPS_PATH)))
+
     def _open_drops(self):
         """Saves what the drop scanner has so far, adds it all up into a page, and opens the folder."""
         folder = DATA_DIR / "drops"
@@ -5397,6 +5528,8 @@ class App:
 
 def main():
     global tesseract_ok, TESS
+    if not PLATFORM.ensure_admin(WINDOW_TITLE):
+        return
     # Only one copy at a time (per data folder): two copies would each keep their own log.
     # If it's already running, bring that window to the front instead. (The lock keeps the old
     # name, so an older version and this one can't run at the same time either.)

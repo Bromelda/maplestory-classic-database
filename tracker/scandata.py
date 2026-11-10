@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Raise this after any fix that changes what gets counted. tools/publish_drops.py only uses sessions from
 # the current version, so results from before a fix can't mix in with the good ones.
-SCANNER_VERSION = 5
+SCANNER_VERSION = 7
 
 
 def _key(text):

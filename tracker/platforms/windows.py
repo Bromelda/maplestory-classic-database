@@ -4,6 +4,7 @@ import ctypes
 import os
 import platform
 import subprocess
+import sys
 import threading
 import time
 from ctypes import wintypes
@@ -12,6 +13,16 @@ from pathlib import Path
 import numpy as np
 
 from .base import Hotkeys, Platform, parse_hotkey, presses, to_register
+
+
+def admin_command(executable, argv, frozen):
+    """What starts this program again: (program, its arguments, the folder to start in). From source, with no console window."""
+    exe = Path(executable)
+    if frozen:
+        return str(exe), subprocess.list2cmdline(argv[1:]), str(exe.parent)
+    quiet = exe.with_name("pythonw.exe")
+    script = Path(argv[0]).resolve()
+    return str(quiet if quiet.exists() else exe), subprocess.list2cmdline([str(script), *argv[1:]]), str(script.parent)
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -214,6 +225,21 @@ class WindowsPlatform(Platform):
             *on_path,
         ]
 
+    def ensure_admin(self, title):
+        # The game runs as administrator, and Windows hides key presses from a normal program while it's in front.
+        try:
+            if ctypes.windll.shell32.IsUserAnAdmin():
+                return True
+            exe, args, folder = admin_command(sys.executable, sys.argv, getattr(sys, "frozen", False))
+            ctypes.windll.shell32.ShellExecuteW.restype = ctypes.c_ssize_t
+            started = ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, args, folder, 1)
+        except Exception:
+            started = 0
+        if started <= 32:                       # (Windows asked, and the answer was no, or it couldn't start)
+            ctypes.windll.user32.MessageBoxW(None, f"{title} only runs as administrator, so its hotkeys work in the game.\n\n"
+                                                   "Start it again and say yes when Windows asks.", title, 0x30)
+        return False
+
     def claim_single_instance(self, key, title, old_titles=()):
         self._mutex = _CreateMutex(None, False, "Local\\MapleEXP-" + key)    # kept while it runs
         if ctypes.get_last_error() != 183:                                   # ERROR_ALREADY_EXISTS
@@ -411,6 +437,17 @@ class WindowsPlatform(Platform):
     def open_folder(self, path):
         # (The Microsoft Store's Python keeps AppData elsewhere, and only it sees the usual path. Explorer needs the real one.)
         os.startfile(os.path.realpath(path))
+
+    def documents(self):
+        # (It may have been moved, to OneDrive for one.)
+        path = ctypes.create_unicode_buffer(260)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, path) == 0 and path.value:      # (5: CSIDL_PERSONAL)
+            return Path(path.value)
+        return super().documents()
+
+    def open_file(self, path):
+        # (Explorer hands it to the desktop, so the browser doesn't start as administrator like this tracker.)
+        subprocess.Popen(["explorer", os.path.realpath(path)])
 
     def show_file(self, path):
         subprocess.Popen(["explorer", f"/select,{os.path.realpath(path)}"])

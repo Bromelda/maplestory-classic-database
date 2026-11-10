@@ -28,6 +28,41 @@ drop results are kept. While it's open, the account is saved in `daybook.json` i
   button) while it's open, and the controller's popup. Items on the bar are recognised from real pictures of it, made
   by `tools/make_quick_digits.py`. It's only been checked at 2560x1440.
 
+## Chat
+
+The **Chat** button (or Shift+F8) opens a window that stays on top of the game, with what the chat box says, one tab for each kind:
+
+- **Buddy:** buddy chat, the bright orange lines with "()" after the name ("Remoneide() : LOL"), and whispers, if the game
+  shows them in green
+- **Party:** the pink lines with no block behind them, and the party's news like "'jine' has joined the party."
+- **General:** the white lines from people on your map and channel, and the game's yellow notices ("[Notice] ...", both lines
+  of a long one)
+- **Speakers:** the lines on yellow, pink and light blue blocks when the chat box is open, and the dark ones on the grey bar
+  when it's closed. Each shows its channel ("CH01", from the little badge after the name) on its block's colour, and the
+  name in that colour too. A digit that couldn't be made out shows as "?".
+- **Other:** someone opening something special from a box (light letters on a red block, marked "box"), and any other
+  colour, like light blue letters (maybe group chat)
+
+Each line has the time it was first seen, and the same line is never added twice. A tab with new lines says how many. A new
+buddy message rings a bell and lights the Buddy tab up; the switch at the bottom turns that off. Move it and size it as you
+like: it opens there next time. The text starts big; A- and A+ make it smaller or bigger.
+
+The reading isn't perfect, so a name can come out a few ways ("xeyna", "meyna"). Every way a name's read is kept together, and
+it's shown the way most readings say, on all of that person's lines. A line's tab goes by what it looked like on most looks.
+Something seen for just one look and never again isn't kept, as real lines stay up for a while.
+
+It looks at the chat box 10 times a second while the game's in front, so a line that's only up for a quarter of a second is
+still caught. The chat box closed shows one line at a time; opened (its + button), it shows ten, and fast speakers are much
+less likely to push a buddy message past before it's seen. Buddy, party and other lines are read all the time; general chat
+and speakers only while the window's open, as they're most of the chat. What it reads stays in memory and is gone when the
+tracker closes: it's never saved or sent anywhere.
+
+Checked on real pictures of the chat box open and closed, and on your screenshots of each kind of chat, but not yet live in the
+game. A long line that wraps onto a second line in the open box shows as two lines (a second line with no name is only kept
+for notices and boxes). The messages at the bottom right (pickups, crafting) aren't chat: they're not in this window.
+
+The channels are read by the shapes of the badge's digits, made from your pictures by `tools/make_chat_badge.py`.
+
 ## What the scanner does
 
 1. Follows the monsters on screen by their sprites, using only the ones that live on the current map, in their hit and
@@ -141,6 +176,8 @@ with a switch and a button that opens the drops folder.
 | Shift+F4 | Repot bell |
 | Shift+F5 | Move the card |
 | Shift+F6 | Reset |
+| Shift+F7 | Items window |
+| Shift+F8 | Chat window |
 
 They work while the game or the tracker is in front, and bringing the window back leaves the keyboard with the game. With
 another program in front, click the taskbar button or double-click the desktop shortcut.
@@ -149,9 +186,8 @@ You can change them in Settings to nearly any key, such as plain 0, 9, 8 and 7, 
 Shift's held down to attack. The game gets those keys too, so typing a plain key in chat sets it off as well, which matters most
 for Reset. It's ignored while a shop's "how many" box is up. `hotkeys.log` in the data folder says which presses came through.
 
-**To use them in the game, start the tracker with `run_as_admin.bat`** and say yes when Windows asks. The game runs as administrator,
-and Windows doesn't show a normal program any keys pressed while an administrator program is in front. Started the usual way,
-everything else works, but the hotkeys only work with the tracker's own window in front.
+**The tracker only runs as administrator.** However it's started, Windows asks first, and it stops if the answer's no. The game runs
+as administrator, and Windows doesn't show a normal program any keys pressed while an administrator program is in front.
 
 The tracker notices these by checking whether the keys you chose are down: only those keys, only while the game or the tracker is in
 front. It sends nothing to the game.
@@ -236,6 +272,8 @@ py -3 tools/replay.py other.mp4 --map "The Land of Wild Boar II" --gh 10 --out s
 | The rules, one situation at a time (`tests/test_lootwatch.py`) | Passing |
 | The scanner on made-up footage: real map art and sprites, stand-in player, scrolling view (`tests/test_fieldwatch.py`) | Passing |
 | Saving, map names, the report (`tests/test_dropscan.py`) | Passing |
+| The page of which monster drops what (`tests/test_mobbook.py`) | Passing |
+| Reading the chat box, on real pictures of it open and closed, and real buddy lines (`tests/test_chat.py`) | Passing |
 | Saving clips and replaying them, on made-up footage (`tests/test_clips.py`) | Passing |
 | Finding a real Wild Boar in one real 1920x1080 screenshot, among all 83 monsters | Correct: 0.74 against 0.68 for the next best |
 | The tracker window with the scanner connected | **Not run yet** |

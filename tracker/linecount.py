@@ -145,7 +145,7 @@ class Meter:
         self.since_seen += amount
 
     def results(self):
-        return {k: self.total[k] for k in ("exp_lines", "exp_bar", "mesos_lines", "mesos_checked", "mesos_box", "items_read", "items_unread")}
+        return {k: self.total[k] for k in ("exp_lines", "exp_bar", "exp_lump", "mesos_lines", "mesos_checked", "mesos_box", "items_read", "items_unread")}
 
 
 class Stretch:
@@ -178,6 +178,7 @@ class LineCounter:
         self.odd_amounts = Counter()    # EXP lines that fit no monster here: worth a look if one keeps coming
         self.solo_kills = Counter()     # species -> kills named by their line, alone, whatever else was going on
         self.listed = {}                # species -> item -> [how many picked up, kills in that time]
+        self.on_maps = {}               # map -> Counter of item -> how many times it was picked up there, whoever it came from
 
     # ---------- what comes in ----------
 
@@ -234,6 +235,8 @@ class LineCounter:
             self.meter.mesos_line(qty, t)
         else:
             self.meter.add("items_read", 1, t)
+            if self.map:
+                self.on_maps.setdefault(self.map, Counter())[name] += 1
         if self.open:
             self.open.picks.append((name, qty, t))
         if self.span and name != "mesos":
@@ -404,4 +407,5 @@ class LineCounter:
                 "mesos": {name(s): m for s, m in mesos.items()}, "skipped": dict(skipped), "stretches": self.stretches,
                 "solo_kills": {name(s): n for s, n in solo.items()},
                 "listed": {name(s): v for s, v in listed.items()},
+                "on_maps": {m: dict(c) for m, c in self.on_maps.items()},
                 "odd_amounts": {str(k): v for k, v in self.odd_amounts.most_common(10)}, "read": self.meter.results()}

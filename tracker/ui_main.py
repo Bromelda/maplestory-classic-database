@@ -851,9 +851,12 @@ class SimpleView(tk.Frame):
         self.move_btn = Button(more, theme, text="Move card", kind="secondary", width=half, height=38, radius=12,
                                size=12, command=cb["move"], tip="Move or resize the tracker card", bg=bg)
         self.move_btn.grid(row=0, column=1, padx=(g.px(6), 0))
-        self.items_btn = Button(more, theme, text="Items and reading", kind="secondary", width=INNER, height=38, radius=12,
+        self.items_btn = Button(more, theme, text="Items and reading", kind="secondary", width=half, height=38, radius=12,
                                 size=12, command=cb["items"], tip="What you've picked up this run, and how much it's reading", bg=bg)
-        self.items_btn.grid(row=1, column=0, columnspan=2, sticky="w", pady=(g.px(6), 0))
+        self.items_btn.grid(row=1, column=0, sticky="w", pady=(g.px(6), 0))
+        self.chat_btn = Button(more, theme, text="Chat", kind="secondary", width=half, height=38, radius=12, size=12,
+                               command=cb.get("chat"), tip="Buddy messages kept apart from the rest of the chat, over the game", bg=bg)
+        self.chat_btn.grid(row=1, column=1, sticky="w", padx=(g.px(6), 0), pady=(g.px(6), 0))
 
         self.message = Message(self, theme, bg)
         self.message.grid(row=3, column=0, padx=g.px(SIDE + 2), pady=pad(8, 14), sticky="we")

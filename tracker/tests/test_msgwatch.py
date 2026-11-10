@@ -126,8 +126,13 @@ blank = np.zeros((4, 4), np.uint8)
 sure = mw.Row(574, 300, "white", 200.0, blank, blank, ("mesos", 5, True))
 sign = mw.Row(584, 300, "white", 200.0, blank, blank, ("text", None, False))
 watch.rows = lambda img, gh: ([sure, sign, sign, sign], [None] * 4)
-watch.look(np.zeros((4, 4, 3), np.uint8), 20.0, 0.0)
+watch.look(np.zeros((4, 594, 3), np.uint8), 20.0, 0.0)
 check(f"scenery behind the stack doesn't move where lines end ({watch.edge})", watch.edge == 574)
+short = mw.Row(562, 300, "white", 200.0, blank, blank, ("mesos", 5, True))
+watch = mw.MessageWatcher(font)
+watch.rows = lambda img, gh: ([short], [None])
+watch.look(np.zeros((4, 594, 3), np.uint8), 20.0, 0.0)
+check(f"a line misread short doesn't say where lines end (+51 as +5: then every line after's cut short) ({watch.edge})", watch.edge is None)
 
 # A line's end is known: scenery just past it doesn't change where it's read from.
 watch = mw.MessageWatcher(font)
@@ -151,6 +156,25 @@ cv2.putText(pale, "+8", (50, 26), cv2.FONT_HERSHEY_PLAIN, 1.5, (235, 255, 255), 
 seen = mw.strokes(pale, 1.0)
 check("letters on pale scenery stand out", seen[:, 50:80].max() > 0.9 and seen[:, :40].max() < 0.1)
 check("plain scenery has nothing to see", mw.strokes(np.full((36, 120, 3), 200, np.uint8), 1.0).max() == 0)
+
+# Real looks at the stack, where the first live hunts on a low-level character went wrong (tests/frames/msg_lines).
+def real_run(name, peak, edge, looks_each=3):
+    """What the watcher hears from these frames, looked at about 10 times a second."""
+    w = mw.MessageWatcher(font)
+    w.peak["white"], w.edge = peak, edge
+    heard, t = [], 0.0
+    for n in range(3):
+        frame = cv2.imread(str(FRAMES / "msg_lines" / f"{name}_{n}.png"))
+        for _ in range(looks_each):
+            t += 0.1
+            heard += [(line.kind, line.amount) for line in w.look(frame, 40 / 3, t)]
+    return heard
+
+
+check("a new line that reads a bit dimmer than the brightest yet is still heard", real_run("missed", 201.0, 573.0) == [("exp", 13)])
+check("a 3 isn't read as an 8", ("exp", 13) in real_run("misread", 184.0, 573.0) and ("exp", 18) not in real_run("misread", 184.0, 573.0))
+heard = real_run("not_new", 182.0, 573.0)
+check("new lines coming in below an old one don't make that one new", ("exp", 12) not in heard and ("mesos", 15) in heard)
 
 print("\nALL PASSED" if not failures else f"\n{failures} FAILED")
 sys.exit(1 if failures else 0)

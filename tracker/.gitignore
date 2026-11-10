@@ -5,3 +5,6 @@ venv/
 *.tmp
 /build/
 /release/
+
+# Real chat pictures from the owner's game, for tests/test_chat.py: other players' chat, so they stay on this computer
+tests/frames/chat_lines/
