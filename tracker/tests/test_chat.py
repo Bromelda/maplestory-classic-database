@@ -297,6 +297,24 @@ else:
         check("real: a buddy line read as nonsense at first is read again, and kept", any(x.kind == "buddy" for x in retry.log.lines),
               [(x.kind, x.text) for x in retry.log.lines])
 
+        # A whisper: near-white letters on an even green bar (the owner's screenshot, put in a real open box, its bar carried
+        # on to the line's end as it is in the game).
+        if (FRAMES / "whisper_crop.png").exists():
+            img = cv2.imread(str(FRAMES / "buddy_open.png"))
+            w = cv2.imread(str(FRAMES / "whisper_crop.png"))
+            img[422:452, 40:40 + w.shape[1]] = w[6:36]
+            img[422:452, 40 + w.shape[1]:54 + 700] = w[6:36, 495:500].mean(axis=1, keepdims=True).astype(np.uint8)
+            got = [(r.top, r.kind) for r in cw.rows(img, 1.0, 54)]
+            check("real: a whisper's green bar is a whisper", (424, "whisper") in got, got)
+            watch = cw.ChatWatch(tess.read_lines, kinds=cw.SHOWN)
+            watch.look(img, 1440, 54, 0.0, 1000.0)
+            while watch.waiting:
+                watch.read()
+            got = [(x.who, x.text) for x in watch.log.lines if x.kind == "whisper"]
+            check("real: ...and read", len(got) == 1 and got[0][0] == "minickp" and "move" in got[0][1], got)
+        whispers = [(p.name, r.top) for p in sorted(FRAMES.glob("open_*.png")) for r in cw.rows(cv2.imread(str(p)), 1.0, X0) if r.kind == "whisper"]
+        check("real: no whispers where there are none", not whispers, whispers)
+
         # The owner's screenshot of buddy lines over a lit-up map, between speakers ("Remoneide() : 11m" was missed, and
         # "Remoneidef) :" / "Pernoneide(y:" weren't taken for names), put in a real open box where its lines go.
         if (FRAMES / "buddy_scenery.jpg").exists():

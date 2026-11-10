@@ -9,7 +9,8 @@ What a line is comes from how the game draws it (the owner's own account of it, 
 - yellow letters: notices from the game ("[Notice] ..."), kept with general chat
 - pink letters, with no block of colour behind: party chat (and the party's own news, in a pale orange: "'jine' has joined the party.")
 - bright orange letters: buddy chat (on the owner's screenshot: 210, 151, 61 in red, green, blue)
-- green: whispers, in the classic game: not seen in this game yet, so they go with buddy chat
+- whispers: near-white letters on an even green bar ("minickp : harro can u move a bit to the left", on the owner's
+  screenshot), kept with buddy chat
 - speakers (megaphones), to the whole world: dark letters on a block of colour (yellow, light blue, pink, red) in the open
   box, and dark coloured letters on the grey bar when it's closed
 - a speaker's block says which channel it came from on a little badge after the name ("CH01"): it's read, with the block's
@@ -72,6 +73,8 @@ RED_BLOCK = (165, 40, 90)       # a box's red block: brighter than the open box'
 SOLID = 12                      # the closed box's grey bar is this even (2): nothing shows through it
 LIGHTER, DARKER = 40, 15        # letters lighter than what's behind them by this are chat; darker by this, a speaker
 GREY_SAT = 60                   # letters less coloured than this are white
+WHISPER_BAR = (55, 170, 90, 80, 15)     # a whisper's green bar: its hue between these, this coloured, this bright, and as even
+                                # as this (the owner's: hue 72, 123, 102, 8; scenery's grass through the box: 51 bright, 31)
 BRIGHT_SAT = 140                # buddy chat's orange is bright: the party's "has joined the party" lines are a paler one (74)
 NEAR_COLOUR = 70                # a pixel this far from the letters' colour is only half part of them, for reading
 SAME = 0.82                     # how alike two readings have to be to be the same line...
@@ -257,6 +260,8 @@ def rows(img, s, x0):
                 sharp = (v - cv2.blur(v.astype(np.float32), (9, 9))).astype(np.float32)
                 letters = name & (sharp >= np.percentile(sharp[name], 60))
         colour = tuple(int(c) for c in np.median(pic[letters], axis=0))
+        if kind is None and whisper_bar(np.median(pic[~near_letters], axis=0), bg, spread):
+            kind = "whisper"
         kind = kind or kind_of(colour)
         # Its letters, the whole line's length, by how strongly each pixel has their colour (the backdrop and the scenery are
         # other colours), from where it starts. Soft edges read better than hard ones.
@@ -294,6 +299,13 @@ def rows(img, s, x0):
             row.block = colour_behind
         out.append(row)
     return out
+
+
+def whisper_bar(bgr, bright, spread):
+    """Is what's behind a line (its colour (b, g, r), how bright, how much that varies) a whisper's green bar?"""
+    hsv = cv2.cvtColor(np.uint8([[[int(c) for c in bgr]]]), cv2.COLOR_BGR2HSV)[0, 0]
+    lo, hi, sat, light, even = WHISPER_BAR
+    return lo <= int(hsv[0]) * 2 < hi and int(hsv[1]) >= sat and bright >= light and spread <= even
 
 
 def block_colour(bgr):

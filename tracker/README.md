@@ -32,8 +32,8 @@ drop results are kept. While it's open, the account is saved in `daybook.json` i
 
 The **Chat** button (or Shift+F8) opens a window that stays on top of the game, with what the chat box says, one tab for each kind:
 
-- **Buddy:** buddy chat, the bright orange lines with "()" after the name ("Remoneide() : LOL"), and whispers, if the game
-  shows them in green
+- **Buddy:** buddy chat, the bright orange lines with "()" after the name ("Remoneide() : LOL"), and whispers (light letters on a green
+  bar), marked "whisper"
 - **Party:** the pink lines with no block behind them, and the party's news like "'jine' has joined the party."
 - **General:** the white lines from people on your map and channel
 
