@@ -56,7 +56,8 @@ GREY_BAR = 115                  # the closed box's bar (107 to 121)
 GRID_SLACK = 6                  # ...give or take this, found from the bottom lines (the open box has more than these:
 GRID_LINES = 6                  # above them may be scenery)
 END_GAP = 40                    # a gap this wide in a line is past its end (between words: 8; either side of the ":", 25 or so)
-PATCHY = 41                     # what's behind a chat line, past its letters, varies less than this
+PATCHY = 41                     # what's behind a chat line, past its letters, varies less than this...
+PATCHY_W = 260                  # ...in its first this many pixels (the name, and a little after)
 OPEN_K = 7                      # wider than a letter's stroke, for what's around it
 NAME_W = 110                    # the first part of a line, with the name: its letters' colour says what kind of line it is
 PITCH = 30.25                   # ...and each next one up is this much higher. Lines there touch, so they're found by where they are
@@ -86,10 +87,13 @@ RECENT_LINES = 400              # how far back a line read again is looked for, 
 SETTLE_S, SETTLE_LOOKS = 1.0, 3 # a new line's told of (the bell) once it's been seen 3 times, or twice over this long
 ONCE_S = 2.0                    # a line seen once, and not again in this long, wasn't one
 SCENERY_S = 2.0                 # a place where what looked like a line read as nonsense is left alone this long
+TRIES = 4                       # a line that read as nonsense is read again (scenery behind it changes) up to this many times
 
 KINDS = ("buddy", "whisper", "party", "general", "notice", "speaker", "box", "guild", "other")
-TABS = (("Buddy", ("buddy", "whisper")), ("Party", ("party",)), ("General", ("general", "notice")),
-        ("Speakers", ("speaker",)), ("Other", ("box", "guild", "other")))
+# The owner only wants buddy, party and general (white) chat: speakers, notices, box lines and the rest are still told apart
+# (so they aren't taken for general chat), but not read or shown.
+TABS = (("Buddy", ("buddy", "whisper")), ("Party", ("party",)), ("General", ("general",)))
+SHOWN = tuple(k for _, kinds in TABS for k in kinds)                                        # the kinds read and shown
 FIRST = ("buddy", "whisper", "party", "guild", "other", "general", "notice", "speaker", "box")     # which are read first
 
 BADGE = Path(__file__).resolve().parent / "assets" / "chat_badge.npz"   # the badge's "CH" and digits (tools/make_chat_badge.py)
@@ -216,9 +220,14 @@ def rows(img, s, x0):
             continue
         if not block and not boxed:
             # (Scenery above the open box can look like a line, but what's behind its "letters" is patchy, where the box's
-            # backdrop is even: real lines, 17 to 39; scenery, 42 up)
+            # backdrop is even: real lines, 17 to 39; scenery, 42 up). Only at its start, where every line has a name: past a
+            # short line's end, bright scenery shows through the backdrop ("Remoneide() : 11m" over a lit-up map was missed).
+            # Nor the top or bottom edge of a speaker's block next to it, a few rows that are all bright (47 with it, 29 without).
             k = max(3, int(round(OPEN_K * s)) | 1)
-            if float(cv2.morphologyEx(v.astype(np.float32), cv2.MORPH_OPEN, np.ones((k, k), np.uint8)).std()) > PATCHY:
+            start = v[:, :int(PATCHY_W * s)]
+            opened = cv2.morphologyEx(start.astype(np.float32), cv2.MORPH_OPEN, np.ones((k, k), np.uint8))
+            edge = (start >= BLOCK + 20).mean(axis=1) > 0.6
+            if float(opened[~edge].std() if (~edge).sum() >= 8 else opened.std()) > PATCHY:
                 continue
         light, dark = band & (v >= bg + LIGHTER), band & (v <= bg - DARKER)
         colour_behind = block_colour(np.median(pic[~near_letters], axis=0)) if block or boxed else "grey"
@@ -274,6 +283,8 @@ def rows(img, s, x0):
             faint = np.nonzero((mask > 0.25).sum(axis=0) >= 2)[0]      # (a thin ":" is faint, and the gaps either side of it wide)
             gaps = np.nonzero(np.diff(faint) > END_GAP * s)[0]
             xs = xs[xs <= faint[gaps[0]]] if gaps.size else xs
+            if not xs.size:
+                continue
         mask = mask[:, :xs[-1] + 3]
         shape = cv2.resize(mask, (max(8, mask.shape[1] // 4), 8), interpolation=cv2.INTER_AREA)
         row = Row(y0, y1, kind, colour, shape, mask)
@@ -390,7 +401,7 @@ def split(text):
     """(who, what they said) from a chat line: "Name : hello", "Name>> hello" (a whisper) or "> Name : hello". Tesseract reads
     the ":" as ".", "|", ">", ";", "-", "=" or "°" at times, and a speaker's channel badge (CH21) after the name as a mark or two.
     A buddy's name has "()" after it: "Remoneide() : LOL" (read as "( )", "(]", "{}" at times)."""
-    m = re.match(r"^\s*(?:>\s*)?[(']?([A-Za-z0-9_]{2,13})(?:\s?[(\[{]\s?[)\]}|lI1]?)?(?:\s*(?:>>|<<)|(?:\s+\S{1,6}){0,2}?\s*[:;.,>=|°·©*~-]+(?=\s))\s*(.+)$", text)
+    m = re.match(r"^\s*(?:>\s*)?[(']?([A-Za-z0-9_]{2,13})(?:\s?[(\[{]\s?[^\s:;]?|\s?[)\]}])?(?:\s*(?:>>|<<)|(?:\s+\S{1,6}){0,2}?\s*[:;.,>=|°·©*~-]+(?=\s))\s*(.+)$", text)
     if m:
         return m.group(1).strip(), re.sub(r"^\S{1,2}\s*[:;|]\s+", "", m.group(2).strip())     # (the rest of a badge: "9 : hi")
     return "", text
@@ -621,7 +632,7 @@ class ChatWatch:
         self.read_lines = read_lines
         self.log = log if log is not None else ChatLog()
         self.kinds = set(kinds)
-        self.known = {}                 # a line's picture's size -> [(shape, the Said it is, or None for nonsense)], latest last
+        self.known = {}                 # a line's picture's size -> [[shape, the Said it is or None for nonsense, times read]]
         self.waiting = []               # (kind, shape, mask, s, now, clock, top): lines seen, not read yet
         self.lock = threading.Lock()
         self.reads = self.dropped = 0
@@ -629,15 +640,28 @@ class ChatWatch:
         self.scenery = {}               # (where a line would be: its top, its kind) -> until when it's left alone: it read as
                                         # nonsense there, so it's scenery above the open box (which changes as you move)
 
+    def _entry(self, shape):
+        for entry in reversed(self.known.get(shape.shape, ())):
+            if _shape_same(entry[0], shape):
+                return entry
+        return None
+
     def _known(self, shape):
-        for old, said in reversed(self.known.get(shape.shape, ())):
-            if _shape_same(old, shape):
-                return True, said
-        return False, None
+        """(known, the Said it is): a line read already. One that read as nonsense isn't known until it's been read TRIES
+        times: busy scenery behind a real line can spoil a reading, and it changes as you move."""
+        entry = self._entry(shape)
+        if entry is None or (entry[1] is None and entry[2] < TRIES):
+            return False, None
+        return True, entry[1]
 
     def _remember(self, shape, said):
+        entry = self._entry(shape)
+        if entry is not None and entry[1] is None:
+            entry[1] = said
+            entry[2] += 1
+            return
         same = self.known.setdefault(shape.shape, [])
-        same.append((shape, said))
+        same.append([shape, said, 1])
         del same[:-SHAPES]
 
     def look(self, img, rect_h, x0, now, clock=None):

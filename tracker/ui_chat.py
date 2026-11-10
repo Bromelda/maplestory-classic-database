@@ -1,9 +1,9 @@
-"""The Chat window: what the game's chat box said this run, a tab for each kind, so a buddy's message isn't lost among the speakers.
+"""The Chat window: what the game's chat box said this run, a tab for each kind, so a buddy's message isn't lost in general chat.
 
-Buddy, Party, General, Speakers and Other each keep their own list, oldest at the top, each line with the time it was first
-seen. It stays on top of the game, and you can move it and change its size: it opens where you left it. A- and A+ make the
-lines' text smaller or bigger. A speaker's line shows its channel ("CH01") in the colour of its block. A new buddy message
-can ring a bell and light the Buddy tab up (a switch at the bottom turns that off).
+Buddy, Party and General each keep their own list, oldest at the top, each line with the time it was first seen (speakers,
+notices and the rest aren't read: the owner doesn't want them). It stays on top of the game, and you can move it and change its
+size: it opens where you left it. A- and A+ make the lines' text smaller or bigger. A new buddy message can ring a bell and
+light the Buddy tab up (a switch at the bottom turns that off).
 
 It's only a window on what the tracker already read (chatwatch.py): closing it loses nothing.
 """
@@ -168,8 +168,7 @@ class ChatWindow:
         self.shown, self.shown_changed = numbers, log.changed
 
     def _empty(self):
-        return {"Buddy": "No buddy messages yet. They show here as they come, with the time they came.",
-                "Speakers": "No speakers yet."}.get(self.page, "Nothing yet.")
+        return {"Buddy": "No buddy messages yet. They show here as they come, with the time they came."}.get(self.page, "Nothing yet.")
 
     def _line(self, said):
         if self.text.index("end-1c") != "1.0":

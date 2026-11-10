@@ -282,6 +282,36 @@ else:
         check("real: once a spot's read as nonsense, it isn't read again straight away", not junk.waiting and not junk.log.lines, len(junk.waiting))
         junk.look(moved, 1440, X0, 13.0)
         check("real: ...but it's looked at again after a while", junk.waiting, len(junk.waiting))
+        # A real line read as nonsense once (busy scenery behind it) is read again, not remembered as nonsense for good.
+        calls = []
+
+        def spoilt_twice(images, chars=None):
+            calls.append(len(images))
+            return ["TOS We a Eee Ol od OUD" if len(calls) <= 2 else "Remoneide() : are you on?"] * len(images)
+        retry = cw.ChatWatch(spoilt_twice, kinds={"buddy"})
+        one = cv2.imread(str(FRAMES / "buddy_open.png"))
+        for t in (0.0, 2.5, 5.0, 7.5):
+            retry.look(one, 1440, 54, t, 1000.0 + t)
+            while retry.waiting:
+                retry.read()
+        check("real: a buddy line read as nonsense at first is read again, and kept", any(x.kind == "buddy" for x in retry.log.lines),
+              [(x.kind, x.text) for x in retry.log.lines])
+
+        # The owner's screenshot of buddy lines over a lit-up map, between speakers ("Remoneide() : 11m" was missed, and
+        # "Remoneidef) :" / "Pernoneide(y:" weren't taken for names), put in a real open box where its lines go.
+        if (FRAMES / "buddy_scenery.jpg").exists():
+            img = cv2.imread(str(FRAMES / "buddy_open.png"))
+            crop = cv2.imread(str(FRAMES / "buddy_scenery.jpg"))
+            h = 540 - 116
+            img[116:116 + h, 36:36 + crop.shape[1]] = crop[:h]
+            got = [r.top for r in cw.rows(img, 1.0, 54) if r.kind == "buddy"]
+            check("real: buddy lines over a lit-up map are all found", got == [328, 388, 448, 479], got)
+            watch = cw.ChatWatch(tess.read_lines, kinds={"buddy"})
+            watch.look(img, 1440, 54, 0.0, 1000.0)
+            while watch.waiting:
+                watch.read()
+            texts = [x.text for x in watch.log.lines if x.kind == "buddy"]
+            check("real: ...and all read", len(texts) == 4 and "11m" in texts[-1], texts)
 
         watch = cw.ChatWatch(tess.read_lines)
         watch.look(cv2.imread(str(FRAMES / "buddy_open.png")), 1440, 54, 0.0, 1000.0)
@@ -345,21 +375,18 @@ win.refresh()
 root.update()
 body = win.text.get("1.0", "end")
 check("window: new lines are added at the end, none twice", body.count("are you on?") == 1 and body.index("Mo") > body.index("Jine"), body)
-check("window: the Speakers tab says it has a new line", win.tab_buttons["Speakers"].cget("text") == "Speakers +1", win.tab_buttons["Speakers"].cget("text"))
-win.show("Speakers")
-root.update()
-check("window: Speakers shows the speaker", "Nine Dragons" in win.text.get("1.0", "end"))
-check("window: once seen, the tab's count goes", win.tab_buttons["Speakers"].cget("text") == "Speakers")
-win.show("All")
-root.update()
-check("window: All has everything", all(w in win.text.get("1.0", "end") for w in ("Kati", "Jine", "Mo")))
-log.add("speaker", "Insira CH01 : [Pink Rabbit Puppet] ACCEPTEDTV TWITCH BIG GIVEAWAY NOW", 4.0, 1003.0, "01", "yellow")
-win.show("Speakers")
+check("window: just Buddy, Party, General (and All) tabs", list(win.tab_buttons) == ["Buddy", "Party", "General", "All"], list(win.tab_buttons))
+check("only buddy, party and general chat are read and shown", set(cw.SHOWN) == {"buddy", "whisper", "party", "general"}, cw.SHOWN)
+log.add("general", "OpZeno : try it", 4.0, 1003.0)
+win.show("General")
 root.update()
 body = win.text.get("1.0", "end")
-check("window: a speaker's channel shows", "CH01" in body and "Insira" in body, body)
-ranges = win.text.tag_ranges("badge_yellow")
-check("window: ...on its block's colour", bool(ranges) and "CH01" in win.text.get(ranges[0], ranges[1]), ranges)
+check("window: General shows general chat, not speakers", "OpZeno" in body and "Kati" not in body, body)
+check("window: once seen, the tab's count goes", win.tab_buttons["General"].cget("text") == "General")
+win.show("All")
+root.update()
+body = win.text.get("1.0", "end")
+check("window: All has buddy and general chat, not speakers", all(w in body for w in ("OpZeno", "Jine", "Mo")) and "Kati" not in body, body)
 check("window: the text starts bigger", win.size == 18, win.size)
 win.flash()
 win.refresh()

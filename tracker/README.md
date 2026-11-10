@@ -35,13 +35,10 @@ The **Chat** button (or Shift+F8) opens a window that stays on top of the game, 
 - **Buddy:** buddy chat, the bright orange lines with "()" after the name ("Remoneide() : LOL"), and whispers, if the game
   shows them in green
 - **Party:** the pink lines with no block behind them, and the party's news like "'jine' has joined the party."
-- **General:** the white lines from people on your map and channel, and the game's yellow notices ("[Notice] ...", both lines
-  of a long one)
-- **Speakers:** the lines on yellow, pink and light blue blocks when the chat box is open, and the dark ones on the grey bar
-  when it's closed. Each shows its channel ("CH01", from the little badge after the name) on its block's colour, and the
-  name in that colour too. A digit that couldn't be made out shows as "?".
-- **Other:** someone opening something special from a box (light letters on a red block, marked "box"), and any other
-  colour, like light blue letters (maybe group chat)
+- **General:** the white lines from people on your map and channel
+
+Speakers (the lines on coloured blocks), the game's yellow notices, someone opening something from a box, and any other colour
+aren't shown or read: they're told apart from general chat and left out.
 
 Each line has the time it was first seen, and the same line is never added twice. A tab with new lines says how many. A new
 buddy message rings a bell and lights the Buddy tab up; the switch at the bottom turns that off. Move it and size it as you
@@ -49,19 +46,18 @@ like: it opens there next time. The text starts big; A- and A+ make it smaller o
 
 The reading isn't perfect, so a name can come out a few ways ("xeyna", "meyna"). Every way a name's read is kept together, and
 it's shown the way most readings say, on all of that person's lines. A line's tab goes by what it looked like on most looks.
-Something seen for just one look and never again isn't kept, as real lines stay up for a while.
+Something seen for just one look and never again isn't kept, as real lines stay up for a while. A line that reads as nonsense (busy
+scenery behind the see-through box can spoil it) is read again a few times, a couple of seconds apart, so it isn't lost.
 
 It looks at the chat box 10 times a second while the game's in front, so a line that's only up for a quarter of a second is
 still caught. The chat box closed shows one line at a time; opened (its + button), it shows ten, and fast speakers are much
-less likely to push a buddy message past before it's seen. Buddy, party and other lines are read all the time; general chat
-and speakers only while the window's open, as they're most of the chat. What it reads stays in memory and is gone when the
+less likely to push a buddy message past before it's seen. Buddy and party lines are read all the time; general chat only
+while the window's open, as it's most of the chat. What it reads stays in memory and is gone when the
 tracker closes: it's never saved or sent anywhere.
 
 Checked on real pictures of the chat box open and closed, and on your screenshots of each kind of chat, but not yet live in the
-game. A long line that wraps onto a second line in the open box shows as two lines (a second line with no name is only kept
-for notices and boxes). The messages at the bottom right (pickups, crafting) aren't chat: they're not in this window.
-
-The channels are read by the shapes of the badge's digits, made from your pictures by `tools/make_chat_badge.py`.
+game. A long line that wraps onto a second line in the open box loses its second line (it has no name). The messages at
+the bottom right (pickups, crafting) aren't chat: they're not in this window.
 
 ## What the scanner does
 

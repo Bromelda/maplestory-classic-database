@@ -3898,8 +3898,9 @@ class App:
 
     def _chat_worker(self):
         """Looks at the game's chat box 10 times a second (chatwatch.py), while the game's in front: lines can come every
-        quarter of a second. What it sees goes to _chat_reader to be read. General chat and speakers are only read while the
-        Chat window's open (they're most of the chat, and reading them costs a little); buddy, party and the rest always are."""
+        quarter of a second. What it sees goes to _chat_reader to be read. Only buddy, party and general chat are read (speakers,
+        notices and the rest aren't wanted), and general chat only while the Chat window's open (it's most of the chat, and
+        reading it costs a little); buddy and party always are."""
         with mss.mss() as sct:
             while not self.stop_evt.is_set():
                 t0 = time.monotonic()
@@ -3909,7 +3910,7 @@ class App:
                     rect = self.reader.last_rect
                     if self.chat and rect and self.reader.hwnd and self.reader.mode == "window" and PLATFORM.game_in_front():
                         window_open = bool(self.chat_win and self.chat_win.exists())
-                        self.chat.kinds = set(chatwatch.KINDS) - (set() if window_open else {"general", "notice", "speaker", "box"})
+                        self.chat.kinds = set(chatwatch.SHOWN) - (set() if window_open else {"general"})
                         where = chatwatch.area(rect)
                         shot = self.reader._hide_own(grab(sct, *where))
                         if shot:
