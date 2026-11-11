@@ -9,8 +9,9 @@ What a line is comes from how the game draws it (the owner's own account of it, 
 - yellow letters: notices from the game ("[Notice] ..."), kept with general chat
 - pink letters, with no block of colour behind: party chat (and the party's own news, in a pale orange: "'jine' has joined the party.")
 - bright orange letters: buddy chat (on the owner's screenshot: 210, 151, 61 in red, green, blue)
-- whispers: near-white letters on an even green bar ("minickp : harro can u move a bit to the left", on the owner's
-  screenshot), kept with buddy chat
+- whispers: green letters ("Xeyna<< hi", or from another world "Xeyna[Windia-9]>> hi", on the owner's screenshot), kept
+  with buddy chat; and near-white letters on an even green bar (another screenshot: "minickp : harro can u move a bit to the
+  left", maybe a whisper picked out)
 - speakers (megaphones), to the whole world: dark letters on a block of colour (yellow, light blue, pink, red) in the open
   box, and dark coloured letters on the grey bar when it's closed
 - a speaker's block says which channel it came from on a little badge after the name ("CH01"): it's read, with the block's
@@ -404,7 +405,10 @@ def tidy(text):
     """A reading, without what the edges of a block or the box add to it."""
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"^[^A-Za-z0-9\['(]+", "", text)                  # (a block's left edge: "|", "\\")
+    face = re.search(r"\s[:;=][-']?[()\[\]DPp3O/|]$", text)          # (a smiley at the end, ":(", is kept)
+    text = text[:face.start()] if face else text
     text = re.sub(r"(\s+[^\sA-Za-z0-9]{1,3})+$", "", text)          # (marks after the line's end)
+    text = text + face.group(0) if face else text
     text = re.sub(r"\s+[|]\s*\w{0,2}$", "", text)
     return text.strip(" ,`\"_~|")
 
@@ -412,8 +416,9 @@ def tidy(text):
 def split(text):
     """(who, what they said) from a chat line: "Name : hello", "Name>> hello" (a whisper) or "> Name : hello". Tesseract reads
     the ":" as ".", "|", ">", ";", "-", "=" or "°" at times, and a speaker's channel badge (CH21) after the name as a mark or two.
-    A buddy's name has "()" after it: "Remoneide() : LOL" (read as "( )", "(]", "{}" at times)."""
-    m = re.match(r"^\s*(?:>\s*)?[(']?([A-Za-z0-9_]{2,13})(?:\s?[(\[{]\s?[^\s:;]?|\s?[)\]}])?(?:\s*(?:>>|<<)|(?:\s+\S{1,6}){0,2}?\s*[:;.,>=|°·©*~-]+(?=\s))\s*(.+)$", text)
+    A buddy's name has "()" after it: "Remoneide() : LOL" (read as "( )", "(]", "{}" at times). A whisper from another world
+    has it after the name: "Xeyna[Windia-9]>> hi" (read as "xeynalvVindia-9]>> hi")."""
+    m = re.match(r"^\s*(?:>\s*)?[(']?([A-Za-z0-9_]{2,13})(?:\s?[(\[{]\s?[^\s:;]?|\s?[)\]}])?(?:[\[({lI1|]\S{2,14}?-\d{1,2}[\])}|lI1]?\s*(?:>>|<<)|\s*(?:>>|<<)|(?:\s+\S{1,6}){0,2}?\s*[:;.,>=|°·©*~-]+(?=\s))\s*(.+)$", text)
     if m:
         return m.group(1).strip(), re.sub(r"^\S{1,2}\s*[:;|]\s+", "", m.group(2).strip())     # (the rest of a badge: "9 : hi")
     return "", text

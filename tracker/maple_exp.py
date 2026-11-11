@@ -161,6 +161,7 @@ DEFAULTS = {"gap_seconds": 120, "transparency": 0, "topmost": True,
             "auto_tuck": True,          # the window goes to the taskbar once you're in the game: the card shows the numbers
             "chat_alert": True,         # a bell, and the Buddy tab lights up, for a new buddy message (ui_chat.py)
             "chat_geometry": "",        # where the Chat window was, and its size
+            "chat_places": {},          # ...and the others opened from it (a tab's right-click), by the tab they opened on
             "chat_text": 18}            # how big the Chat window's lines are (its A- and A+)
 SHAPE_LABELS = {"square": "Square", "wide": "Wide", "bar": "Bar"}
 SHAPE_BLURBS = {"square": "The narrow card: the big number, the level bar and Start/Pause.",
@@ -3151,7 +3152,7 @@ class App:
         self.log_open = False
         self.settings_win = None
         self.items_win = None
-        self.chat_win = None
+        self.chat_wins = []                     # the Chat windows open (the first, and any opened from a tab's right-click)
         self.chat_log = chatwatch.ChatLog()     # the chat box's lines this run (chatwatch.py): in memory only
         self.chat = None                        # the ChatWatch reading them, once Tesseract's there
         self.chat_seen_at = None                # when the chat box was last seen (time.monotonic())
@@ -3848,29 +3849,58 @@ class App:
                                      lambda: self.run_items, lambda: self._run_text(time.monotonic()), topmost=bool(self.cfg["topmost"]),
                                      at=at, style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM), get_check=self._inventory_check)
 
+    def _chat_windows(self):
+        """The Chat windows still open."""
+        self.chat_wins = [c for c in self.chat_wins if c.exists()]
+        return self.chat_wins
+
     def open_chat(self):
-        """The Chat window: buddy messages kept apart from the rest of the chat. (Its hotkey closes it again.)"""
-        if self.chat_win and self.chat_win.exists():
-            self.chat_win.win.destroy()
+        """The Chat window: buddy messages kept apart from the rest of the chat. (Its hotkey closes it again, and any others
+        opened from it.)"""
+        if self._chat_windows():
+            for c in list(self.chat_wins):
+                c.win.destroy()
+            self.chat_wins = []
             return
 
+        def moved(geometry):
+            self.cfg["chat_geometry"] = geometry
+        self._new_chat_window("Buddy", self.cfg.get("chat_geometry") or None, moved)
+
+    def _chat_window_from(self, page, source):
+        """Another Chat window, on that tab (a tab's right-click): where one on that tab was last, or just beside the one it
+        was opened from."""
+        places = self.cfg.get("chat_places") if isinstance(self.cfg.get("chat_places"), dict) else {}
+        geometry = places.get(page)
+        if not geometry:
+            try:
+                source.win.update_idletasks()
+                step = 40 * len(self._chat_windows())           # (one more down and right for each open: not on top of another)
+                geometry = f"{source.win.winfo_width()}x{source.win.winfo_height()}+{source.win.winfo_x() + step}+{source.win.winfo_y() + step}"
+            except tk.TclError:
+                geometry = None
+
+        def moved(geometry):
+            self.cfg["chat_places"] = {**(self.cfg.get("chat_places") or {}), page: geometry}
+        self._new_chat_window(page, geometry, moved)
+
+    def _new_chat_window(self, page, geometry, moved):
         def alert_set(on):
             self.cfg["chat_alert"] = on
             save_config(self.cfg)
 
-        def moved(geometry):
-            self.cfg["chat_geometry"] = geometry
-
         def text_size_set(size):
             self.cfg["chat_text"] = size
             save_config(self.cfg)
-        self.chat_win = ChatWindow(self.root, self.theme, dict(bg=BG, fg=FG, dim=DIM, list_bg=LIST_BG, select=SELECT, accent=ACCENT),
-                                   lambda: self.chat_log, self._chat_status, (lambda: self.cfg.get("chat_alert", True), alert_set),
-                                   geometry=self.cfg.get("chat_geometry") or None, on_geometry=moved,
-                                   style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM),
-                                   text_size=(lambda: self.cfg.get("chat_text", 18), text_size_set))
-        win = self.chat_win.win
+        chat = ChatWindow(self.root, self.theme, dict(bg=BG, fg=FG, dim=DIM, list_bg=LIST_BG, select=SELECT, accent=ACCENT),
+                          lambda: self.chat_log, self._chat_status, (lambda: self.cfg.get("chat_alert", True), alert_set),
+                          geometry=geometry, on_geometry=moved, style_window=lambda w: PLATFORM.style_window(w, INK, TEXT_DIM),
+                          text_size=(lambda: self.cfg.get("chat_text", 18), text_size_set), page=page,
+                          new_window=self._chat_window_from)
+        self.chat_wins.append(chat)
+        win = chat.win
         win.bind("<Destroy>", lambda e: e.widget is win and save_config(self.cfg), add="+")
+        return chat
 
     def _chat_status(self):
         """How the chat reading's going, in a line."""
@@ -3889,8 +3919,8 @@ class App:
             new = self.chat.take_new() if self.chat else []
             if any(x.kind in ("buddy", "whisper") for x in new) and self.cfg.get("chat_alert", True):
                 self.root.bell()
-                if self.chat_win and self.chat_win.exists():
-                    self.chat_win.flash()
+                for chat in self._chat_windows():
+                    chat.flash()
         except Exception as e:
             log_error("telling of new chat", e)
         if not self.stop_evt.is_set():
@@ -3909,7 +3939,7 @@ class App:
                         self.chat = chatwatch.ChatWatch(TESS.read_lines, self.chat_log)
                     rect = self.reader.last_rect
                     if self.chat and rect and self.reader.hwnd and self.reader.mode == "window" and PLATFORM.game_in_front():
-                        window_open = bool(self.chat_win and self.chat_win.exists())
+                        window_open = bool(self.chat_wins)
                         self.chat.kinds = set(chatwatch.SHOWN) - (set() if window_open else {"general"})
                         where = chatwatch.area(rect)
                         shot = self.reader._hide_own(grab(sct, *where))
@@ -4906,7 +4936,7 @@ class App:
         self.log_status.set(self._log_status_text(now))
         self.reader.own_rect = self._window_rect()
         try:
-            self.reader.extra_rects = (PLATFORM.own_window_rect(self.chat_win.win),) if self.chat_win and self.chat_win.exists() else ()
+            self.reader.extra_rects = tuple(PLATFORM.own_window_rect(c.win) for c in self._chat_windows())
         except Exception:
             self.reader.extra_rects = ()
 

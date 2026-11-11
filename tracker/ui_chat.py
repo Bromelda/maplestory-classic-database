@@ -3,7 +3,8 @@
 Buddy, Party and General each keep their own list, oldest at the top, each line with the time it was first seen (speakers,
 notices and the rest aren't read: the owner doesn't want them). It stays on top of the game, and you can move it and change its
 size: it opens where you left it. A- and A+ make the lines' text smaller or bigger. A new buddy message can ring a bell and
-light the Buddy tab up (a switch at the bottom turns that off).
+light the Buddy tab up (a switch at the bottom turns that off). Right-click a tab to open it in a window of its own, beside
+this one: as many as you like (buddy chat in one, party in another...), each just like this one.
 
 It's only a window on what the tracker already read (chatwatch.py): closing it loses nothing.
 """
@@ -36,11 +37,13 @@ def tab_of(kind):
 class ChatWindow:
     """get_log: the ChatLog. get_status: a line saying how the reading's going. alert: (get, set) for the bell switch.
     colours: bg, fg, dim, list_bg, select, accent. on_geometry(text): where the window is now, to open it there next time.
-    text_size: (get, set) for how big the lines' text is."""
+    text_size: (get, set) for how big the lines' text is. page: the tab it opens on. new_window(tab, this window): open
+    another window on that tab (a tab's right-click menu)."""
 
     def __init__(self, root, theme, colours, get_log, get_status, alert, geometry=None, on_geometry=None, style_window=None,
-                 text_size=None):
+                 text_size=None, page="Buddy", new_window=None):
         self.get_log, self.get_status, self.alert, self.on_geometry = get_log, get_status, alert, on_geometry
+        self.new_window = new_window
         self.theme, self.text_size = theme, text_size
         self.colours = c = colours
         px = theme.px
@@ -64,6 +67,8 @@ class ChatWindow:
             b = tk.Label(tabs, text=name, bg=c["bg"], fg=c["dim"], font=text, padx=px(8), pady=px(4), cursor="hand2")
             b.pack(side="left", padx=(0, px(2)))
             b.bind("<Button-1>", lambda e, n=name: self.show(n))
+            if new_window:
+                b.bind("<Button-3>", lambda e, n=name: self._tab_menu(e, n))
             self.tab_buttons[name] = b
             self.seen[name] = 0
 
@@ -100,8 +105,18 @@ class ChatWindow:
 
         self.page, self.shown, self.shown_changed = None, [], -1
         self.flash_left = 0
-        self.show("Buddy")
+        self.show(page if page in self.tab_buttons else "Buddy")
         self.refresh()
+
+    def _tab_menu(self, e, name):
+        """A tab's right-click menu: open it in a new window."""
+        c = self.colours
+        menu = tk.Menu(self.win, tearoff=0, bg=c["list_bg"], fg=c["fg"], activebackground=c["accent"], activeforeground=c["bg"])
+        menu.add_command(label=f"Open {name} in a new window", command=lambda: self.new_window(name, self))
+        try:
+            menu.tk_popup(e.x_root, e.y_root)
+        finally:
+            menu.grab_release()
 
     def _set_size(self, size):
         self.size = max(TEXT_SIZES[0], min(TEXT_SIZES[1], int(size or TEXT_SIZE)))
@@ -128,6 +143,7 @@ class ChatWindow:
 
     def show(self, name):
         self.page = name
+        self.win.title(f"Chat - {name}")
         self.shown, self.shown_changed = None, -1
         if name == "Buddy":
             self.flash_left = 0

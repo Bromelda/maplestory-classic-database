@@ -32,8 +32,8 @@ drop results are kept. While it's open, the account is saved in `daybook.json` i
 
 The **Chat** button (or Shift+F8) opens a window that stays on top of the game, with what the chat box says, one tab for each kind:
 
-- **Buddy:** buddy chat, the bright orange lines with "()" after the name ("Remoneide() : LOL"), and whispers (light letters on a green
-  bar), marked "whisper"
+- **Buddy:** buddy chat, the bright orange lines with "()" after the name ("Remoneide() : LOL"), and whispers (green letters,
+  "Xeyna<< hi", "Xeyna[Windia-9]>> hi"), marked "whisper"
 - **Party:** the pink lines with no block behind them, and the party's news like "'jine' has joined the party."
 - **General:** the white lines from people on your map and channel
 
@@ -43,6 +43,10 @@ aren't shown or read: they're told apart from general chat and left out.
 Each line has the time it was first seen, and the same line is never added twice. A tab with new lines says how many. A new
 buddy message rings a bell and lights the Buddy tab up; the switch at the bottom turns that off. Move it and size it as you
 like: it opens there next time. The text starts big; A- and A+ make it smaller or bigger.
+
+Right-click a tab (Buddy, Party, General or All) and pick **Open in a new window** to have it in a window of its own, so you
+can watch buddy chat in one and party or general chat in another, side by side. Open as many as you like; each works like the
+first, and opens where you last left one on that tab. The Chat button (or Shift+F8) closes them all.
 
 The reading isn't perfect, so a name can come out a few ways ("xeyna", "meyna"). Every way a name's read is kept together, and
 it's shown the way most readings say, on all of that person's lines. A line's tab goes by what it looked like on most looks.
