@@ -102,7 +102,10 @@ for text, want in (("OpZeno : try it", ("OpZeno", "try it")), ("sababaa > yvessi
     check(f"split: {text}", cw.split(text) == want, cw.split(text))
 # (buddies' names have "()" after them, on the owner's screenshots of buddy chat)
 for text, want in (("Remoneide() : LOL", ("Remoneide", "LOL")), ("andra() : night dear <3 <3", ("andra", "night dear <3 <3")),
-                   ("Boeuff( ) : xD", ("Boeuff", "xD")), ("Gabbaroo(] : wb", ("Gabbaroo", "wb"))):
+                   ("Boeuff( ) : xD", ("Boeuff", "xD")), ("Gabbaroo(] : wb", ("Gabbaroo", "wb")),
+                   # (the ":" lost, or run into what they said)
+                   ("Remoneide(}:+108 cromi bubs", ("Remoneide", "+108 cromi bubs")), ("Remoneide(}) +108 bubs", ("Remoneide", "+108 bubs")),
+                   ("Boeuff() ayce special is at 9pm", ("Boeuff", "ayce special is at 9pm")), ("andra({). im hustling", ("andra", "im hustling"))):
     check(f"split, a buddy: {text}", cw.split(text) == want, cw.split(text))
     check(f"a buddy's line is a line: {text}", cw.is_line("buddy", text))
 for text, want in (("Xeyna[Windia-9]>> i don't :(", ("Xeyna", "i don't :(")), ("xeynalvVindia-9]>> i don't", ("xeyna", "i don't")),
@@ -334,6 +337,34 @@ else:
             got = [(x.who.lower(), x.text) for x in watch.log.lines if x.kind == "whisper"]
             check("real: ...both read, with who sent them", [w for w, _ in got] == ["xeyna", "xeyna"] and "burnt land" in got[0][1]
                   and "don't" in got[1][1], got)
+        # A 7: a pixel-thin slanted stroke, read as "/" or "?" ("ive tried 7 times", party chat from the tracker's own clip).
+        # Its letters are made bolder for reading. Its letters, put together again as other lines, have the 7 read as one too.
+        if (FRAMES / "party_seven_90.png").exists():
+            img = cv2.imread(str(FRAMES / "party_seven_90.png"))
+            watch = cw.ChatWatch(tess.read_lines, kinds=cw.SHOWN)
+            watch.look(img, 1440, 54, 0.0, 1000.0)
+            while watch.waiting:
+                watch.read()
+            got = [(x.who, x.text) for x in watch.log.lines if x.kind == "party"]
+            check("real: a 7 is read as a 7", any(w == "Bromelda" and "tried 7 times" in t for w, t in got), got)
+            said = "Bromelda:ivetried7timesnoluckj"
+            for r in cw.rows(img, 1.0, 54):
+                mask = r.mask
+                ink = np.append((mask > 0.5)[2:-2].any(axis=0), False)
+                starts, ends = np.flatnonzero(ink[1:] & ~ink[:-1]) + 1, np.flatnonzero(ink[:-1] & ~ink[1:]) + 1
+                if r.kind == "party" and len(starts) == len(said):
+                    break
+            if len(starts) == len(said):
+                glyph = {c: mask[:, a:b] for c, a, b in reversed(list(zip(said, starts, ends)))}
+                gap = np.zeros((mask.shape[0], 3))
+
+                def line(text):
+                    return np.hstack([gap, gap] + [np.zeros((mask.shape[0], 9)) if c == " " else np.hstack([glyph[c], gap]) for c in text] + [gap, gap])
+                tries = ["Bromelda : tried 7", "Bromelda : 7 times", "Bromelda : 7 tries", "Bromelda : 7 tied", "Bromelda : lvl 7"]
+                got = [cw.tidy(x) for x in tess.read_lines([cw.picture(line(t), 1.0) for t in tries])]
+                check("real: a 7 at a line's end or before a word is read as a 7", all("7" in x and "/" not in x and "?" not in x for x in got), got)
+            else:
+                check("real: the 7 line's letters are found one by one", False, (len(starts), len(said)))
         whispers = [(p.name, r.top) for p in sorted(FRAMES.glob("open_*.png")) for r in cw.rows(cv2.imread(str(p)), 1.0, X0) if r.kind == "whisper"]
         check("real: no whispers where there are none", not whispers, whispers)
 

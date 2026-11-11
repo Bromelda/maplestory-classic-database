@@ -77,7 +77,8 @@ GREY_SAT = 60                   # letters less coloured than this are white
 WHISPER_BAR = (55, 170, 90, 80, 15)     # a whisper's green bar: its hue between these, this coloured, this bright, and as even
                                 # as this (the owner's: hue 72, 123, 102, 8; scenery's grass through the box: 51 bright, 31)
 BRIGHT_SAT = 140                # buddy chat's orange is bright: the party's "has joined the party" lines are a paler one (74)
-NEAR_COLOUR = 70                # a pixel this far from the letters' colour is only half part of them, for reading
+BOLD = 5                        # a line's letters are made this much bolder for reading (in the picture made 3 times as big)
+NEAR_COLOUR = 70               # a pixel this far from the letters' colour is only half part of them, for reading
 SAME = 0.82                     # how alike two readings have to be to be the same line...
 SAME_NEAR, NEAR_S = 0.7, 30     # ...or this alike, the same person within this many seconds
 SAME_WORDS = 0.9                # ...or this alike, within those seconds, whatever the name was read as
@@ -394,11 +395,14 @@ def _grid_shift(count, H, s, n):
 
 
 def picture(mask, s):
-    """A line's letters for Tesseract: dark on white, big, with a margin."""
+    """A line's letters for Tesseract: dark on white, big, with a margin, and their strokes made bolder. (The game's letters
+    are a pixel thin: a 7's slanted stroke, made bigger, is a dotted line, read as "/" or "?". Bolder, it's read as a 7, and
+    the ":" after a name is read as one more often too.)"""
     img = (255 * (1 - mask)).astype(np.uint8)
     k = 3.0 / max(s, 0.3)
     img = cv2.resize(img, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
-    return cv2.copyMakeBorder(img, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+    img = cv2.copyMakeBorder(img, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+    return cv2.erode(img, cv2.getStructuringElement(cv2.MORPH_CROSS, (BOLD, BOLD)))     # (a "+": a square makes Xeyna's x an m)
 
 
 def tidy(text):
@@ -421,6 +425,10 @@ def split(text):
     m = re.match(r"^\s*(?:>\s*)?[(']?([A-Za-z0-9_]{2,13})(?:\s?[(\[{]\s?[^\s:;]?|\s?[)\]}])?(?:[\[({lI1|]\S{2,14}?-\d{1,2}[\])}|lI1]?\s*(?:>>|<<)|\s*(?:>>|<<)|(?:\s+\S{1,6}){0,2}?\s*[:;.,>=|°·©*~-]+(?=\s))\s*(.+)$", text)
     if m:
         return m.group(1).strip(), re.sub(r"^\S{1,2}\s*[:;|]\s+", "", m.group(2).strip())     # (the rest of a badge: "9 : hi")
+    # (a buddy's "()" is enough, its ":" lost or run into what they said: "Remoneide(}:+108 bubs", "Boeuff() ayce", "andra({). hi")
+    m = re.match(r"^\s*(?:>\s*)?([A-Za-z0-9_]{2,13})\s?[(\[{][(){}\[\]]{0,2}[)\]}]\s*[:;.,>=|°·©*~-]*\s*(.+)$", text)
+    if m:
+        return m.group(1), m.group(2).strip()
     return "", text
 
 
