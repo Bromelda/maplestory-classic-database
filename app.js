@@ -1114,6 +1114,7 @@ function renderHome() {
       ${card("Next job step", jobs.length ? `<ul class="home-list">${jobs.map((j) => `<li><span class="home-text">${link("job", j.id)} <small>${esc(j.location || j.instructor || "")}</small></span><span class="right">Lv ${j.level}</span></li>`).join("")}</ul>` : `<p class="sub">You've reached the last job open in Classic so far.</p>`,
         `<p class="sub small"><button type="button" class="link-btn" data-go="jobs">See the job tree</button> · <button type="button" class="link-btn" data-go="skills">Plan your skills</button></p>`)}
       ${installCard(card)}
+      ${card("Chat filter", `<p class="sub">Keep buddy, party and general chat apart while you play. Share your game window and it reads the chat box in your browser, with nothing to download.</p>`, `<p class="sub small"><a href="chat.html">Open the chat filter</a></p>`)}
       ${card("Plan ahead", `<p class="sub">Crafting materials, time to your next levels, the best quests, and two builds side by side.</p>`, `<p class="sub small"><button type="button" class="link-btn" data-go="planner">Open the planner</button></p>`)}
       ${latest ? card("Latest news", `<p><a href="${esc(latest.url)}" target="_blank" rel="noopener">${esc(latest.name)}</a><br><span class="sub">${esc(niceDate(latest.date))}</span></p>`, `<p class="sub small"><button type="button" class="link-btn" data-go="patches">All news</button></p>`) : ""}
     </div>`;

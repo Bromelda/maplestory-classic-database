@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="theme-color" content="#14100d">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat filter · MapleStory Classic DB</title>
+  <meta name="description" content="Keep buddy, party and general chat apart while you play MapleStory Classic World. Share your game window: it reads the chat box in your browser, nothing to download.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍁</text></svg>">
+  <link rel="stylesheet" href="style.css?v=11">
+  <style>
+    main.chat-page { max-width: 860px; }
+    .chat-page h2 { margin: 0 0 6px; font-size: 1.25rem; }
+    .chat-page .sub { color: var(--muted); }
+    .ch-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 6px; }
+    .ch-actions .btn { border: 0; font: inherit; cursor: pointer; }
+    .ch-actions .btn:disabled { opacity: .5; cursor: default; }
+    .ch-file { cursor: pointer; }
+    #chStatus { min-height: 1.4em; margin: 6px 0 0; color: var(--muted); }
+    .ch-panel { margin-top: 14px; display: flex; flex-direction: column; height: min(70vh, 640px); }
+    #chView { flex: 1; min-height: 0; }
+    .ch-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-top: 8px; color: var(--muted); font-size: .9em; }
+    .ch-tools button { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 2px 10px; font: inherit; cursor: pointer; }
+    .ch-how { margin-top: 14px; }
+    .ch-how li { margin-bottom: 4px; }
+    .back { display: inline-block; margin-bottom: 10px; }
+  </style>
+  <style id="viewCss"></style>
+</head>
+<body>
+  <header>
+    <div class="brand-row"><h1>🍁 MapleStory Classic DB</h1></div>
+  </header>
+  <main class="chat-page">
+    <a class="back" href="./">← Back to the database</a>
+    <section class="calc-card">
+      <h2>Chat filter <span class="badge">Early test</span></h2>
+      <p class="sub">Keeps buddy, party and general chat apart while you play, so a buddy's message isn't lost in a busy town. Share your game window and it reads the chat box as lines come. Speakers (megaphones) and other chat are left out.</p>
+      <div class="ch-actions">
+        <button type="button" class="btn" id="chShare">Share game window</button>
+        <label class="btn ghost ch-file">Try a screenshot<input type="file" id="chFile" accept="image/*" hidden></label>
+        <button type="button" class="btn ghost" id="chPop" hidden>Pop out on top</button>
+      </div>
+      <p class="sub small" id="chNoShare" hidden>Sharing a window needs Chrome or Edge (or Firefox) on a computer.</p>
+      <p id="chStatus" aria-live="polite"></p>
+      <div class="ch-panel">
+        <div id="chView"></div>
+        <div class="ch-tools">
+          <label><input type="checkbox" id="chBell"> Bell and flash for buddy messages</label>
+          <span>Text <button type="button" id="chSmaller" aria-label="Smaller text">A−</button> <button type="button" id="chBigger" aria-label="Bigger text">A+</button> <button type="button" id="chClear">Clear</button></span>
+        </div>
+      </div>
+    </section>
+    <section class="calc-card ch-how">
+      <h3>How to use it</h3>
+      <ul class="sub">
+        <li>Press <b>Share game window</b> and pick the MapleStory window (not your whole screen). Keep the chat box showing. Open it (Enter) to catch more lines at once.</li>
+        <li><b>Pop out on top</b> opens a small chat window that stays over the game. Right-click any tab (Buddy, Party, General) to open it in a window of its own, so you can watch two or three at once.</li>
+        <li>Keep this page open while you play. It can sit behind the game, but don't minimise it: browsers slow down pages that are minimised.</li>
+        <li>Words are read from the picture, so now and then a letter comes out wrong, and a line over busy scenery can be missed.</li>
+      </ul>
+      <p class="sub small">Everything happens in your browser: the picture and the chat never leave your computer, and they're gone when you close the page. It only looks at the picture. It never touches the game or plays for you. <b>Use at your own risk:</b> we couldn't find a clear Nexon rule on tools that read the screen, so check their rules before using it on an account you care about.</p>
+    </section>
+  </main>
+  <footer>Unofficial fan project, not affiliated with Nexon. Game images © NEXON.</footer>
+  <script src="chatread.js?v=1"></script>
+  <script src="chat.js?v=1"></script>
+</body>
+</html>
