@@ -1,5 +1,1457 @@
 [
  {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "blue_snail",
+  "item": "blue_rubber_boots",
+  "rate": null,
+  "text": "Blue Snail now drops Blue Rubber Boots"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "slime",
+  "item": "bottomwear_def_scroll_greater",
+  "rate": null,
+  "text": "Slime now drops Bottomwear DEF Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "orange_mushroom",
+  "item": "green_armine_skirt",
+  "rate": null,
+  "text": "Orange Mushroom now drops Green Armine Skirt"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "ribbon_pig",
+  "item": "maple_leaf",
+  "rate": null,
+  "text": "Ribbon Pig now drops Maple Leaf"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "ribbon_pig",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Ribbon Pig now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "ribbon_pig",
+  "item": "shield_accuracy_scroll_greater",
+  "text": "Ribbon Pig no longer listed as dropping Shield Accuracy Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "dark_stump",
+  "item": "maple_leaf",
+  "rate": null,
+  "text": "Dark Stump now drops Maple Leaf"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "dark_stump",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Dark Stump now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "octopus",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Octopus now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "green_mushroom",
+  "item": "orange_lolica_armor",
+  "rate": null,
+  "text": "Green Mushroom now drops Orange Lolica Armor"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "green_mushroom",
+  "item": "maple_leaf",
+  "rate": null,
+  "text": "Green Mushroom now drops Maple Leaf"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "green_mushroom",
+  "item": "cape_str_scroll_lesser",
+  "rate": null,
+  "text": "Green Mushroom now drops Cape STR Scroll: Lesser"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "green_mushroom",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Green Mushroom now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "axe_stump",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Axe Stump now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "axe_stump",
+  "item": "green_legolier",
+  "rate": null,
+  "text": "Axe Stump now drops Green Legolier"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "axe_stump",
+  "item": "pink_qi_pao",
+  "rate": null,
+  "text": "Axe Stump now drops Pink Qi Pao"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "axe_stump",
+  "item": "bronze_aroa_boots",
+  "rate": null,
+  "text": "Axe Stump now drops Bronze Aroa Boots"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "blue_mushroom",
+  "item": "arrows_for_bows",
+  "rate": null,
+  "text": "Blue Mushroom now drops Arrows for Bows"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "blue_mushroom",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Blue Mushroom now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "blue_mushroom",
+  "item": "orihalcon_ore",
+  "text": "Blue Mushroom no longer listed as dropping Orihalcon Ore"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "ghost_stump",
+  "item": "topwear_def_scroll_intermediate",
+  "rate": null,
+  "text": "Ghost Stump now drops Topwear DEF Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mano",
+  "item": "overall_armor_luk_scroll_intermediate",
+  "rate": null,
+  "text": "Mano now drops Overall Armor LUK Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "orange_slime",
+  "item": "green_malady_s_candy",
+  "rate": null,
+  "text": "Orange Slime now drops Green Malady's Candy"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "orange_slime",
+  "item": "red_malady_s_candy",
+  "rate": null,
+  "text": "Orange Slime now drops Red Malady's Candy"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "orange_slime",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Orange Slime now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "orange_slime",
+  "item": "blue_malady_s_candy",
+  "rate": null,
+  "text": "Orange Slime now drops Blue Malady's Candy"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_necki",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Jr. Necki now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_necki",
+  "item": "green_armine_skirt",
+  "rate": null,
+  "text": "Jr. Necki now drops Green Armine Skirt"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "ligator_kerning_city_pq",
+  "item": "coupon",
+  "rate": null,
+  "text": "Ligator (Kerning City PQ) now drops Coupon"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "horny_mushroom",
+  "item": "zeco",
+  "rate": null,
+  "text": "Horny Mushroom now drops Zeco"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "horny_mushroom",
+  "item": "red_hwarang_shirt",
+  "rate": null,
+  "text": "Horny Mushroom now drops Red Hwarang Shirt"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "horny_mushroom",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Horny Mushroom now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "horny_mushroom",
+  "item": "red_shark",
+  "text": "Horny Mushroom no longer listed as dropping Red Shark"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "horny_mushroom",
+  "item": "blue_training_shirt",
+  "text": "Horny Mushroom no longer listed as dropping Blue Training Shirt"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "dark_axe_stump",
+  "item": "wooden_baseball_bat",
+  "rate": null,
+  "text": "Dark Axe Stump now drops Wooden Baseball Bat"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "dark_axe_stump",
+  "item": "shield_def_scroll_lesser",
+  "rate": null,
+  "text": "Dark Axe Stump now drops Shield DEF Scroll: Lesser"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "dark_axe_stump",
+  "item": "halloween_candies",
+  "rate": null,
+  "text": "Dark Axe Stump now drops Halloween Candies"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wooden_mask",
+  "item": "studded_polearm",
+  "rate": null,
+  "text": "Wooden Mask now drops Studded Polearm"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wooden_mask",
+  "item": "two_handed_sword_attack_scroll_intermediate",
+  "rate": null,
+  "text": "Wooden Mask now drops Two-handed Sword Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wooden_mask",
+  "item": "red_sergeant",
+  "rate": null,
+  "text": "Wooden Mask now drops Red Sergeant"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "rocky_mask",
+  "item": "fusion_mace",
+  "rate": null,
+  "text": "Rocky Mask now drops Fusion Mace"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "rocky_mask",
+  "item": "studded_polearm",
+  "rate": null,
+  "text": "Rocky Mask now drops Studded Polearm"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "rocky_mask",
+  "item": "gold_sneak_pants",
+  "rate": null,
+  "text": "Rocky Mask now drops Gold Sneak Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushroom",
+  "item": "brown_guise",
+  "rate": null,
+  "text": "Zombie Mushroom now drops Brown Guise"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushroom",
+  "item": "pet_equip_jump_scroll_intermediate",
+  "rate": null,
+  "text": "Zombie Mushroom now drops Pet Equip Jump Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushroom",
+  "item": "arrows_for_bows",
+  "rate": null,
+  "text": "Zombie Mushroom now drops Arrows for Bows"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushroom",
+  "item": "mithril_ore",
+  "rate": null,
+  "text": "Zombie Mushroom now drops Mithril Ore"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_necki_kerning_city_pq",
+  "item": "coupon",
+  "rate": null,
+  "text": "Jr. Necki (Kerning City PQ) now drops Coupon"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_boar",
+  "item": "brown_jester",
+  "rate": null,
+  "text": "Wild Boar now drops Brown Jester"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_boar",
+  "item": "black_jester",
+  "rate": null,
+  "text": "Wild Boar now drops Black Jester"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "evil_eye",
+  "item": "halfmoon_zamadar",
+  "rate": null,
+  "text": "Evil Eye now drops Halfmoon Zamadar"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "evil_eye",
+  "item": "weighted_earrings",
+  "rate": null,
+  "text": "Evil Eye now drops Weighted Earrings"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "evil_eye",
+  "item": "axe_pole_arm",
+  "rate": null,
+  "text": "Evil Eye now drops Axe Pole Arm"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "evil_eye",
+  "item": "old_chief_stan_s_hammer",
+  "rate": null,
+  "text": "Evil Eye now drops Old Chief Stan's Hammer"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "iron_hog",
+  "item": "red_shouldermail_pants",
+  "text": "Iron Hog no longer listed as dropping Red Shouldermail Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "curse_eye_kerning_city_pq",
+  "item": "coupon",
+  "rate": null,
+  "text": "Curse Eye (Kerning City PQ) now drops Coupon"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fairy_2",
+  "item": "mystic_shield",
+  "rate": null,
+  "text": "Fairy 2 now drops Mystic Shield"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "fairy_2",
+  "item": "mithril_wand",
+  "text": "Fairy 2 no longer listed as dropping Mithril Wand"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "fairy_3",
+  "item": "mithril_wand",
+  "text": "Fairy 3 no longer listed as dropping Mithril Wand"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fairy_4",
+  "item": "torn_ledger_pages",
+  "rate": null,
+  "text": "Fairy 4 now drops Torn Ledger Pages"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fairy_4",
+  "item": "mystic_shield",
+  "rate": null,
+  "text": "Fairy 4 now drops Mystic Shield"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fairy_4",
+  "item": "orange_potion",
+  "rate": null,
+  "text": "Fairy 4 now drops Orange Potion"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "blue_mushroom_thief_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Blue Mushroom (Thief 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "cold_eye_thief_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Cold Eye (Thief 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "curse_eye_magician_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Curse Eye (Magician 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "evil_eye_bowman_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Evil Eye (Bowman 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fire_boar_warrior_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Fire Boar (Warrior 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "horny_mushroom_magician_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Horny Mushroom (Magician 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "lupin_warrior_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Lupin (Warrior 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushroom_bowman_2nd_job_test",
+  "item": "dark_marble",
+  "rate": null,
+  "text": "Zombie Mushroom (Bowman 2nd job test) now drops Dark Marble"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "ligator",
+  "item": "gloves_accuracy_scroll_greater",
+  "rate": null,
+  "text": "Ligator now drops Gloves Accuracy Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "ligator",
+  "item": "shield_def_scroll_greater",
+  "text": "Ligator no longer listed as dropping Shield DEF Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fire_boar",
+  "item": "green_able_armor_skirt",
+  "rate": null,
+  "text": "Fire Boar now drops Green Able Armor Skirt"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fire_boar",
+  "item": "one_handed_sword_attack_scroll_greater",
+  "rate": null,
+  "text": "Fire Boar now drops One-Handed Sword Attack Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fire_boar",
+  "item": "overall_armor_def_scroll_greater",
+  "rate": null,
+  "text": "Fire Boar now drops Overall Armor DEF Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fire_boar",
+  "item": "machete",
+  "rate": null,
+  "text": "Fire Boar now drops Machete"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "fire_boar",
+  "item": "ryden",
+  "rate": null,
+  "text": "Fire Boar now drops Ryden"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "curse_eye",
+  "item": "red_knucklevest",
+  "rate": null,
+  "text": "Curse Eye now drops Red Knucklevest"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "curse_eye",
+  "item": "arrows_for_crossbows",
+  "rate": null,
+  "text": "Curse Eye now drops Arrows for Crossbows"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "curse_eye",
+  "item": "arrows_for_bows",
+  "rate": null,
+  "text": "Curse Eye now drops Arrows for Bows"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_wraith",
+  "item": "fragment_of_magic",
+  "rate": null,
+  "text": "Jr. Wraith now drops Fragment of Magic"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_wraith",
+  "item": "pet_equip_jump_scroll_intermediate",
+  "rate": null,
+  "text": "Jr. Wraith now drops Pet Equip Jump Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "jr_wraith",
+  "item": "claw_attack_scroll_greater",
+  "text": "Jr. Wraith no longer listed as dropping Claw Attack Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_boogie_1",
+  "item": "wizard_wand",
+  "rate": null,
+  "text": "Jr. Boogie 1 now drops Wizard Wand"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_boogie_1",
+  "item": "earring_luk_scroll_greater",
+  "rate": null,
+  "text": "Jr. Boogie 1 now drops Earring LUK Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_boogie_2",
+  "item": "bronze_guardian",
+  "rate": null,
+  "text": "Jr. Boogie 2 now drops Bronze Guardian"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "stumpy",
+  "item": "earring_int_scroll_intermediate",
+  "rate": null,
+  "text": "Stumpy now drops Earring INT Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "stumpy",
+  "item": "wooden_top",
+  "rate": null,
+  "text": "Stumpy now drops Wooden Top"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "stumpy",
+  "item": "gloves_crit_rate_scroll_chaos",
+  "rate": null,
+  "text": "Stumpy now drops Gloves Crit. Rate Scroll: Chaos"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "stumpy",
+  "item": "earring_luk_scroll_intermediate",
+  "rate": null,
+  "text": "Stumpy now drops Earring LUK Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "stumpy",
+  "item": "gloves_magic_attack_scroll_chaos",
+  "rate": null,
+  "text": "Stumpy now drops Gloves Magic Attack Scroll: Chaos"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "lupin",
+  "item": "zeco",
+  "rate": null,
+  "text": "Lupin now drops Zeco"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "lupin",
+  "item": "green_distinction",
+  "rate": null,
+  "text": "Lupin now drops Green Distinction"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "lupin",
+  "item": "blue_potion",
+  "rate": null,
+  "text": "Lupin now drops Blue Potion"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "lorang",
+  "item": "pet_equip_speed_scroll_greater",
+  "rate": null,
+  "text": "Lorang now drops Pet Equip Speed Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "cold_eye",
+  "item": "rotten_root_fragment",
+  "rate": null,
+  "text": "Cold Eye now drops Rotten Root Fragment"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "cold_eye",
+  "item": "brown_guise",
+  "rate": null,
+  "text": "Cold Eye now drops Brown Guise"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "cold_eye",
+  "item": "black_amoria_skirt",
+  "text": "Cold Eye no longer listed as dropping Black Amoria Skirt"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mushmom",
+  "item": "earring_int_scroll_intermediate",
+  "rate": null,
+  "text": "Mushmom now drops Earring INT Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mushmom",
+  "item": "gloves_attack_scroll_chaos",
+  "rate": null,
+  "text": "Mushmom now drops Gloves Attack Scroll: Chaos"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mushmom",
+  "item": "mushmom_balloon",
+  "rate": null,
+  "text": "Mushmom now drops Mushmom Balloon"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mushmom",
+  "item": "gloves_attack_scroll_intermediate",
+  "rate": null,
+  "text": "Mushmom now drops Gloves Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mushmom",
+  "item": "shoes_speed_scroll_intermediate",
+  "rate": null,
+  "text": "Mushmom now drops Shoes Speed Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mushmom",
+  "item": "bottomwear_def_scroll_intermediate",
+  "rate": null,
+  "text": "Mushmom now drops Bottomwear DEF Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "skeledog",
+  "item": "overall_armor_str_scroll_intermediate",
+  "rate": null,
+  "text": "Skeledog now drops Overall Armor STR Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "skeledog",
+  "item": "red_duke",
+  "rate": null,
+  "text": "Skeledog now drops Red Duke"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "copper_drake",
+  "item": "blood_fitted_mail",
+  "rate": null,
+  "text": "Copper Drake now drops Blood Fitted Mail"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "copper_drake",
+  "item": "golden_mole",
+  "rate": null,
+  "text": "Copper Drake now drops Golden Mole"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "copper_drake",
+  "item": "white_justice_cape",
+  "rate": null,
+  "text": "Copper Drake now drops White Justice Cape"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "copper_drake",
+  "item": "earring_str_scroll_greater",
+  "rate": null,
+  "text": "Copper Drake now drops Earring STR Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "copper_drake",
+  "item": "green_distinction",
+  "rate": null,
+  "text": "Copper Drake now drops Green Distinction"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "copper_drake",
+  "item": "one_handed_axe_attack_scroll_greater",
+  "rate": null,
+  "text": "Copper Drake now drops One-Handed Axe Attack Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mummydog",
+  "item": "cape_accuracy_scroll_intermediate",
+  "rate": null,
+  "text": "Mummydog now drops Cape Accuracy Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mummydog",
+  "item": "overall_armor_str_scroll_intermediate",
+  "rate": null,
+  "text": "Mummydog now drops Overall Armor STR Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mummydog",
+  "item": "sabretooth",
+  "rate": null,
+  "text": "Mummydog now drops Sabretooth"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mummydog",
+  "item": "brown_piettra_skirt",
+  "rate": null,
+  "text": "Mummydog now drops Brown Piettra Skirt"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "mummydog",
+  "item": "red_avenger",
+  "rate": null,
+  "text": "Mummydog now drops Red Avenger"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "clang",
+  "item": "silver_black_stealer_pants",
+  "rate": null,
+  "text": "Clang now drops Silver / Black Stealer Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "clang",
+  "item": "cape_str_scroll_intermediate",
+  "rate": null,
+  "text": "Clang now drops Cape STR Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "clang",
+  "item": "blue_maro",
+  "rate": null,
+  "text": "Clang now drops Blue Maro"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "clang",
+  "item": "red_avenger",
+  "rate": null,
+  "text": "Clang now drops Red Avenger"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "croco",
+  "item": "dark_piette",
+  "rate": null,
+  "text": "Croco now drops Dark Piette"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "croco",
+  "item": "buck",
+  "rate": null,
+  "text": "Croco now drops Buck"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "croco",
+  "item": "hat_mp_scroll_intermediate",
+  "rate": null,
+  "text": "Croco now drops Hat MP Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushmom",
+  "item": "earring_evasion_scroll_greater",
+  "rate": null,
+  "text": "Zombie Mushmom now drops Earring Evasion Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushmom",
+  "item": "red_hearted_earrings",
+  "rate": null,
+  "text": "Zombie Mushmom now drops Red-Hearted Earrings"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushmom",
+  "item": "overall_armor_dex_scroll_greater",
+  "rate": null,
+  "text": "Zombie Mushmom now drops Overall Armor DEX Scroll: Greater"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushmom",
+  "item": "earring_evasion_scroll_intermediate",
+  "rate": null,
+  "text": "Zombie Mushmom now drops Earring Evasion Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushmom",
+  "item": "red_napoleon",
+  "rate": null,
+  "text": "Zombie Mushmom now drops Red Napoleon"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "zombie_mushmom",
+  "item": "overall_armor_dex_scroll_intermediate",
+  "rate": null,
+  "text": "Zombie Mushmom now drops Overall Armor DEX Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "zombie_mushmom",
+  "item": "ilbi_throwing_stars",
+  "text": "Zombie Mushmom no longer listed as dropping Ilbi Throwing Stars"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "zombie_mushmom",
+  "item": "claw_attack_scroll_intermediate",
+  "text": "Zombie Mushmom no longer listed as dropping Claw Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "stone_golem",
+  "item": "aluminum_baseball_bat",
+  "rate": null,
+  "text": "Stone Golem now drops Aluminum Baseball Bat"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "stone_golem",
+  "item": "zard",
+  "text": "Stone Golem no longer listed as dropping Zard"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "stone_golem",
+  "item": "tobi_throwing_stars",
+  "text": "Stone Golem no longer listed as dropping Tobi Throwing Stars"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "skeleton_soldier",
+  "item": "serpent_s_tongue",
+  "text": "Skeleton Soldier no longer listed as dropping Serpent's Tongue"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "dark_stone_golem",
+  "item": "dark_legolier_pants",
+  "rate": null,
+  "text": "Dark Stone Golem now drops Dark Legolier Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "dark_stone_golem",
+  "item": "umber_mantis",
+  "text": "Dark Stone Golem no longer listed as dropping Umber Mantis"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "red_drake",
+  "item": "brown_moon_pants",
+  "rate": null,
+  "text": "Red Drake now drops Brown Moon Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "red_drake",
+  "item": "dark_piettra",
+  "rate": null,
+  "text": "Red Drake now drops Dark Piettra"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "red_drake",
+  "item": "red_salt_shoes",
+  "rate": null,
+  "text": "Red Drake now drops Red Salt Shoes"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "red_drake",
+  "item": "staff_magic_attack_scroll_intermediate",
+  "rate": null,
+  "text": "Red Drake now drops Staff Magic Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_kargo",
+  "item": "dark_legolia",
+  "rate": null,
+  "text": "Wild Kargo now drops Dark Legolia"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_kargo",
+  "item": "two_handed_axe_attack_scroll_intermediate",
+  "rate": null,
+  "text": "Wild Kargo now drops Two-handed Axe Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_kargo",
+  "item": "blue_moon",
+  "rate": null,
+  "text": "Wild Kargo now drops Blue Moon"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_kargo",
+  "item": "wand_magic_attack_scroll_intermediate",
+  "rate": null,
+  "text": "Wild Kargo now drops Wand Magic Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_kargo",
+  "item": "dark_shadow_pants",
+  "rate": null,
+  "text": "Wild Kargo now drops Dark Shadow Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_kargo",
+  "item": "dark_shadow",
+  "rate": null,
+  "text": "Wild Kargo now drops Dark Shadow"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "wild_kargo",
+  "item": "brown_sonata",
+  "rate": null,
+  "text": "Wild Kargo now drops Brown Sonata"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "wild_kargo",
+  "item": "lion_s_fang",
+  "text": "Wild Kargo no longer listed as dropping Lion's Fang"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "officer_skeleton",
+  "item": "blue_moon",
+  "rate": null,
+  "text": "Officer Skeleton now drops Blue Moon"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "officer_skeleton",
+  "item": "cape_dex_scroll_intermediate",
+  "rate": null,
+  "text": "Officer Skeleton now drops Cape DEX Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "officer_skeleton",
+  "item": "bronze_crusader_helm",
+  "rate": null,
+  "text": "Officer Skeleton now drops Bronze Crusader Helm"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "officer_skeleton",
+  "item": "overall_armor_dex_scroll_intermediate",
+  "rate": null,
+  "text": "Officer Skeleton now drops Overall Armor DEX Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "officer_skeleton",
+  "item": "dark_shouldermail",
+  "rate": null,
+  "text": "Officer Skeleton now drops Dark Shouldermail"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "officer_skeleton",
+  "item": "dark_shouldermail_pants",
+  "rate": null,
+  "text": "Officer Skeleton now drops Dark Shouldermail Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "tauromacis",
+  "item": "one_handed_axe_attack_scroll_intermediate",
+  "rate": null,
+  "text": "Tauromacis now drops One-Handed Axe Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "tauromacis",
+  "item": "white_potion",
+  "rate": null,
+  "text": "Tauromacis now drops White Potion"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "tauromacis",
+  "item": "gold_ore",
+  "rate": null,
+  "text": "Tauromacis now drops Gold Ore"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "tauromacis",
+  "item": "blue_duo",
+  "rate": null,
+  "text": "Tauromacis now drops Blue Duo"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "tauromacis",
+  "item": "maroon_jangoon_shoes",
+  "rate": null,
+  "text": "Tauromacis now drops Maroon Jangoon Shoes"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "tauromacis",
+  "item": "skull_shield",
+  "text": "Tauromacis no longer listed as dropping Skull Shield"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "tauromacis",
+  "item": "serpent_s_tongue",
+  "text": "Tauromacis no longer listed as dropping Serpent's Tongue"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "shoes_jump_scroll_intermediate",
+  "rate": null,
+  "text": "Commander Skeleton now drops Shoes Jump Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "black_crystal_ore",
+  "rate": null,
+  "text": "Commander Skeleton now drops Black Crystal Ore"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "blue_china",
+  "rate": null,
+  "text": "Commander Skeleton now drops Blue China"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "dark_golden_circlet",
+  "rate": null,
+  "text": "Commander Skeleton now drops Dark Golden Circlet"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "orihalcon_ore",
+  "rate": null,
+  "text": "Commander Skeleton now drops Orihalcon Ore"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "speed_potion",
+  "rate": null,
+  "text": "Commander Skeleton now drops Speed Potion"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "blue_moon_pants",
+  "rate": null,
+  "text": "Commander Skeleton now drops Blue Moon Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "skull_earrings",
+  "rate": null,
+  "text": "Commander Skeleton now drops Skull Earrings"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "ivory_shouldermail_pants",
+  "rate": null,
+  "text": "Commander Skeleton now drops Ivory Shouldermail Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "ivory_shouldermail",
+  "rate": null,
+  "text": "Commander Skeleton now drops Ivory Shouldermail"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "overall_armor_int_scroll_intermediate",
+  "rate": null,
+  "text": "Commander Skeleton now drops Overall Armor INT Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "black_maro",
+  "rate": null,
+  "text": "Commander Skeleton now drops Black Maro"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "commander_skeleton",
+  "item": "dark_shouldermail_pants",
+  "rate": null,
+  "text": "Commander Skeleton now drops Dark Shouldermail Pants"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "taurospear",
+  "item": "adamantium_ore",
+  "rate": null,
+  "text": "Taurospear now drops Adamantium Ore"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "taurospear",
+  "item": "blood_mesana",
+  "rate": null,
+  "text": "Taurospear now drops Blood Mesana"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_removed",
+  "monster": "taurospear",
+  "item": "evil_tale",
+  "text": "Taurospear no longer listed as dropping Evil Tale"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_balrog",
+  "item": "armor_crafting_catalyst",
+  "rate": null,
+  "text": "Jr. Balrog now drops Armor Crafting Catalyst"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_balrog",
+  "item": "wand_magic_attack_scroll_intermediate",
+  "rate": null,
+  "text": "Jr. Balrog now drops Wand Magic Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_balrog",
+  "item": "one_handed_weapon_crafting_catalyst",
+  "rate": null,
+  "text": "Jr. Balrog now drops One-Handed Weapon Crafting Catalyst"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_balrog",
+  "item": "scroll_crafting_catalyst",
+  "rate": null,
+  "text": "Jr. Balrog now drops Scroll Crafting Catalyst"
+ },
+ {
+  "date": "2026-11-15",
+  "type": "drop_new",
+  "monster": "jr_balrog",
+  "item": "jr_balrog_horn",
+  "rate": null,
+  "text": "Jr. Balrog now drops Jr. Balrog Horn"
+ },
+ {
   "date": "2026-11-03",
   "type": "note",
   "text": "Database launched: 83 monsters, 303 maps, 1,105 Classic drops, 325 quests and 187 NPCs. From now on, anything new players find shows up here every day."
