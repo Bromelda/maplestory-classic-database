@@ -1,5 +1,21 @@
 [
  {
+  "id": 48557,
+  "name": "Scheduled Game Update - November 18, 2026",
+  "category": "maintenance",
+  "date": "2026-11-16",
+  "summary": "MapleStory Classic World will be performing a scheduled maintenance starting on Wednesday, November 18, 2026 at 5:00 AM PST.",
+  "url": "https://www.nexon.com/maplestory/news/maintenance/48557/scheduled-game-update-november-18-2026"
+ },
+ {
+  "id": 48552,
+  "name": "November Update: Special Events",
+  "category": "events",
+  "date": "2026-11-16",
+  "summary": "A new world opens and a new journey begins!",
+  "url": "https://www.nexon.com/maplestory/news/events/48552/november-update-special-events"
+ },
+ {
   "id": 48256,
   "name": "November Update: Forgotten Hollow Preview",
   "category": "update",
