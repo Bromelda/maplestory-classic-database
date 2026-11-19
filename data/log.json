@@ -1,5 +1,193 @@
 [
  {
+  "date": "2026-11-19",
+  "type": "drop_removed",
+  "monster": "green_mushroom",
+  "item": "claw_attack_scroll_intermediate",
+  "text": "Green Mushroom no longer listed as dropping Claw Attack Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "bubbling",
+  "item": "pet_equip_speed_scroll_lesser",
+  "rate": null,
+  "text": "Bubbling now drops Pet Equip Speed Scroll: Lesser"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "stirge",
+  "item": "gold_sneak_pants",
+  "rate": null,
+  "text": "Stirge now drops Gold Sneak Pants"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "horny_mushroom",
+  "item": "yellow_bandana",
+  "rate": null,
+  "text": "Horny Mushroom now drops Yellow Bandana"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "horny_mushroom",
+  "item": "blue_training_shirt",
+  "rate": null,
+  "text": "Horny Mushroom now drops Blue Training Shirt"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "rocky_mask",
+  "item": "orange_potion",
+  "rate": null,
+  "text": "Rocky Mask now drops Orange Potion"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "ligator",
+  "item": "green_lamelle",
+  "rate": null,
+  "text": "Ligator now drops Green Lamelle"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "ligator",
+  "item": "blue_baseball_cap",
+  "rate": null,
+  "text": "Ligator now drops Blue Baseball Cap"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "ligator",
+  "item": "stinger",
+  "rate": null,
+  "text": "Ligator now drops Stinger"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "king_slime",
+  "item": "scroll_crafting_catalyst",
+  "rate": null,
+  "text": "King Slime now drops Scroll Crafting Catalyst"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "jr_boogie_1",
+  "item": "blue_potion",
+  "rate": null,
+  "text": "Jr. Boogie 1 now drops Blue Potion"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "glowshroom",
+  "text": "New monster: Glowshroom (Lv 39)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_removed",
+  "monster": "mushmom",
+  "item": "orange_whitebottom_boots",
+  "text": "Mushmom no longer listed as dropping Orange Whitebottom Boots"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "raffle",
+  "text": "New monster: Raffle (Lv 40)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "golden_stirge",
+  "text": "New monster: Golden Stirge (Lv 42)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "aqumander",
+  "text": "New monster: Aqumander (Lv 43)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "echopus",
+  "text": "New monster: Echopus (Lv 45)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "rafflesia",
+  "text": "New monster: Rafflesia (Lv 47)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "shade",
+  "item": "cape_magic_def_scroll_intermediate",
+  "rate": null,
+  "text": "Shade now drops Cape Magic Def. Scroll: Intermediate"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_removed",
+  "monster": "shade",
+  "item": "one_handed_weapon_crafting_catalyst",
+  "text": "Shade no longer listed as dropping One-Handed Weapon Crafting Catalyst"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "duskmander",
+  "text": "New monster: Duskmander (Lv 50)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "myewood",
+  "text": "New monster: Myewood (Lv 54)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "rotten_mushroom",
+  "text": "New monster: Rotten Mushroom (Lv 56)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "drop_new",
+  "monster": "skeleton_soldier",
+  "item": "orange_golden_circlet",
+  "rate": null,
+  "text": "Skeleton Soldier now drops Orange Golden Circlet"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "sporewood",
+  "text": "New monster: Sporewood (Lv 59)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "monster_new",
+  "monster": "rotten_mushmom",
+  "text": "New monster: Rotten Mushmom (Lv 60)"
+ },
+ {
+  "date": "2026-11-19",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The Journey Begins"
+ },
+ {
   "date": "2026-11-15",
   "type": "drop_new",
   "monster": "blue_snail",
