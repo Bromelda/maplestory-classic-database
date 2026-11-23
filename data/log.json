@@ -1,5 +1,1009 @@
 [
  {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "red_snail",
+  "field": "mdef",
+  "old": 30,
+  "new": 15,
+  "text": "Red Snail: MDEF 30 → 15"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "slime",
+  "field": "mdef",
+  "old": 20,
+  "new": 5,
+  "text": "Slime: MDEF 20 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "octopus",
+  "field": "mdef",
+  "old": 30,
+  "new": 15,
+  "text": "Octopus: MDEF 30 → 15"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "flyeye",
+  "text": "New monster: Flyeye (Lv 13)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "green_mushroom",
+  "field": "mdef",
+  "old": 30,
+  "new": 20,
+  "text": "Green Mushroom: MDEF 30 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "goblin_fire",
+  "text": "New monster: Goblin Fire (Lv 15)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "blue_mushroom",
+  "field": "mdef",
+  "old": 20,
+  "new": 10,
+  "text": "Blue Mushroom: MDEF 20 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "stirge",
+  "field": "wdef",
+  "old": 0,
+  "new": 5,
+  "text": "Stirge: WDEF 0 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "stirge",
+  "field": "mdef",
+  "old": 30,
+  "new": 15,
+  "text": "Stirge: MDEF 30 → 15"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "turkey",
+  "text": "New monster: Turkey (Lv 20)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "jr_necki",
+  "field": "wdef",
+  "old": 0,
+  "new": 15,
+  "text": "Jr. Necki: WDEF 0 → 15"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "jr_necki",
+  "field": "mdef",
+  "old": 30,
+  "new": 5,
+  "text": "Jr. Necki: MDEF 30 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "zombie_mushroom",
+  "field": "wdef",
+  "old": 15,
+  "new": 10,
+  "text": "Zombie Mushroom: WDEF 15 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "zombie_mushroom",
+  "field": "mdef",
+  "old": 15,
+  "new": 20,
+  "text": "Zombie Mushroom: MDEF 15 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "wild_boar",
+  "field": "wdef",
+  "old": 15,
+  "new": 20,
+  "text": "Wild Boar: WDEF 15 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "wild_boar",
+  "field": "mdef",
+  "old": 15,
+  "new": 10,
+  "text": "Wild Boar: MDEF 15 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "moon_bunny",
+  "text": "New monster: Moon Bunny (Lv 30)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "curse_eye",
+  "field": "wdef",
+  "old": 30,
+  "new": 20,
+  "text": "Curse Eye: WDEF 30 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "curse_eye",
+  "field": "mdef",
+  "old": 0,
+  "new": 10,
+  "text": "Curse Eye: MDEF 0 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "lupin",
+  "field": "wdef",
+  "old": 0,
+  "new": 5,
+  "text": "Lupin: WDEF 0 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "lupin",
+  "field": "mdef",
+  "old": 30,
+  "new": 20,
+  "text": "Lupin: MDEF 30 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "lorang",
+  "field": "wdef",
+  "old": 0,
+  "new": 20,
+  "text": "Lorang: WDEF 0 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "lorang",
+  "field": "mdef",
+  "old": 30,
+  "new": 10,
+  "text": "Lorang: MDEF 30 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "glowshroom",
+  "field": "wdef",
+  "old": 10,
+  "new": 15,
+  "text": "Glowshroom: WDEF 10 → 15"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "glowshroom",
+  "field": "mdef",
+  "old": 10,
+  "new": 5,
+  "text": "Glowshroom: MDEF 10 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "cold_eye",
+  "field": "wdef",
+  "old": 0,
+  "new": 10,
+  "text": "Cold Eye: WDEF 0 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "cold_eye",
+  "field": "mdef",
+  "old": 30,
+  "new": 20,
+  "text": "Cold Eye: MDEF 30 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "raffle",
+  "field": "wdef",
+  "old": 10,
+  "new": 20,
+  "text": "Raffle: WDEF 10 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "raffle",
+  "field": "mdef",
+  "old": 0,
+  "new": 10,
+  "text": "Raffle: MDEF 0 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "glowshroom_level_41_form",
+  "text": "New monster: Glowshroom (Level 41 form) (Lv 41)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "zombie_lupin",
+  "field": "wdef",
+  "old": 0,
+  "new": 5,
+  "text": "Zombie Lupin: WDEF 0 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "zombie_lupin",
+  "field": "mdef",
+  "old": 30,
+  "new": 20,
+  "text": "Zombie Lupin: MDEF 30 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "golden_stirge",
+  "field": "wdef",
+  "old": 0,
+  "new": 15,
+  "text": "Golden Stirge: WDEF 0 → 15"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "golden_stirge",
+  "field": "mdef",
+  "old": 0,
+  "new": 15,
+  "text": "Golden Stirge: MDEF 0 → 15"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "golden_stirge_level_42_form",
+  "text": "New monster: Golden Stirge (Level 42 form) (Lv 42)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "aqumander",
+  "field": "wdef",
+  "old": 0,
+  "new": 20,
+  "text": "Aqumander: WDEF 0 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "aqumander",
+  "field": "mdef",
+  "old": 20,
+  "new": 10,
+  "text": "Aqumander: MDEF 20 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "raffle_level_43_form",
+  "text": "New monster: Raffle (Level 43 form) (Lv 43)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "aqumander_level_44_form",
+  "text": "New monster: Aqumander (Level 44 form) (Lv 44)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "rafflesia_level_45_form",
+  "text": "New monster: Rafflesia (Level 45 form) (Lv 45)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "duskmander_level_46_form",
+  "text": "New monster: Duskmander (Level 46 form) (Lv 46)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "myewood_level_47_form",
+  "text": "New monster: Myewood (Level 47 form) (Lv 47)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "rotten_mushroom_level_48_form",
+  "text": "New monster: Rotten Mushroom (Level 48 form) (Lv 48)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "clang",
+  "field": "wdef",
+  "old": 15,
+  "new": 20,
+  "text": "Clang: WDEF 15 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "clang",
+  "field": "mdef",
+  "old": 15,
+  "new": 10,
+  "text": "Clang: MDEF 15 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "sporewood_level_49_form",
+  "text": "New monster: Sporewood (Level 49 form) (Lv 49)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_new",
+  "monster": "darkwood",
+  "text": "New monster: Darkwood (Lv 50)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "duskmander",
+  "field": "wdef",
+  "old": 0,
+  "new": 10,
+  "text": "Duskmander: WDEF 0 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "myewood",
+  "field": "wdef",
+  "old": 10,
+  "new": 20,
+  "text": "Myewood: WDEF 10 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "myewood",
+  "field": "mdef",
+  "old": 0,
+  "new": 10,
+  "text": "Myewood: MDEF 0 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "malady",
+  "field": "wdef",
+  "old": 0,
+  "new": 5,
+  "text": "Malady: WDEF 0 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "malady",
+  "field": "mdef",
+  "old": 50,
+  "new": 20,
+  "text": "Malady: MDEF 50 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "rotten_mushroom",
+  "field": "mdef",
+  "old": 10,
+  "new": 5,
+  "text": "Rotten Mushroom: MDEF 10 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "drop_new",
+  "monster": "rotten_mushroom",
+  "item": "untainted_mushroom_cap",
+  "rate": null,
+  "text": "Rotten Mushroom now drops Untainted Mushroom Cap"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "stone_golem",
+  "field": "wdef",
+  "old": 30,
+  "new": 25,
+  "text": "Stone Golem: WDEF 30 → 25"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "stone_golem",
+  "field": "mdef",
+  "old": 0,
+  "new": 5,
+  "text": "Stone Golem: MDEF 0 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "dark_stone_golem",
+  "field": "wdef",
+  "old": 0,
+  "new": 5,
+  "text": "Dark Stone Golem: WDEF 0 → 5"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "dark_stone_golem",
+  "field": "mdef",
+  "old": 30,
+  "new": 25,
+  "text": "Dark Stone Golem: MDEF 30 → 25"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "sporewood",
+  "field": "wdef",
+  "old": 0,
+  "new": 20,
+  "text": "Sporewood: WDEF 0 → 20"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "monster_changed",
+  "monster": "sporewood",
+  "field": "mdef",
+  "old": 0,
+  "new": 10,
+  "text": "Sporewood: MDEF 0 → 10"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "another_sanctuary",
+  "text": "New map: Another Sanctuary"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "bygone_days",
+  "text": "New map: Bygone Days"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "cave_fairy_sanctuary",
+  "text": "New map: Cave Fairy Sanctuary"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "cave_fairy_store",
+  "text": "New map: Cave Fairy Store"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "decayed_tunnel_i",
+  "text": "New map: Decayed Tunnel I"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "decayed_tunnel_ii",
+  "text": "New map: Decayed Tunnel II"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "decayed_tunnel_iii",
+  "text": "New map: Decayed Tunnel III"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "dilapidated_tomb",
+  "text": "New map: Dilapidated Tomb"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "forbidden_entrance",
+  "text": "New map: Forbidden Entrance"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "forgotten_dungeon_tunnel",
+  "text": "New map: Forgotten Dungeon Tunnel"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "forgotten_entrance_i",
+  "text": "New map: Forgotten Entrance I"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "forgotten_entrance_ii",
+  "text": "New map: Forgotten Entrance II"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "forgotten_entrance_iii",
+  "text": "New map: Forgotten Entrance III"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "hanging_gardens_of_rot",
+  "text": "New map: Hanging Gardens of Rot"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "lingering_regret",
+  "text": "New map: Lingering Regret"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "perilous_descent_i",
+  "text": "New map: Perilous Descent I"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "perilous_descent_ii",
+  "text": "New map: Perilous Descent II"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "perilous_descent_iii",
+  "text": "New map: Perilous Descent III"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "precipice_of_darkness",
+  "text": "New map: Precipice of Darkness"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "primeval_forest_i",
+  "text": "New map: Primeval Forest I"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "primeval_forest_ii",
+  "text": "New map: Primeval Forest II"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "primeval_forest_iii",
+  "text": "New map: Primeval Forest III"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "rotten_house",
+  "text": "New map: Rotten House"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "someone_else_s_grave",
+  "text": "New map: Someone Else's Grave"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "the_end_of_fleeting_light",
+  "text": "New map: The End of Fleeting Light"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "the_faded_canopy",
+  "text": "New map: The Faded Canopy"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "the_faded_threshold",
+  "text": "New map: The Faded Threshold"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "the_valley_of_death",
+  "text": "New map: The Valley of Death"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "back_to_town",
+  "text": "New map: Back to Town"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "forgotten_hollow",
+  "text": "New map: Forgotten Hollow"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "pig_town",
+  "text": "New map: Pig Town"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "primrose_hill",
+  "text": "New map: Primrose Hill"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "shortcut_pig_town",
+  "text": "New map: Shortcut (Pig Town)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "map_new",
+  "map": "shortcut_primrose_hill",
+  "text": "New map: Shortcut (Primrose Hill)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10422",
+  "text": "New quest: Planting Trees (Lv 19)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10423",
+  "text": "New quest: Shawn the Excavator's Request (Lv 24)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10424",
+  "text": "New quest: Eliminate Monsters from the Site (Lv 24)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10425",
+  "text": "New quest: Notice from the Excavation Team (Lv 45)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10426",
+  "text": "New quest: The Smell Below (Lv 22)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10427",
+  "text": "New quest: The Settlers' Road (Lv 38)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10428",
+  "text": "New quest: Where the Hero Fell (Lv 50)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10511",
+  "text": "New quest: The Mushmom Who Woke (Lv 54)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10512",
+  "text": "New quest: Tapping at the Window (Lv 22)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10513",
+  "text": "New quest: The Chime That Rings Alone (Lv 22)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10514",
+  "text": "New quest: Faces in the Dark (Lv 40)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10515",
+  "text": "New quest: A Patient Hunger (Lv 40)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10800",
+  "text": "New quest: Bad for Business (Lv 26)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10801",
+  "text": "New quest: Notes on the Board (Lv 24)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10802",
+  "text": "New quest: The Glowing Charms (Lv 24)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q10803",
+  "text": "New quest: The Last Note (Lv 24)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q500012",
+  "text": "New quest: [Event] Thanksgiving Pumpkin Pie (Lv 10)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q500013",
+  "text": "New quest: [Event] Thanksgiving Pumpkin Pie (Lv 10)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q500014",
+  "text": "New quest: [Event] Escaped Thanksgiving Turkey (Lv 10)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q500015",
+  "text": "New quest: [Event] Moon Bunny's Rice Cake (Lv 11)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_new",
+  "quest": "q500016",
+  "text": "New quest: [Event] The New Journey Begins (Lv 10)"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] Halloween Candies"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] Trick or Treat!"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The Marks We Leave Behind"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The First Mark"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The Second Mark"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The Third Mark"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The Fourth Mark"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The Fifth Mark"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "quest_removed",
+  "text": "Quest removed or ended: [Event] The Final Mark"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "alston",
+  "text": "New NPC: Alston"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "bluebell_bud",
+  "text": "New NPC: Bluebell Bud"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "cave_fairy_s_storage",
+  "text": "New NPC: Cave Fairy's Storage"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "daniel_the_scholar",
+  "text": "New NPC: Daniel the Scholar"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "fully_bloomed_bluebell",
+  "text": "New NPC: Fully Bloomed Bluebell"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "glimmer",
+  "text": "New NPC: Glimmer"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "grandma_benson",
+  "text": "New NPC: Grandma Benson"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "growlie",
+  "text": "New NPC: Growlie"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "jaime_the_explorer",
+  "text": "New NPC: Jaime the Explorer"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "luma",
+  "text": "New NPC: Luma"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "moss_firefly",
+  "text": "New NPC: Moss Firefly"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "myen",
+  "text": "New NPC: Myen"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "myra",
+  "text": "New NPC: Myra"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "nyroth",
+  "text": "New NPC: Nyroth"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "sylka",
+  "text": "New NPC: Sylka"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "tamya",
+  "text": "New NPC: Tamya"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "timmy",
+  "text": "New NPC: Timmy"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "torin",
+  "text": "New NPC: Torin"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "tory",
+  "text": "New NPC: Tory"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "whitney",
+  "text": "New NPC: Whitney"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "worn_notice_board",
+  "text": "New NPC: Worn Notice Board"
+ },
+ {
+  "date": "2026-11-23",
+  "type": "npc_new",
+  "npc": "zelya",
+  "text": "New NPC: Zelya"
+ },
+ {
   "date": "2026-11-19",
   "type": "drop_removed",
   "monster": "green_mushroom",
